@@ -1,8 +1,0 @@
-{
-  "text_embedding": {
-    "model_id": "LOCAL_MODEL_ID_NOT_SELECTED",
-    "field_map": {
-      "text": "embedding"
-    }
-  }
-}

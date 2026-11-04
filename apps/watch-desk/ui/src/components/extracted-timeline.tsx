@@ -6,14 +6,12 @@ import type { TimelineItem } from "./source-data";
 
 export function ExtractedTimeline({
   items,
-  review,
   from,
   to,
   returnTo,
   limited,
 }: {
   items: TimelineItem[];
-  review: TimelineItem[];
   from: number;
   to: number;
   returnTo: string;
@@ -25,18 +23,10 @@ export function ExtractedTimeline({
   );
   return (
     <section aria-label="Extracted source timeline">
-      <p className="feature-note">
-        Extracted source times · All items require review. Points have no inferred duration.
-      </p>
       {limited === true && (
         <p role="status">Result window reached. Narrow the date or command selection.</p>
       )}
-      {ordered.length === 0 && (
-        <p>
-          No resolved source times in this window. This does not confirm an empty schedule.
-          Historical messages retain their original dates.
-        </p>
-      )}
+      {ordered.length === 0 && <p>No timed events available for this range.</p>}
       <div className="extracted-axis">
         <time>{new Date(from).toISOString()}</time>
         <time>{new Date(to).toISOString()}</time>
@@ -69,19 +59,6 @@ export function ExtractedTimeline({
           );
         })}
       </ol>
-      {review.length > 0 && (
-        <details>
-          <summary>{review.length} unresolved facts requiring source review</summary>
-          <ul>
-            {review.map((item) => (
-              <li key={item.key}>
-                <Link to={messageHref(item.messageKey, returnTo)}>{item.title}</Link> ·{" "}
-                {item.reason}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
     </section>
   );
 }

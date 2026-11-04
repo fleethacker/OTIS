@@ -120,14 +120,14 @@ test("calendar mounts controls and truthful loading", () => {
     route: "/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch",
   });
   expect(view.getByLabelText("UTC date")).toHaveValue("2026-11-04");
-  expect(view.getByLabelText("Grid interval")).toHaveValue("30");
+  expect(view.queryByLabelText("Grid interval")).toBeNull();
   expect(view.getByRole("searchbox", { name: "Search schedule" })).toHaveValue("watch");
   const search = view.getByRole("searchbox", { name: "Search schedule" });
   expect(search.closest("section")?.getAttribute("aria-label")).toBe("Calendar controls");
-  expect(search).toHaveAttribute("aria-describedby", "schedule-search-hint");
-  expect(view.container.querySelector("#schedule-search-hint")?.textContent).toContain(
-    "within the selected period"
-  );
+  expect(search).not.toHaveAttribute("aria-describedby");
+  expect(view.queryByText(/Ship schedule/)).toBeNull();
+  expect(view.queryByText(/Hybrid keyword/)).toBeNull();
+  expect(view.container.querySelector(".view-label")).toBeNull();
   expect(view.getByRole("status").textContent).toContain("Loading schedule");
 });
 test("week is an accessible URL-owned view with civil DST/year boundaries", () => {
@@ -139,8 +139,8 @@ test("week is an accessible URL-owned view with civil DST/year boundaries", () =
     "true"
   );
   expect(view.getByRole("button", { name: "Previous week" })).toBeTruthy();
-  expect(view.getByLabelText("Grid interval")).not.toBeDisabled();
-  expect(view.getByLabelText("Visible hours (UTC)")).toHaveValue("6-12");
+  expect(view.queryByLabelText("Grid interval")).toBeNull();
+  expect(view.queryByLabelText("Visible hours (UTC)")).toBeNull();
   expect(
     (weekBounds("2026-11-04", "America/New_York").to -
       weekBounds("2026-11-04", "America/New_York").from) /

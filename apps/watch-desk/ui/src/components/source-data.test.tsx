@@ -44,7 +44,7 @@ test("source failures do not silently fall back to fixture or keyword data", asy
     globalThis.fetch = original;
   }
 });
-test("extracted timeline shows exact point times without duration and keeps unresolved facts off the plot", () => {
+test("extracted timeline shows exact point times without duration or explanatory copy", () => {
   const view = renderWithProviders(
     <ExtractedTimeline
       from={Date.parse("2026-11-04T00:00:00Z")}
@@ -54,19 +54,9 @@ test("extracted timeline shows exact point times without duration and keeps unre
         {
           key: "point",
           messageKey: "source@r1",
-          title: "Crypto change",
+          title: "Crypto change <script>",
           kind: "point",
           at: "2026-11-04T10:00:00Z",
-          reviewRequired: true,
-        },
-      ]}
-      review={[
-        {
-          key: "unknown",
-          messageKey: "source@r1",
-          title: "Unresolved <script>",
-          kind: "unresolved",
-          reason: "Date missing",
           reviewRequired: true,
         },
       ]}
@@ -75,7 +65,7 @@ test("extracted timeline shows exact point times without duration and keeps unre
   expect(view.getByText(/Point: 2026-11-04 10:00/)).toBeTruthy();
   expect(view.container.querySelectorAll(".extracted-point").length).toBe(1);
   expect(view.container.querySelectorAll(".extracted-interval").length).toBe(0);
-  expect(view.getByText("Unresolved <script>")).toBeTruthy();
   expect(view.container.querySelector("script")).toBeNull();
   expect(view.getByText(/Requires review/)).toBeTruthy();
+  expect(view.queryByText(/Extracted source times/)).toBeNull();
 });

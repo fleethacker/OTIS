@@ -109,6 +109,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "parse-command-optask"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "parse-command-core",
+ "parse-command-parser-api",
+ "parse-command-types",
+ "serde_json",
+]
+
+[[package]]
 name = "parse-command-parser-api"
 version = "0.1.0"
 dependencies = [

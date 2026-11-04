@@ -246,7 +246,7 @@ impl ParserHost {
             .security_override
             .cloned()
             .unwrap_or(facts.header.security);
-        if context.security_override.is_none() {
+        if context.security_override.is_none() && security.status != SecurityStatus::Conflict {
             security.status = SecurityStatus::Unvalidated;
         }
         security.validate()?;

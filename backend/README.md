@@ -7,9 +7,10 @@ The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.
 | `parse-command-types` | Strict core message, passage and audit DTOs, semantic validation, UTC timestamps and deterministic IDs |
 | `parse-command-parser-api` | Borrowed scanner views, contributor trait, typed failures, cooperative work budget and bounded output sink |
 | `parse-command-core` | Explicit registry/allowlist, profile selection, host metadata, core/audit separation and validated results |
+| `parse-command-optask` | Profile-specific OPTASK interpretation with rule provenance and external sample regression coverage |
 | `examples/reference-parser` | Independent synthetic contributor crate exercised through the host; no production enablement |
 
-This milestone provides a synchronous library host. IMAP/MIME intake, durable queue/outbox, audit batching, OpenSearch writes, passage construction, embeddings, HTTP and Docker deployment are subsequent adapters. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed input must be retained by that future intake/outbox layer. OPTASK interpretation is the next branch's work.
+This milestone provides a synchronous library host and OPTASK contribution. IMAP/MIME intake, durable queue/outbox, audit batching, OpenSearch writes, passage construction, embeddings, HTTP and Docker deployment are subsequent adapters. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed input must be retained by that future intake/outbox layer.
 
 ## Build and verify
 
@@ -30,6 +31,25 @@ PARSE_COMMAND_SAMPLES=/absolute/path/to/OPTASK_Messages/parsed \
 ```
 
 The external test checks all message/passage/audit DTOs against the Rust contract and round-trips them without field loss. It also scans all fourteen preserved source bodies and verifies their exact message types and hashes. It does not verify OPTASK semantic interpretation. Keep supplied traffic, fixtures and USMTF knowledge outside this repository. Constructed generic contract cases live in the test sources.
+
+To run the separate OPTASK semantic regression against the same external fixtures:
+
+```sh
+PARSE_COMMAND_SAMPLES=/absolute/path/to/OPTASK_Messages/parsed \
+  cargo test -p parse-command-optask --locked --offline external_optask_regression -- --ignored
+```
+
+The [supported-message list](../README.md#supported-optask-messages) identifies the tested profiles. This test compares every approved example fact and header value, and allows additional explicit participants and uncertainty fields. It checks 13 periods, 27 frequencies, 25 activities and 8 contacts. Human approval of the sample wire structure does not by itself validate operational interpretation.
+
+## Use the OPTASK contribution
+
+Add `parse-command-optask` as a path dependency of the consuming backend crate. Construct `Box::new(parse_command_optask::OptaskParser)` in the host registry and explicitly enable the required exact identifiers from `SUPPORTED_MESSAGE_TYPES`; the library does not enable them globally. Pass decoded body and email subject separately to `ParserHost::parse`.
+
+The profile selector distinguishes the short 2003 header from the observed standard/version-bearing headers. Known layouts have separate field rules. The 2003 subset requires an explicit host security context because that header supplies no policy; it does not manufacture a security policy or issue timestamp. Context reference times are not used to fill missing event dates.
+
+Core status remains `partial` while records are retained without semantic projection. Bad record layouts produce audit diagnostics and a review flag while subsequent sound records remain available. All facts from a record are validated before emission; output-limit or cancellation errors still abort the entire result. Unknown classifications retain conflict status, and source caveats flag security review. Source POCs/participants do not assign local C2 roles or resolve command aliases.
+
+The implementation validates exact integer-Hz conversion, date calendars, verified-time checksums and conditional period qualifiers. Baseline daily crypto recurrence evidence stays in audit; partial times are not expanded into a dated schedule. Full issue timestamps alone establish retention. Resource limits remain caller-supplied, and the crate adds no new third-party dependencies to the foundation's dependency set.
 
 ## Add a parser crate
 

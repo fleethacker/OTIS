@@ -1,5 +1,6 @@
 //! Compiled OPTASK contribution. Rules operate only on explicit profiles and supplied evidence.
 mod frequency;
+mod geo;
 mod interpretation;
 mod profile;
 mod time;
@@ -14,7 +15,7 @@ pub use profile::TYPES as SUPPORTED_MESSAGE_TYPES;
 pub struct OptaskParser;
 static DESCRIPTOR: ParserDescriptor = ParserDescriptor {
     id: "optask",
-    version: "0.1.0",
+    version: "0.2.0",
     icd_major: ICD_MAJOR,
     message_types: profile::TYPES,
     profiles: &[profile::BASELINE, profile::EXAMPLES],
@@ -23,6 +24,7 @@ static DESCRIPTOR: ParserDescriptor = ParserDescriptor {
         FactCategory::Frequency,
         FactCategory::Activity,
         FactCategory::Contact,
+        FactCategory::Location,
     ],
 };
 impl MessageParser for OptaskParser {
@@ -76,7 +78,7 @@ impl MessageParser for OptaskParser {
             output.review_flag("inferred_profile")?;
         }
         let mut scope = Scope::default();
-        let mut counts = [0usize; 4];
+        let mut counts = [0usize; 5];
         let mut message_periods = Vec::new();
         for record in input.records {
             context.budget.checkpoint(1 + record.fields.len() as u64)?;
@@ -84,8 +86,14 @@ impl MessageParser for OptaskParser {
                 continue;
             }
             scope.advance(record, input.message_type)?;
-            let extraction =
-                extract(record, input.message_type, profile, &scope).and_then(|extraction| {
+            for (is_geo, extraction) in [
+                extract(record, input.message_type, profile, &scope),
+                geo::extract(record, &scope, context.budget),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let extraction = extraction.and_then(|extraction| {
                     if let Some(value) = &extraction {
                         // Reject a bad record before emitting any of its facts.
                         for fact in &value.facts {
@@ -94,78 +102,84 @@ impl MessageParser for OptaskParser {
                     }
                     Ok(extraction)
                 });
-            match extraction {
-                Ok(Some(extraction)) => {
-                    if extraction.facts.is_empty() {
+                match extraction {
+                    Ok(Some(extraction)) => {
+                        if extraction.facts.is_empty() {
+                            output.audit(audit(
+                                record,
+                                None,
+                                profile,
+                                extraction.rule,
+                                extraction.source,
+                                json!({"disposition":"no_scheduled_fact"}),
+                            ))?;
+                        }
+                        for mut fact in extraction.facts {
+                            fact.assign_id(&mut counts);
+                            let id = fact.id().to_owned();
+                            if matches!(&fact,Fact::Location(v) if v.status==LocationStatus::Unresolved)
+                            {
+                                output.review_flag("geospatial_review")?;
+                            }
+                            if fact.has_partial_time() {
+                                output.review_flag("time_review")?;
+                            }
+                            if let Fact::Period(p) = &fact {
+                                if p.scope.is_none() {
+                                    message_periods.push(p.clone());
+                                }
+                            }
+                            if fact.conflicts_with(
+                                &message_periods,
+                                issued_at.as_ref(),
+                                context.budget,
+                            )? {
+                                output.review_flag("time_conflict")?;
+                            }
+                            let temporal = matches!(&fact,Fact::Activity(a) if a.kind=="crypto_changeover" && profile==Profile::Baseline);
+                            output.audit(audit(
+                                record,
+                                Some(id),
+                                profile,
+                                extraction.rule,
+                                extraction.source,
+                                json!({"daily_recurrence_evidence":temporal,"scope":fact.scope()}),
+                            ))?;
+                            fact.emit(output)?;
+                        }
+                        if let Some(code) = extraction.diagnostic {
+                            diagnostic(record, profile, code, output)?;
+                        }
+                    }
+                    Ok(None) if is_geo == 1 => {}
+                    Ok(None) => {
+                        // Preserve every unprojected record without treating arbitrary prose as tasking.
                         output.audit(audit(
                             record,
                             None,
                             profile,
-                            extraction.rule,
-                            extraction.source,
-                            json!({"disposition":"no_scheduled_fact"}),
+                            "optask.preserve.v1",
+                            "record retained without semantic projection",
+                            json!({"disposition":"preserved_only"}),
                         ))?;
-                    }
-                    for mut fact in extraction.facts {
-                        fact.assign_id(&mut counts);
-                        let id = fact.id().to_owned();
-                        if fact.has_partial_time() {
-                            output.review_flag("time_review")?;
+                        if matches!(record.set_id, "CANX" | "REF") {
+                            output.review_flag("lineage_review")?;
                         }
-                        if let Fact::Period(p) = &fact {
-                            if p.scope.is_none() {
-                                message_periods.push(p.clone());
-                            }
+                        if record.set_id == "CAVEAT" {
+                            output.review_flag("security_review")?;
                         }
-                        if fact.conflicts_with(
-                            &message_periods,
-                            issued_at.as_ref(),
-                            context.budget,
-                        )? {
-                            output.review_flag("time_conflict")?;
-                        }
-                        let temporal = matches!(&fact,Fact::Activity(a) if a.kind=="crypto_changeover" && profile==Profile::Baseline);
-                        output.audit(audit(
-                            record,
-                            Some(id),
-                            profile,
-                            extraction.rule,
-                            extraction.source,
-                            json!({"daily_recurrence_evidence":temporal,"scope":fact.scope()}),
-                        ))?;
-                        fact.emit(output)?;
                     }
-                    if let Some(code) = extraction.diagnostic {
-                        diagnostic(record, profile, code, output)?;
+                    Err(error)
+                        if matches!(
+                            error.kind,
+                            ErrorKind::MalformedInput | ErrorKind::InvalidValue
+                        ) =>
+                    {
+                        diagnostic(record, profile, error.code, output)?;
+                        output.review_flag("record_review")?;
                     }
+                    Err(error) => return Err(error),
                 }
-                Ok(None) => {
-                    // Preserve every unprojected record without treating arbitrary prose as tasking.
-                    output.audit(audit(
-                        record,
-                        None,
-                        profile,
-                        "optask.preserve.v1",
-                        "record retained without semantic projection",
-                        json!({"disposition":"preserved_only"}),
-                    ))?;
-                    if matches!(record.set_id, "CANX" | "REF") {
-                        output.review_flag("lineage_review")?;
-                    }
-                    if record.set_id == "CAVEAT" {
-                        output.review_flag("security_review")?;
-                    }
-                }
-                Err(error)
-                    if matches!(
-                        error.kind,
-                        ErrorKind::MalformedInput | ErrorKind::InvalidValue
-                    ) =>
-                {
-                    diagnostic(record, profile, error.code, output)?;
-                    output.review_flag("record_review")?;
-                }
-                Err(error) => return Err(error),
             }
         }
         Ok(ParseSummary {
@@ -315,9 +329,13 @@ fn header(
 struct Scope {
     segment: Option<String>,
     coordinator: Option<String>,
+    datum: Option<String>,
 }
 impl Scope {
     fn advance(&mut self, r: &RecordView<'_>, kind: &str) -> Result<(), ParseFailure> {
+        if r.set_id == "GEODATUM" {
+            self.datum = r.fields.first().map(|f| f.normalized().into_owned());
+        }
         if kind != "OPTASK LINK" {
             return Ok(());
         }
@@ -377,6 +395,7 @@ enum Fact {
     Frequency(Frequency),
     Activity(Box<Activity>),
     Contact(Contact),
+    Location(Location),
 }
 impl Fact {
     fn validate(&self) -> Result<(), ValidationError> {
@@ -385,6 +404,7 @@ impl Fact {
             Self::Frequency(f) => f.validate(),
             Self::Activity(f) => f.validate(),
             Self::Contact(f) => f.validate(),
+            Self::Location(f) => f.validate(),
         }
     }
     fn id(&self) -> &str {
@@ -393,14 +413,16 @@ impl Fact {
             Self::Frequency(f) => &f.id,
             Self::Activity(f) => &f.id,
             Self::Contact(f) => &f.id,
+            Self::Location(f) => &f.id,
         }
     }
-    fn assign_id(&mut self, counts: &mut [usize; 4]) {
+    fn assign_id(&mut self, counts: &mut [usize; 5]) {
         let (index, prefix, id) = match self {
             Self::Period(f) => (0, 'v', &mut f.id),
             Self::Frequency(f) => (1, 'f', &mut f.id),
             Self::Activity(f) => (2, 'a', &mut f.id),
             Self::Contact(f) => (3, 'c', &mut f.id),
+            Self::Location(f) => (4, 'g', &mut f.id),
         };
         counts[index] += 1;
         *id = format!("{prefix}{}", counts[index]);
@@ -411,6 +433,7 @@ impl Fact {
             Self::Frequency(f) => f.scope.as_deref(),
             Self::Activity(f) => f.scope.as_deref(),
             Self::Contact(f) => f.scope.as_deref(),
+            Self::Location(f) => f.scope.as_deref(),
         }
     }
     fn emit(self, s: &mut dyn ParseSink) -> Result<(), ParseFailure> {
@@ -419,6 +442,7 @@ impl Fact {
             Self::Frequency(f) => s.frequency(f),
             Self::Activity(f) => s.activity(*f),
             Self::Contact(f) => s.contact(f),
+            Self::Location(f) => s.location(f),
         }
     }
     fn has_partial_time(&self) -> bool {

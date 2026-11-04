@@ -70,3 +70,9 @@ The Rust implementation is in [`backend/`](backend/README.md). The following exa
 This coverage reproduces all approved example facts: 13 periods, 27 frequencies, 25 activities and 8 contacts. Extraction includes frequency plans, crypto changeover points, communications windows/checks, replenishment rendezvous, explicit task records, reporting requirements and source POCs where present. Detailed evidence stays in separate audit documents.
 
 Support is specific to these tested layouts and extraction rules. Output remains marked `partial` because unprojected records are preserved for review; the example-based profiles do not establish full edition compliance. Missing dates and unresolved command/C2 mappings remain explicit. The parser performs no runtime network or model calls. UI integration lives in the separate `ui/` directory.
+
+## Initial inbox test
+
+The [intake runbook](backend/INTAKE.md) covers starting the demo monitor, inspecting per-email custody, restart/retry behavior and loading isolated OpenSearch UI test indices. The worker retains original email bytes and commits parser results with a durable audit outbox before marking a receipt parsed. Duplicate bodies share a projection; IMAP server receipt time selects the newest subject and differences remain flagged.
+
+The [ICD 1.1.0](docs/ICD.md) adds optional geographic locations: points, channel endpoint lines and area polygons, with WGS84 as the approved default only when a datum is absent. Source evidence remains in audit. The demo worker monitors IMAP continuously; production Exchange PKI and continuous OpenSearch delivery remain subsequent acceptance work.

@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "icd_version": "1.0.0",
+      "icd_version": "1.1.0",
       "profile": "ui_fixture_lexical_no_retention"
     },
     "properties": {
@@ -325,6 +325,45 @@
       "subject": {
         "type": "text",
         "analyzer": "standard"
+      },
+      "locations": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "type": {
+            "type": "keyword"
+          },
+          "label": {
+            "type": "text"
+          },
+          "datum": {
+            "type": "keyword"
+          },
+          "datum_source": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          },
+          "point": {
+            "type": "geo_point",
+            "ignore_malformed": false
+          },
+          "shape": {
+            "type": "geo_shape",
+            "ignore_malformed": false,
+            "coerce": false
+          },
+          "radius_m": {
+            "type": "double"
+          },
+          "scope": {
+            "type": "keyword"
+          }
+        }
       }
     }
   }

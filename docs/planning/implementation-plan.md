@@ -1,6 +1,6 @@
 # Parse Command implementation plan
 
-Status: proposed engineering plan, 2026-11-04. No product implementation or deployment has started. Unresolved decisions are tracked in [decisions and questions](decisions-and-questions.md); proposals are not implicit defaults.
+Status: engineering plan, updated 2026-11-04. Parser SDK/OPTASK extraction and demo IMAP/SQLite custody are implemented; the initial local OpenSearch test indices are populated. Continuous delivery, production PKI, embeddings and the UI service remain subsequent work. Unresolved decisions are tracked in [decisions and questions](decisions-and-questions.md); proposals are not implicit defaults.
 
 ## Outcome and boundaries
 
@@ -232,4 +232,4 @@ Treat absent format definitions, inability to load the model within budget, or a
 - Agreed OpenAPI schema and JSON fixtures for the UI teammate.
 - Dockerfiles, Compose configuration, offline export/import manifest, bootstrap tooling, operating/recovery runbook, and measured resource report.
 
-These are future execution deliverables. This planning turn creates only Markdown knowledge and design documents.
+The artifact list tracks the original plan. Current execution and initial-test commands are recorded in `backend/README.md` and `backend/INTAKE.md`; detailed source knowledge remains outside Git.

@@ -1,0 +1,36 @@
+name: parse-command-intake
+services:
+  intake:
+    image: parse-command-intake:local
+    build:
+      context: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1
+    mem_limit: 128m
+    pids_limit: 64
+    environment:
+      # Public demo credential; never substitute production credentials in this file.
+      PARSE_COMMAND_IMAP_PASSWORD: ${PARSE_COMMAND_IMAP_PASSWORD:-ParseCommandDemoOnly123!}
+    volumes:
+      - ./config/demo-compose-intake.json:/etc/parse-command/config.json:ro
+      - custody:/var/lib/parse-command
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    networks:
+      - demo-mail
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "3"
+networks:
+  demo-mail:
+    external: true
+    name: parse-command-demo_mail
+volumes:
+  custody:

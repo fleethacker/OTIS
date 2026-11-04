@@ -69,3 +69,11 @@ Status: planning, 2026-11-04. No unconfirmed implementation choice below is a de
 Follow-up answers recorded: IMAP only; 365 total days from USMTF issue time with searchable cold; 2003 baseline plus inferable later extensions; interface-first delivery with compiled Rust parser contributions. The remaining cold-storage decision is implementation topology, not whether cold data is searchable. Cutoff granularity and handling of unresolvable issue time remain open.
 
 No numeric memory target, model name, OpenSearch release, network port, mail interval, API library, or crate version has been selected. Do not substitute restore-only archives for the confirmed searchable-cold requirement.
+
+## Intake implementation decisions — 2026-11-04
+
+- Production mail is enclave-local on-premises Exchange with PKI protection. The demo does not need PKI. Exact production TLS/client-certificate/authentication details remain to be validated before enabling that endpoint.
+- Duplicate USMTF bodies use the most recently received email subject, with differences flagged. Implementation uses server IMAP INTERNALDATE and a durable receipt-order tie-breaker, retaining every original email and subject.
+- WGS84 is the approved default when no coordinate datum is stated. Explicit other/unknown datums remain unresolved until a supported transformation is established.
+- Defer message types without examples; the root README lists only the fourteen tested supplied profiles.
+- Local demo intake now uses SQLite custody/outbox staging and a bounded synchronous worker. The committed numeric demo limits are explicit test configuration, not confirmed production hardware capacity. Continuous OpenSearch delivery and production PKI remain separate acceptance work.

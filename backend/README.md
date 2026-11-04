@@ -1,16 +1,17 @@
 # Parse Command backend
 
-The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the UI team owns the future root `ui/` directory. SDK version 0.1.0 implements ICD 1.0.0 as local, compiled crates; nothing is published to a package registry.
+The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the UI team owns the future root `ui/` directory. SDK version 0.2.0 implements ICD 1.1.0 as local, compiled crates; nothing is published to a package registry.
 
 | Package | Responsibility |
 | --- | --- |
 | `parse-command-types` | Strict core message, passage and audit DTOs, semantic validation, UTC timestamps and deterministic IDs |
 | `parse-command-parser-api` | Borrowed scanner views, contributor trait, typed failures, cooperative work budget and bounded output sink |
 | `parse-command-core` | Explicit registry/allowlist, profile selection, host metadata, core/audit separation and validated results |
+| `parse-command-intake` | Demo mailbox monitor, custody journal, bounded MIME decoding and parser staging |
 | `parse-command-optask` | Profile-specific OPTASK interpretation with rule provenance and external sample regression coverage |
 | `examples/reference-parser` | Independent synthetic contributor crate exercised through the host; no production enablement |
 
-This milestone provides a synchronous library host and OPTASK contribution. IMAP/MIME intake, durable queue/outbox, audit batching, OpenSearch writes, passage construction, embeddings, HTTP and Docker deployment are subsequent adapters. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed input must be retained by that future intake/outbox layer.
+This milestone provides a synchronous library host and OPTASK contribution. The [intake worker](INTAKE.md) adds read-only IMAP polling, MIME framing, SQLite custody and durable outbox staging. Continuous OpenSearch delivery, passage construction, embeddings and HTTP remain subsequent adapters. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed accepted email remains in the custody journal with an explicit state.
 
 ## Build and verify
 

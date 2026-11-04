@@ -9,6 +9,7 @@ publish.workspace = true
 parse-command-types.workspace = true
 parse-command-parser-api.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 parse-command-reference-parser = { path = "../../examples/reference-parser" }

@@ -337,6 +337,84 @@ fn malformed_field_counts_and_unicode_are_bounded_without_panics() {
     }
 }
 
+#[test]
+fn geospatial_default_datum_points_lines_and_closed_polygons_follow_contract() {
+    let parsed=run(&body("OPTASK MCM","AREA/0000N00000E/0000N00100E/0100N00000E//\nCHANDAT/EXAMPLE/100000N0200000E/110000N0210000E//\nPIM/101122S7-0203344W6/011200Z3/EXAMPLE//"),None).unwrap();
+    let locations = &parsed.core.get().locations;
+    assert_eq!(locations.len(), 3);
+    assert_eq!(locations[0].datum, "WGS84");
+    assert_eq!(locations[0].datum_source, LocationDatumSource::Default);
+    let polygon = locations[0].shape.as_ref().unwrap();
+    assert_eq!(polygon["type"], "Polygon");
+    let ring = polygon["coordinates"][0].as_array().unwrap();
+    assert_eq!(ring.first(), ring.last());
+    assert_eq!(ring.len(), 4);
+    let line = locations[1].shape.as_ref().unwrap();
+    assert_eq!(line["type"], "LineString");
+    assert_eq!(line["coordinates"], json!([[20.0, 10.0], [21.0, 11.0]]));
+    let point = locations[2].point.as_ref().unwrap();
+    assert!((point.lat + (10.0 + 11.0 / 60.0 + 22.0 / 3600.0)).abs() < 1e-10);
+    assert!(point.lon < 0.0);
+    for location in locations {
+        assert!(
+            parsed
+                .audit
+                .iter()
+                .any(|event| event.get().subject_id.as_ref() == Some(&location.id))
+        );
+    }
+}
+#[test]
+fn different_datums_bad_checksums_and_crossing_rings_are_reviewable_without_geometry() {
+    for record in [
+        "GEODATUM/ADI-E//\nAREA/0000N00000E/0000N00100E/0100N00000E//",
+        "PIM/101122S7-0203344W5/011200Z3/EXAMPLE//",
+        "AREA/0000N00000E/0200N00200E/0200N00000E/0000N00200E//",
+    ] {
+        let parsed = run(&body("OPTASK MCM", record), None).unwrap();
+        let location = &parsed.core.get().locations[0];
+        assert_eq!(location.status, LocationStatus::Unresolved);
+        assert!(location.shape.is_none() && location.point.is_none());
+        assert!(
+            parsed
+                .core
+                .get()
+                .review_flags
+                .iter()
+                .any(|v| v == "geospatial_review")
+        );
+    }
+    assert!(
+        GeoPoint {
+            lat: f64::NAN,
+            lon: 0.0
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        GeoPoint {
+            lat: 91.0,
+            lon: 0.0
+        }
+        .validate()
+        .is_err()
+    );
+    let explicit = run(
+        &body(
+            "OPTASK LINK",
+            "GEODATUM/WE//\nAREA/0000N00000E/0000N00100E/0100N00000E//",
+        ),
+        None,
+    )
+    .unwrap();
+    assert_eq!(explicit.core.get().locations[0].datum, "WGS84");
+    assert_eq!(
+        explicit.core.get().locations[0].datum_source,
+        LocationDatumSource::Explicit
+    );
+}
+
 fn contains_expected(actual: &Value, expected: &Value, path: &str) {
     match expected {
         Value::Object(map) => {
@@ -401,11 +479,19 @@ fn external_optask_regression() {
             totals[i] += actual[key].as_array().unwrap().len();
         }
         assert!(
-            !parsed.audit.iter().any(|e| e
-                .get()
-                .payload
-                .get("detail")
-                .is_some_and(|v| v["disposition"] == "review_required")),
+            !parsed
+                .audit
+                .iter()
+                .any(|e| e
+                    .get()
+                    .payload
+                    .get("detail")
+                    .is_some_and(|v| v["disposition"] == "review_required"
+                        && !v["code"]
+                            .as_str()
+                            .is_some_and(|c| c.starts_with("coordinate_")
+                                || c.starts_with("area_")
+                                || c.starts_with("circle_")))),
             "{}",
             expected["type"]
         );

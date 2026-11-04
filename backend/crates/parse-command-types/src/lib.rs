@@ -1,4 +1,4 @@
-//! Compact ICD 1.0.0 documents. Validate before publication; core never carries parser evidence.
+//! Compact ICD 1.1.0 documents. Validate before publication; core never carries parser evidence.
 use chrono::{DateTime, Duration, FixedOffset, SecondsFormat};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, fmt};
 
 mod generated;
 pub use generated::*;
-pub const ICD_VERSION: &str = "1.0.0";
+pub const ICD_VERSION: &str = "1.1.0";
 pub const ICD_MAJOR: u16 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,7 +159,7 @@ pub fn validate_subject_id(
 ) -> Result<(), ValidationError> {
     let b = v.as_bytes();
     if b.len() < 2
-        || !b"afcv".contains(&b[0])
+        || !b"afcvg".contains(&b[0])
         || prefix.is_some_and(|p| p != b[0])
         || b[1] == b'0'
         || !b[1..].iter().all(u8::is_ascii_digit)
@@ -348,7 +348,8 @@ impl Message {
             .map(|x| &x.id)
             .chain(self.frequencies.iter().map(|x| &x.id))
             .chain(self.activities.iter().map(|x| &x.id))
-            .chain(self.contacts.iter().map(|x| &x.id));
+            .chain(self.contacts.iter().map(|x| &x.id))
+            .chain(self.locations.iter().map(|x| &x.id));
         let mut seen = BTreeSet::new();
         for id in ids {
             if !seen.insert(id) {
@@ -371,6 +372,91 @@ impl Passage {
 }
 impl AuditEvent {
     fn validate_semantics(&self) -> Result<(), ValidationError> {
+        Ok(())
+    }
+}
+impl GeoPoint {
+    fn validate_semantics(&self) -> Result<(), ValidationError> {
+        if !self.lat.is_finite() || !self.lon.is_finite() {
+            return Err(invalid("geoPoint", "finite_coordinates"));
+        }
+        Ok(())
+    }
+}
+impl Location {
+    fn validate_semantics(&self) -> Result<(), ValidationError> {
+        if self.radius_m.is_some_and(|v| !v.is_finite()) {
+            return Err(invalid("location.radius_m", "finite"));
+        }
+        if self.status == LocationStatus::Unresolved {
+            if self.point.is_some() || self.shape.is_some() {
+                return Err(invalid("location", "unresolved_geometry"));
+            }
+            return Ok(());
+        }
+        if self.datum != "WGS84" || self.point.is_some() == self.shape.is_some() {
+            return Err(invalid("location", "one_wgs84_geometry"));
+        }
+        if let Some(shape) = &self.shape {
+            if shape.len() != 2 {
+                return Err(invalid("location.shape", "geometry_keys"));
+            }
+            let kind = shape
+                .get("type")
+                .and_then(|v| v.as_str())
+                .ok_or(invalid("location.shape", "geometry_type"))?;
+            let coords = shape
+                .get("coordinates")
+                .ok_or(invalid("location.shape", "coordinates"))?;
+            fn point(v: &serde_json::Value) -> Result<(), ValidationError> {
+                let a = v
+                    .as_array()
+                    .filter(|a| a.len() == 2)
+                    .ok_or(invalid("location.shape", "position"))?;
+                GeoPoint {
+                    lon: a[0]
+                        .as_f64()
+                        .ok_or(invalid("location.shape", "longitude"))?,
+                    lat: a[1].as_f64().ok_or(invalid("location.shape", "latitude"))?,
+                }
+                .validate()
+            }
+            fn points(
+                v: &serde_json::Value,
+                min: usize,
+            ) -> Result<&Vec<serde_json::Value>, ValidationError> {
+                let a = v
+                    .as_array()
+                    .filter(|a| a.len() >= min)
+                    .ok_or(invalid("location.shape", "vertices"))?;
+                for v in a {
+                    point(v)?;
+                }
+                Ok(a)
+            }
+            match kind {
+                "Point" => point(coords)?,
+                "LineString" => {
+                    let a = points(coords, 2)?;
+                    if a.windows(2).all(|w| w[0] == w[1]) {
+                        return Err(invalid("location.shape", "degenerate_line"));
+                    }
+                }
+                "Polygon" => {
+                    let rings = coords
+                        .as_array()
+                        .filter(|a| !a.is_empty())
+                        .ok_or(invalid("location.shape", "rings"))?;
+                    for ring in rings {
+                        let a = points(ring, 4)?;
+                        if a.first() != a.last() {
+                            return Err(invalid("location.shape", "ring_not_closed"));
+                        }
+                    }
+                }
+                _ => return Err(invalid("location.shape", "geometry_type")),
+            }
+        }
         Ok(())
     }
 }

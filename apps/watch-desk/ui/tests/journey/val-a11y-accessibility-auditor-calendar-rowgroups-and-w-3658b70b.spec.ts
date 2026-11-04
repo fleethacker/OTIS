@@ -1,0 +1,60 @@
+import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { withEphemeralStack } from "../../../ark/pipeline/journey-stack";
+
+test("Day and Week retain valid full-page accessibility after view changes", async ({ page }) => {
+  const stack = await withEphemeralStack({
+    fixture: "fixtures/read-the-daily-ship-schedule.json",
+    storyId: "val-a11y-accessibility-auditor-calendar-rowgroups-and-w-3658b70b",
+  });
+  try {
+    await page.goto(stack.url);
+    await page.getByLabel("UTC date", { exact: true }).fill("2026-11-04");
+    const calendar = page.getByRole("region", { name: "Zulu UTC calendar, scrollable" });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const colorScheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme });
+        for (const view of ["Day", "Week"] as const) {
+          await page.getByRole("button", { name: view, exact: true }).click();
+          const source = view === "Week"
+            ? calendar.getByRole("button", { name: "Fictional crew briefing, event details", exact: true })
+            : calendar.getByRole("link", { name: "Fictional crew briefing, source record", exact: true });
+          await expect(source).toBeVisible();
+          // Scan the entire document, not only the adapted calendar subtree.
+          const results = await new AxeBuilder({ page })
+            .withRules(["aria-required-parent", "aria-required-children", "aria-roles", "aria-valid-attr-value"])
+            .analyze();
+          expect(results.violations, `${width} ${colorScheme} ${view}`).toEqual([]);
+          await stack.screenshot({
+            page,
+            deliverable: true,
+            ...(width === 1440 && colorScheme === "light" && view === "Day"
+              ? {}
+              : { name: `journey-${width}-${colorScheme}-${view.toLowerCase()}` }),
+          });
+        }
+      }
+    }
+    // Removed layout roles must not remove keyboard-operable source links.
+    const source = calendar.getByRole("button", { name: "Fictional crew briefing, event details", exact: true });
+    await source.focus();
+    await page.keyboard.press("Enter");
+    await page.getByRole("dialog").getByRole("link", { name: "Source record · FICTIONAL-MERIDIAN-001", exact: true }).click();
+    await expect(page.getByRole("article", { name: "Selected message" })).toContainText("FICTIONAL-MERIDIAN-001");
+    await page.getByRole("link", { name: "Return to Calendar", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Week", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByLabel("UTC date", { exact: true }).fill("2027-02-04");
+    for (const view of ["Day", "Week"]) {
+      await page.getByRole("button", { name: view, exact: true }).click();
+      await expect(calendar.getByRole("link")).toHaveCount(0);
+      const results = await new AxeBuilder({ page })
+        .withRules(["aria-required-parent", "aria-required-children", "aria-roles", "aria-valid-attr-value"])
+        .analyze();
+      expect(results.violations, `empty ${view}`).toEqual([]);
+    }
+    await stack.assertNoServerErrors();
+  } finally {
+    await stack.teardown();
+  }
+});

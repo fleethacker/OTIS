@@ -1,0 +1,383 @@
+# Ark-owned generated-app pipeline. Installed by generation and replaced only by trusted upgrades.
+# Commands and tool configuration are authoritative; package scripts are conveniences.
+schema-version: v1
+
+# Descriptive references, not policy assessments or execution gates. The digest
+# identifies the retained supplied edition; the URL is the publisher's locator.
+# Source provenance: docs/references/dowi-8430.01-2026-09-08/README.md in Ark.
+policies:
+  - id: dowi-8430-01
+    title: "DoWI 8430.01 — Accelerated Mission Software"
+    edition: "2026-09-08"
+    source-url: https://www.esd.whs.mil/Portals/54/Documents/DD/issuances/dodi/843001p.PDF
+    source-sha256: b35f0dcc2fae721994413c702671e9b754ed6911daeecfcfec0d83f0a4df465a
+    sections:
+      - id: "3.2.d"
+        title: Automate to the Greatest Extent Possible
+        page: 14
+        summary: >-
+          Make testing, security scanning, compliance checks and deployment continuous
+          activities. Improve automation and actionable feedback with code changes.
+          AI-based automation must also follow paragraph 3.6.
+        coverage-note: >-
+          Linked jobs automate parts of testing and scanning. Other lifecycle activities,
+          coverage requirements and approved AI use require separate evidence.
+      - id: "3.5.b"
+        title: Software Component Transparency
+        page: 18
+        summary: >-
+          Generate and maintain an accurate SBOM for covered software using DoW-approved
+          standards, providing composition information for vulnerability and license analysis.
+        coverage-note: >-
+          Source-tree inventories do not establish complete composition of the delivered
+          artifact or conformity with the maintained DoW evidence standards.
+      - id: "3.5.c(1)"
+        title: Verifiable Build Integrity, Provenance, and Pedigree
+        page: 18
+        summary: >-
+          Use secure, automated and observable builds from trusted sources, protect software
+          from tampering during creation and distribution, and produce machine-readable
+          provenance and attestations with a verifiable chain of custody.
+        coverage-note: >-
+          Current source-commit provenance and local signing do not establish final artifact
+          identity, independently protected custody or verified registry publication.
+      - id: "3.5.d(2)(e)"
+        title: Integrated and Continuous T&E
+        page: 19
+        summary: >-
+          Document testing findings, prioritize them in the development backlog and track
+          them to remediation as part of continuing security improvement and validation.
+        coverage-note: >-
+          A backlog fix story records work to do; its creation does not prove prioritization,
+          completed remediation or verified closure.
+      - id: "3.5.f(8)"
+        title: Verifiable Application Security, Resilience, and Safety
+        page: 21
+        summary: >-
+          Validate measurable security and resilience requirements through tooling where
+          feasible, including continuous vulnerability management with static and dynamic
+          analysis and dependency scanning integrated into pipelines.
+        coverage-note: >-
+          Linked jobs provide static analysis and release-time dependency scanning.
+          Dynamic analysis and deployed-software monitoring need separate evidence.
+      - id: "3.5.h"
+        title: Continuous Supply Chain Monitoring and Disclosure
+        page: 21
+        summary: >-
+          Continuously monitor deployed software for vulnerabilities and supply-chain risk.
+          Require developers and vendors to report critical or actively exploited
+          vulnerabilities to the designated authority within DoW CIO-specified timeframes.
+        coverage-note: >-
+          No linked check monitors deployed artifacts or implements the required reporting
+          process. A release-time scan does not provide that ongoing coverage.
+      - id: "3.5.i(2)(c)"
+        title: Dependencies
+        page: 22
+        summary: >-
+          Address the security and license obligations of all sub-components when evaluating
+          the suitability of third-party software.
+        coverage-note: >-
+          Vulnerability and license observations are inputs to a broader suitability
+          evaluation; they do not determine legal obligations or all third-party risks.
+      - id: "3.5.i(3)(c)"
+        title: License Compliance and Legal Risk
+        page: 23
+        summary: >-
+          For nontrivial open-source components, evaluate and document license obligations,
+          compatibility, copyleft and usage conditions alongside security and operational risk.
+        coverage-note: >-
+          A detected license inventory does not evaluate compatibility, usage conditions,
+          disclosure obligations or legal risk for the intended use.
+      - id: "3.5.i(4)"
+        title: Risk Management Considerations for Third-Party and Open-Source Software
+        page: 23
+        summary: >-
+          Include all third-party components, including open-source, commercial products
+          and their transitive dependencies, in the system SBOM under paragraph 3.5.b.
+        coverage-note: >-
+          Source-tree scanning alone does not establish that every delivered and runtime
+          component is represented in the system SBOM.
+      - id: "3.6.a(2)"
+        title: Principle of Human Responsibility and Accountability
+        page: 23
+        summary: >-
+          Apply risk-based review, including human review and approval for AI-generated
+          changes to security- or safety-critical functionality. Treat AI-generated code
+          as unverified input without transferring responsibility away from people.
+        coverage-note: >-
+          No linked check establishes a human approval bound to the critical change.
+          Plan approval and advisory AI review do not supply that decision.
+      - id: "3.6.b"
+        title: Protection of Government Data
+        page: 23
+        summary: >-
+          Process nonpublic DoW information only with generative AI services resident on
+          DoW information systems and approved under the cited instructions. Apply privacy,
+          data-minimization and access requirements when processing information about people.
+        coverage-note: >-
+          No linked check verifies AI-service residency, approval or permitted data handling.
+          Provider configuration and credential custody alone do not establish these facts.
+      - id: "3.6.d"
+        title: Approved AI Applications or Services and Environments
+        page: 24
+        summary: >-
+          Use formally authorized AI services developed under the specified AI cybersecurity
+          requirements for DoW proprietary software. Require contractual limits on data
+          sharing and public or DoW-external model training, plus authority auditing and monitoring.
+        coverage-note: >-
+          No linked check verifies formal service authorization or contractual guarantees.
+          Approval and audit evidence must come from the responsible authorities.
+
+preview:
+  build: build
+  check: boot
+
+stages:
+  - name: build
+    label: Build & boot
+    jobs: [build, boot]
+  - name: checks
+    label: Code checks
+    jobs: [typecheck, lint, source-policy, secret-scan, vet, lint-go, archcheck, sast-go]
+  - name: tests
+    label: Tests
+    jobs: [test-ui, test-go, journey]
+  - name: reviews
+    label: Reviews
+    jobs: [design-review, a11y, security]
+  - name: release
+    label: Release
+    jobs: [dep-vuln, package, license-report, evidence, deploy]
+
+jobs:
+  build:
+    on: commit
+    description: Compiles the whole app
+    repair-scope: app-source
+    operation: build
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.5.c(1)"
+        explanation: Automates compilation of the application as a recorded pipeline job.
+        limitations: Compilation alone does not establish trusted inputs, tamper protection or artifact custody.
+
+  typecheck:
+    on: commit
+    needs: [boot]
+    description: Checks the UI types line up
+    repair-scope: app-source
+    exec: ["bun", "--no-env-file", "--config=@pipeline/bunfig.toml", "@pipeline/typecheck.mjs"]
+
+  lint:
+    on: commit
+    needs: [boot]
+    description: Checks style and formatting
+    repair-scope: app-source
+    exec: ["bun", "--no-env-file", "--config=@pipeline/bunfig.toml", "@pipeline/lint.mjs"]
+    fix-exec: ["bun", "--no-env-file", "--config=@pipeline/bunfig.toml", "@pipeline/lint.mjs", "--fix"]
+
+  source-policy:
+    on: commit
+    description: Checks added source follows application runtime conventions
+    repair-scope: app-source
+    exec: ["sh", "@pipeline/source-policy.sh"]
+
+  lint-go:
+    on: commit
+    needs: [boot]
+    description: Runs the configured Go linters
+    repair-scope: app-source
+    exec: ["golangci-lint", "run", "--config", "@pipeline/golangci.yml", "--path-mode=abs", "--new=false", "--new-from-rev=", "./..."]
+
+  vet:
+    on: commit
+    needs: [boot]
+    description: Catches suspicious Go code
+    repair-scope: app-source
+    exec: ["go", "vet", "./..."]
+
+  archcheck:
+    on: commit
+    needs: [boot]
+    description: Checks production code uses real implementations
+    repair-scope: app-source
+    exec: ["go", "run", "github.com/defenseunicorns/ark/framework/go/cmd/archcheck", "."]
+
+  test-go:
+    on: commit
+    needs: [boot]
+    description: Runs the backend tests
+    repair-scope: app-source
+    exec: ["go", "test", "-count=1", "./..."]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.2.d"
+        explanation: Runs the backend test suite on commit-triggered validation to provide development feedback.
+        limitations: Covers existing backend tests; it does not establish every required test or lifecycle activity.
+
+  test-ui:
+    on: commit
+    needs: [boot]
+    description: Runs the frontend tests
+    repair-scope: app-source
+    exec: ["bun", "--no-env-file", "--config=@pipeline/bunfig.toml", "--tsconfig-override=@pipeline/tsconfig.json", "test", "--preload", "@pipeline/test-setup.ts", "./ui/src/"]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.2.d"
+        explanation: Runs the frontend test suite on commit-triggered validation to provide development feedback.
+        limitations: Covers existing frontend tests; it does not establish complete behavior or mission test coverage.
+
+  boot:
+    on: commit
+    description: Starts the app and checks it serves
+    repair-scope: app-source
+    needs: [build]
+    operation: boot
+
+  journey:
+    on:
+      - {every: 3}
+      - {changes: [go.mod, go.sum, bun.lock, package.json, ark/ui/package.json, ark/pipeline/journey-test/*, patches/*]}
+    merge-gate: true
+    description: Plays through the app end to end
+    repair-scope: app-tests
+    needs: [boot]
+    exec: ["bun", "--no-env-file", "--config=@pipeline/bunfig.toml", "--tsconfig-override=@pipeline/tsconfig.json", "@tools/@playwright/test/cli.js", "test", "--config", "@pipeline/playwright.config.ts", "--pass-with-no-tests"]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.2.d"
+        explanation: Runs application browser journeys on the configured commit cadence and dependency changes.
+        limitations: Existing journey specs define coverage; an empty suite can pass without exercising a user journey.
+
+  # ── Content-security jobs (PLAN-2026-q3 4.2.b) ──
+  # The first thing an AO asks about AI-written code, as deterministic jobs
+  # on this rail. Tooling is air-gap-runnable OSS single binaries only
+  # (FOSSA-style SaaS phone-home is disqualified — it undercuts the story
+  # the pipeline generates). Tools ship in the ark-runtime image
+  # (tools/tenant-runtime/apko/apko.yaml); on a bare host a missing tool
+  # goes RED with an install pointer, never silently green — a skipped
+  # security scan that reads as "passed" is worse than a loud gap.
+  # govulncheck/trivy consult vulnerability DBs (network today; the air-gap
+  # DB-mirror runbook is ADR-0041's 4.1.c pre-flight).
+
+  secret-scan:
+    on: commit
+    needs: [boot]
+    description: Scans the tree and history for committed secrets
+    exec: ["gitleaks", "detect", "--source", ".", "--config", "@pipeline/gitleaks.toml", "--gitleaks-ignore-path", "@pipeline/gitleaks-ignore", "--ignore-gitleaks-allow", "--no-banner"]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.2.d"
+        explanation: Scans source and Git history for configured secret patterns during commit-triggered validation.
+        limitations: Pattern-based detection does not establish absence of sensitive data or approved information handling.
+
+  sast-go:
+    on: commit
+    needs: [boot]
+    description: Static security analysis of the Go code
+    repair-scope: app-source
+    exec: ["gosec", "-quiet", "-exclude-generated", "./..."]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.2.d"
+        explanation: Runs automated Go security analysis during commit-triggered validation.
+        limitations: Static analysis covers the configured rules and excludes generated code; other security activities need evidence.
+      - policy: dowi-8430-01
+        section: "3.5.f(8)"
+        explanation: Uses gosec to identify configured classes of vulnerabilities in Go source.
+        limitations: Does not provide dynamic analysis, complete vulnerability coverage or deployed-software monitoring.
+
+  dep-vuln:
+    on: manual
+    description: Checks dependencies for known vulnerabilities before releasing
+    needs: [boot]
+    exec: ["sh", "@pipeline/dep-vuln.sh", "@govulncheck", "@trivy", "@pipeline"]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.5.f(8)"
+        explanation: Runs govulncheck and Trivy dependency scanning before manual release qualification.
+        limitations: Uses current scanner data and configured thresholds; it does not continuously monitor deployed artifacts.
+      - policy: dowi-8430-01
+        section: "3.5.i(2)(c)"
+        explanation: Supplies known dependency-vulnerability observations for third-party suitability review.
+        limitations: Does not evaluate every security risk or license obligation; protected Ark tooling is qualified separately.
+
+  license-report:
+    on: manual
+    description: Reports dependency licenses for the release
+    needs: [package]
+    exec: ["trivy", "fs", "--config", "@pipeline/trivy.yaml", "--ignorefile", "@pipeline/trivy-ignore", "--scanners", "license", "--quiet", "."]
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.5.i(2)(c)"
+        explanation: Reports dependency license observations for third-party suitability review.
+        limitations: An inventory does not determine obligations, compatibility or suitability for the intended use.
+      - policy: dowi-8430-01
+        section: "3.5.i(3)(c)"
+        explanation: Supplies detected license information as an input to open-source license-risk evaluation.
+        limitations: Does not perform legal review of compatibility, copyleft requirements or usage-specific conditions.
+
+  # ── Evidence package (PLAN-2026-q3 4.2.a / ADR-0041) ──
+  evidence:
+    on: manual
+    description: Emits the signed release evidence (SBOMs, vulns, SSDF, provenance)
+    needs: [license-report]
+    operation: evidence
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.5.b"
+        explanation: Emits CycloneDX and SPDX SBOMs from the source tree using Syft.
+        limitations: Does not establish complete delivered-artifact composition or conformity with maintained DoW evidence standards.
+      - policy: dowi-8430-01
+        section: "3.5.c(1)"
+        explanation: Emits source-commit provenance and signs a manifest containing the evidence artifact digests.
+        limitations: Local signing does not establish final artifact identity, independently protected custody or registry publication.
+      - policy: dowi-8430-01
+        section: "3.5.i(4)"
+        explanation: Inventories components detected in the source tree as an input to the system SBOM.
+        limitations: Source-tree detection does not establish coverage of every third-party, transitive or runtime component.
+
+  design-review:
+    on: {every: 5}
+    description: AI reviews the live UI for issues
+    needs: [boot]
+    uses: designer
+    triage-epic: ep-design-review
+
+  security:
+    on: {every: 10}
+    description: AI reviews the source for vulnerabilities
+    needs: [boot]
+    uses: security-testing
+    triage-epic: ep-security
+    policy-references:
+      - policy: dowi-8430-01
+        section: "3.5.d(2)(e)"
+        explanation: Routes advisory security-review findings into categorized backlog fix stories.
+        limitations: Filing a story does not prove prioritization or verified remediation; this is not independent government testing.
+
+  a11y:
+    on: {every: 10}
+    description: AI audits the rendered UI for accessibility (WCAG/508) issues
+    needs: [boot]
+    uses: accessibility-auditor
+    triage-epic: ep-a11y
+
+  # ── Release stages (ADR-0034) ──
+  # Manual-only: these jobs never fire on a normal commit. The
+  # Vulnerability qualification prepares `package` when "Cut release" is requested; `deploy`
+  # is the "Deploy to staging" control. Package/evidence/deploy require a green
+  # vulnerability check at the release SHA; ordinary authoring and upgrades do not.
+  package:
+    on: manual
+    then: [license-report, evidence]
+    description: Build the release as a portable UDS package
+    needs: [dep-vuln]
+    operation: package
+
+  deploy:
+    on: manual
+    description: Deploy the release to the UDS staging cluster
+    needs: [evidence, security]
+    sandbox: true
+    operation: deploy

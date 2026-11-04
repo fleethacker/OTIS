@@ -1,0 +1,13 @@
+[extend]
+useDefault = true
+
+# Upgrade proofs retain exact source bytes under content-addressed blob names,
+# so Gitleaks cannot recognize go.sum by its usual filename. Allow only this
+# public module checksum, not arbitrary secrets in proof blobs or other files.
+[[allowlists]]
+description = "modernc.org/token checksum copied into an upgrade proof"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)\.ark/upgrade-proof/[0-9a-f]{64}/blobs/[0-9a-f]{64}$''']
+regexTarget = "secret"
+regexes = ['''^Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=$''']

@@ -1,0 +1,22 @@
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": false,
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "ui/src/gen/**",
+    "dist/",
+    "build/",
+    "ui/build/",
+    "node_modules/",
+    "playwright-report/",
+    "test-results/",
+    "ui/playwright-report/",
+    "ui/test-results/"
+  ]
+}

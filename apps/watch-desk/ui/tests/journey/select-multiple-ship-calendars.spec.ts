@@ -1,0 +1,81 @@
+import { test, expect } from "@playwright/test";
+import { withEphemeralStack } from "../../../ark/pipeline/journey-stack";
+import { calendarEvent } from "./calendar-assertions";
+
+test.use({ timezoneId: "America/New_York" });
+test("ship overlays combine discovery and preserve explicit source-return state", async ({ page }) => {
+  const stack = await withEphemeralStack({ fixture: "fixtures/select-multiple-ship-calendars.json", storyId: "select-multiple-ship-calendars" });
+  try {
+    await page.clock.setFixedTime(new Date("2026-11-04T06:00:00Z"));
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(stack.url);
+    await page.getByLabel("UTC date", { exact: true }).fill("2026-11-04");
+    await page.getByText("Ships · All 3 selected", { exact: true }).click();
+    const a = page.getByRole("checkbox", { name: "Fictional A", exact: true });
+    const b = page.getByRole("checkbox", { name: "Fictional B", exact: true });
+    const unassigned = page.getByRole("checkbox", { name: "Unassigned / ship unavailable", exact: true });
+    await expect(calendarEvent(page, "Fictional Alpha watch")).toBeVisible();
+    await expect(calendarEvent(page, "Fictional Bravo watch")).toBeVisible();
+    const marker = async () => a.locator("..").locator(".ship-marker").evaluate((el) => getComputedStyle(el).backgroundColor);
+    const color = await marker();
+    await b.click();
+    await expect(b).not.toBeChecked();
+    await unassigned.click();
+    await expect(unassigned).not.toBeChecked();
+    await page.getByRole("searchbox").fill("shared");
+    await expect(calendarEvent(page, "Fictional Bravo watch")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Needs review", exact: true })).toHaveCount(0);
+    await expect(a).toBeVisible();
+    expect(await marker()).toBe(color);
+    await page.getByRole("searchbox").fill("Bravo");
+    await expect(page.getByRole("heading", { name: "No matching schedules" })).toBeVisible();
+    await page.getByRole("searchbox").fill("shared");
+    await page.getByRole("button", { name: "Clear all", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "No ships selected" })).toBeVisible();
+    await unassigned.click();
+    await expect(unassigned).toBeChecked();
+    await expect(page.getByRole("link", { name: /FICTIONAL-EVENTLESS ·/ })).toBeVisible();
+    await unassigned.click();
+    await expect(unassigned).not.toBeChecked();
+    await a.click();
+    await expect(a).toBeChecked();
+    await page.getByLabel("Grid interval").selectOption("30");
+    await page.getByLabel("Visible hours (UTC)").selectOption("6-12");
+    for (const view of ["Week", "Month", "Day"]) {
+      await page.getByRole("button", { name: view, exact: true }).click();
+      await expect(a).toBeChecked();
+      await expect(calendarEvent(page, "Fictional Bravo watch", ".ship-calendar")).toHaveCount(0);
+      await expect(calendarEvent(page, "Fictional Alpha watch", ".ship-calendar").first()).toBeVisible();
+    }
+    await page.getByRole("button", { name: "Local", exact: true }).click();
+    await page.getByLabel("Visible hours (Local)").selectOption("0-24");
+    await expect(calendarEvent(page, "Fictional Alpha watch")).toContainText("UTC-05:00");
+    const url = page.url();
+    await calendarEvent(page, "Fictional Alpha watch").click();
+    await page.reload();
+    await page.getByRole("link", { name: "Return to Calendar", exact: true }).click();
+    await expect(page).toHaveURL(url);
+    await page.getByText("Ships · 1 of 3 selected", { exact: true }).click();
+    await expect(a).toBeChecked();
+    await expect(b).not.toBeChecked();
+    await page.emulateMedia({ colorScheme: "light" });
+    await stack.screenshot({ page, deliverable: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(a).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator(".ship-selector").scrollIntoViewIfNeeded();
+    await stack.screenshot({ page, deliverable: true, name: "journey-narrow" });
+    const stale = new URL(page.url());
+    stale.searchParams.set("ships", JSON.stringify(["unit:Fictional A", "unit:Unavailable"]));
+    await page.goto(stale.toString()); // direct-url: explicit stale selection is a supported cold-link state.
+    await page.getByText(/Ships · 1 of 3 selected/).click();
+    await expect(page.getByRole("status").filter({ hasText: "Some selected ships are unavailable" })).toBeVisible();
+    await expect(b).not.toBeChecked();
+    await page.getByRole("button", { name: "Select all", exact: true }).click();
+    await expect(b).toBeChecked();
+    await expect(unassigned).toBeChecked();
+    await expect(page.getByText("Some selected ships are unavailable", { exact: false })).toHaveCount(0);
+    await stack.assertNoServerErrors();
+  } finally { await stack.teardown(); }
+});

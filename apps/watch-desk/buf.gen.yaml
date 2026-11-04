@@ -1,0 +1,34 @@
+version: v2
+managed:
+  enabled: true
+plugins:
+  # Go plugins (local - installed via go install)
+  - local: protoc-gen-go
+    out: gen
+    opt:
+      - paths=source_relative
+  - local: protoc-gen-connect-go
+    out: gen
+    opt:
+      - paths=source_relative
+
+  # TypeScript plugins (local - installed via npm in ui/).
+  #
+  # include_imports: true is required. App .proto files import
+  # buf/validate/validate.proto for field annotations, and protoc-gen-es
+  # emits `import { file_buf_validate_validate } from "../../buf/validate/validate_pb"`
+  # in the generated TS. Without include_imports, validate_pb.ts never
+  # gets written, typecheck fails on the missing module, and the error
+  # looks pre-existing to any builder agent touching the UI.
+  - local: protoc-gen-es
+    out: ui/src/gen
+    include_imports: true
+    opt:
+      - target=ts
+
+  # Connect-Query plugin for type-safe TanStack Query integration.
+  - local: protoc-gen-connect-query
+    out: ui/src/gen
+    include_imports: true
+    opt:
+      - target=ts

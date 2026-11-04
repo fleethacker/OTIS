@@ -1,0 +1,111 @@
+{
+  "source_revision": "ce3c03c45f94ca17ddc4214305e6f96f9611c891",
+  "state_revision": "d65e36278bf5c170ebd1fa17676fed178a88fb64",
+  "approved_plan_version": "ace87d4b9cd0906402b4f411bf016f125fffc69ee569bbfcb6f5e0babdbcbbe7",
+  "context_status": "approved",
+  "exporter_version": "0.18.0-rolling.d2588b658a781cf6542bb7aee767946f2cea8a6f",
+  "work_profile": "generate-web/go-react",
+  "work_profile_version": "v1",
+  "public_guidance": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "ark/go/AGENTS.md",
+    "ark/go/CLAUDE.md",
+    "ark/ui/AGENTS.md",
+    "ark/ui/CLAUDE.md",
+    "ark/ui/README.md",
+    "docs/ark-handoff.md"
+  ],
+  "context_files": [
+    ".ark-handoff/context/anti-goals.md",
+    ".ark-handoff/context/charter.md",
+    ".ark-handoff/context/glossary.md",
+    ".ark-handoff/context/personas.md",
+    ".ark-handoff/context/standards.md"
+  ],
+  "schema_version": 1,
+  "policy_version": "portable-source-v1",
+  "omissions": [
+    {
+      "path": ".ark-hooks/commit-msg",
+      "reason": "ark-private"
+    },
+    {
+      "path": ".ark-hooks/pre-commit",
+      "reason": "ark-private"
+    },
+    {
+      "path": ".ark-manifest.json",
+      "reason": "ark-private"
+    },
+    {
+      "path": "AGENTS.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "CLAUDE.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "ark/.gitignore",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/codegen/ent/generate.go",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/codegen/ent/go.mod",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/codegen/ent/go.sum",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/go/AGENTS.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "ark/go/CLAUDE.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "ark/testing/README.md",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/testing/uds.ts",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/uds-package/package.yaml",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/uds-package/values.schema.json",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/ui/.gitignore",
+      "reason": "ark-private"
+    },
+    {
+      "path": "ark/ui/AGENTS.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "ark/ui/CLAUDE.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "ark/ui/README.md",
+      "reason": "public-guidance-replacement"
+    },
+    {
+      "path": "docs/ark-handoff.md",
+      "reason": "public-guidance-replacement"
+    }
+  ],
+  "omitted_source_files": 20
+}

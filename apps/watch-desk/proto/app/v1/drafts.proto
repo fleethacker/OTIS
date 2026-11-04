@@ -1,0 +1,30 @@
+syntax = "proto3";
+package app.v1;
+import "app/v1/models.proto";
+option go_package = "github.com/defenseunicorns/generated-app/gen/app/v1;appv1";
+service DraftService {
+  rpc ReadDraft(ReadDraftRequest) returns (ReadDraftResponse);
+  rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
+  rpc ReadPreparation(ReadPreparationRequest) returns (PreparationState);
+  rpc SavePreparation(SavePreparationRequest) returns (PreparationState);
+  rpc RecordAcknowledgement(RecordAcknowledgementRequest) returns (PreparationState);
+}
+message ReadDraftRequest { string source_message_id = 1; }
+message ReadDraftResponse { DraftAcknowledgement draft = 1; }
+message SaveDraftRequest { string source_message_id = 1; string text = 2; }
+message SaveDraftResponse { DraftAcknowledgement draft = 1; }
+message ReadPreparationRequest { string source_message_id = 1; }
+message SavePreparationRequest { string source_message_id = 1; string fields_json = 2; bool generate = 3; }
+message RecordAcknowledgementRequest {
+  string source_message_id = 1;
+  bool acknowledged = 2;
+  bool confirmed_external = 3;
+  string note = 4;
+  string occurred_at = 5;
+}
+message PreparationState {
+  string fields_json = 1;
+  string generated_text = 2;
+  bool acknowledged = 3;
+  string history_json = 4;
+}

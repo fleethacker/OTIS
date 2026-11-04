@@ -1,0 +1,39 @@
+# Workspace-root bun config for an Ark generated app.
+#
+# Single bunfig now — the per-package one in ui/ is gone since the
+# wizard-style merge collapsed ui/package.json into the workspace
+# root. Every `bun install` and `bun test` is invoked from the
+# workspace root and reads this file.
+
+[install]
+# Apply Ark's one-week npm release-age floor to newly resolved direct and
+# transitive packages in generated applications. Existing lock entries remain
+# usable; documented security incidents may override this for one reviewed
+# lockfile refresh with `--minimum-release-age=0`.
+minimumReleaseAge = 604800
+
+# NOTE: frozenLockfile is deliberately NOT set here — `bun add <pkg>` must
+# work in this app's tree. bun.lock is committed and IS the pin: every
+# `bun install` installs exactly those versions, verified against their
+# sha512, with no flag involved. `--frozen-lockfile` is a separate thing —
+# an assertion that the install won't need to WRITE the lockfile — and it
+# belongs in CI, not as a global default here.
+#
+# Setting it here breaks the documented flow: a build agent that hits the
+# library escape hatch runs `bun add <pkg>`, which fails with "lockfile is
+# frozen", and the error's own advice (`--no-frozen-lockfile`) is not a real
+# bun flag. Commit package.json + bun.lock together and the pin holds.
+#
+# Hoisted linker dedupes react/react-dom across the linked
+# @defense-unicorns/ark-ui workspace package — required so
+# renderWithProviders doesn't see two React instances ("Invalid hook
+# call" in render tests).
+linker = "hoisted"
+
+[test]
+# happy-dom + jest-dom matchers + the console.error spy that fails
+# tests on React mount crashes (the render-test guard contract — see
+# ui/src/test-utils/setup.ts). Path is workspace-root-relative because
+# bun resolves preload from cwd, and we always run `bun test` from
+# the workspace root now.
+preload = ["./ui/src/test-utils/setup.ts"]

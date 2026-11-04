@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ark · Mock Login</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #111;
+    color: #e8e8e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  main {
+    width: 100%;
+    max-width: 520px;
+    background: #1c1c1c;
+    border: 2px dashed #f59e0b;
+    border-radius: 8px;
+    padding: 28px 32px;
+  }
+  .banner {
+    background: #f59e0b;
+    color: #111;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .banner .icon { font-size: 16px; line-height: 1; }
+  h1 { font-size: 20px; margin: 0 0 8px 0; font-weight: 600; }
+  p.sub {
+    margin: 0 0 20px 0;
+    color: #a0a0a0;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .roles { display: flex; flex-direction: column; gap: 10px; }
+  form { margin: 0; }
+  button.role {
+    width: 100%;
+    background: #242424;
+    border: 1px solid #333;
+    color: #e8e8e8;
+    text-align: left;
+    padding: 14px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 80ms ease, border-color 80ms ease;
+  }
+  button.role:hover {
+    background: #2a2a2a;
+    border-color: #f59e0b;
+  }
+  button.role.active {
+    border-color: #f59e0b;
+    background: #2a2418;
+  }
+  .role-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .role-desc { color: #b8b8b8; font-weight: 400; }
+  .role-meta {
+    font-size: 12px;
+    color: #888;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
+  }
+  .role-groups {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #666;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace;
+  }
+  footer {
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid #2a2a2a;
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+    letter-spacing: 0.05em;
+    text-transform: lowercase;
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">
+    <span class="icon">⚠</span>
+    <span>Development mode · Mock login</span>
+  </div>
+  <h1>Pick a test user</h1>
+  <p class="sub">UDS Identity handles real user login in production. This screen only appears in local preview and development.</p>
+  <div class="roles">
+    {{range .Roles}}
+    <form method="post" action="/__ark/mock-login">
+      <input type="hidden" name="role" value="{{.Name}}">
+      <input type="hidden" name="return" value="{{$.Return}}">
+      <button type="submit" class="role{{if .IsActive}} active{{end}}">
+        <div class="role-name">{{.Name}}{{if .Description}} <span class="role-desc">— {{.Description}}</span>{{end}}</div>
+        <div class="role-meta">{{.Username}} · {{.Email}}</div>
+        {{if .Groups}}<div class="role-groups">groups: {{range $i, $g := .Groups}}{{if $i}}, {{end}}{{$g}}{{end}}</div>{{end}}
+      </button>
+    </form>
+    {{end}}
+  </div>
+  <footer>mock authentication · not real credentials</footer>
+</main>
+</body>
+</html>

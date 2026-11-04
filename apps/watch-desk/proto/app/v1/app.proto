@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package app.v1;
+
+option go_package = "github.com/defenseunicorns/generated-app/gen/app/v1;appv1";
+
+// AppService provides basic application functionality
+// This is a starter service - Ark will add more services based on your data
+service AppService {
+  // Health returns the application health status
+  rpc Health(HealthRequest) returns (HealthResponse) {}
+
+  // Info returns application metadata
+  rpc Info(InfoRequest) returns (InfoResponse) {}
+
+  // GetIdentity returns the current user's identity and resolved role,
+  // read from X-Auth-Request-* headers. In production (UDS) Authservice
+  // sets these after JWT validation; in dev the framework's mock
+  // Authservice shim sets them from a cookie-backed session.
+  rpc GetIdentity(GetIdentityRequest) returns (GetIdentityResponse) {}
+
+  // ListRoles returns all available roles defined in the app's role
+  // config. Kept for apps that want app-specific role-aware UI (e.g.
+  // "admins see X, members don't"). Role *switching* is a dev-only
+  // concern handled by the mock-auth picker at /__ark/mock-login — do
+  // NOT build an in-app role switcher component.
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {}
+}
+
+// HealthRequest checks application health
+message HealthRequest {}
+
+// HealthResponse indicates if the application is healthy
+message HealthResponse {
+  bool healthy = 1;
+  string message = 2;
+}
+
+// InfoRequest gets application information
+message InfoRequest {}
+
+// InfoResponse contains application metadata
+message InfoResponse {
+  string name = 1;
+  string version = 2;
+  string description = 3;
+}
+
+// GetIdentityRequest has no parameters — identity is derived from request headers.
+message GetIdentityRequest {}
+
+// GetIdentityResponse contains the resolved user identity.
+message GetIdentityResponse {
+  string username = 1;
+  string email = 2;
+  repeated string groups = 3;
+  string role = 4;
+}
+
+// ListRolesRequest has no parameters.
+message ListRolesRequest {}
+
+// ListRolesResponse contains all available roles in the app.
+message ListRolesResponse {
+  repeated RoleInfo roles = 1;
+}
+
+// RoleInfo describes a single available role.
+message RoleInfo {
+  string name = 1;
+  string description = 2;
+}

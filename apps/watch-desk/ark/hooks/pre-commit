@@ -1,0 +1,133 @@
+#!/bin/bash
+# Pre-commit hook for Ark-generated applications.
+#
+# Installed at ark/hooks/pre-commit from the canonical Ark bundle and wired
+# via `git config core.hooksPath ark/hooks` during workspace init. Every
+# repository role explicitly activates this hook after cloning; Git does not
+# inherit core.hooksPath from the source repository.
+#
+# Design: only validate hand-written code. Generated files (ent/, ui/src/gen/)
+# are always valid — skip them so an agent committing backend + proto changes
+# doesn't fail on unrelated frontend lint, and vice versa.
+#
+# Silent on success, captured diagnostics on failure. VERBOSE=1 shows progress.
+
+set -e
+
+run_check() {
+	if [ -n "${VERBOSE:-}" ]; then
+		"$@"
+	elif output=$("$@" 2>&1); then
+		return 0
+	else
+		printf '%s\n' "$output" >&2
+		return 1
+	fi
+}
+
+# Agent ownership boundary. The generated workspace contains a small set of
+# tracked platform files so the app can build without fetching Ark at runtime,
+# but those files are not application-story source. Prompt guidance explains
+# that boundary; this gate enforces it while a dispatch is active. Human-owned
+# commits and `ark upgrade` do not carry ARK_DISPATCH, so framework migrations
+# can still refresh these paths through the trusted workspace flow.
+#
+# Generated outputs (gen/, ent/ outside schema/, ui/src/gen/, and the generated
+# route registry) are deliberately absent: app stories must be able to run
+# codegen and commit its results even though they must not hand-edit them.
+if [ -n "${ARK_DISPATCH:-}" ]; then
+	ownership_violation=$(git diff --cached --name-only --no-renames --diff-filter=ACMRD |
+		grep -E '^(\.ark-manifest\.json$|\.ark/upgrade-proof(/|$)|ark(/|$))' ||
+		true)
+	if [ -n "$ownership_violation" ]; then
+		echo ""
+		echo "OWNERSHIP VIOLATION: an app-story commit changes the Ark bundle or coordinator metadata."
+		echo "Run the checked workspace upgrade for framework changes; app source outside ark/ is yours to edit."
+		echo "Offending paths:"
+		echo "$ownership_violation" | head -20
+		exit 1
+	fi
+fi
+
+# A bundle refresh changes only the owned subtree and its receipt. App checks
+# belong to ordinary publication or an actual compatibility migration. Trusted
+# producer/receiver verification still requires canonical bytes and unchanged app
+# source/history; app dispatches are rejected above before reaching this branch.
+bundle_only=true
+staged_paths=$(git diff --cached --name-only --no-renames)
+while IFS= read -r changed_path; do
+	case "$changed_path" in
+	ark/* | .ark-manifest.json) ;;
+	*) bundle_only=false ;;
+	esac
+done <<<"$staged_paths"
+if [ "$bundle_only" = true ] && git rev-parse --verify HEAD >/dev/null 2>&1; then
+	exit 0
+fi
+
+# The coordinator's initial generated-Web tree is checked by hubpush's
+# candidate merge gate before main is created, then again asynchronously on
+# landed main. Avoid running those same jobs a third time in this hook. The
+# exact unborn/scaffold shape prevents later agent commits using the shortcut.
+initial_scaffold=false
+if [ -z "${ARK_DISPATCH:-}" ] && ! git rev-parse --verify HEAD >/dev/null 2>&1 &&
+	[ "$(git diff --cached --name-status -- .ark-manifest.json)" = "$(printf 'A\t.ark-manifest.json')" ] &&
+	[ "$(git diff --cached --name-status -- ark/hooks/pre-commit)" = "$(printf 'A\tark/hooks/pre-commit')" ] &&
+	[ "$(git diff --cached --name-status -- ui/build/.gitkeep)" = "$(printf 'A\tui/build/.gitkeep')" ]; then
+	initial_scaffold=true
+fi
+
+# Every later source commit runs the hook checks. Their merged tree is also
+# checked by hubpush, independently of post-landing Pipeline history.
+if [ "$initial_scaffold" != true ] && git diff --cached --name-only | grep '\.go$' | grep -qvE '^(ent/|gen/)'; then
+	run_check ark run job build
+	run_check ark run job vet
+	run_check ark run job test-go
+	run_check ark run job archcheck
+	if command -v gosec >/dev/null 2>&1; then
+		run_check ark run job sast-go
+	fi
+fi
+# Frontend — Oxlint + typecheck on hand-written TS changes. Run from the
+# repo root: one root package.json drives both backend and ui, and ui/ is no
+# longer a separate workspace, so there is nothing to cd into. Oxlint mirrors
+# the root `lint` script but keeps the
+# --max-warnings 150 budget (see header) that the root script omits.
+if [ "$initial_scaffold" != true ] && git diff --cached --name-only | grep 'ui/.*\.\(ts\|tsx\)$' | grep -qv 'ui/src/gen/'; then
+
+	run_check ark run job lint --fix --staged
+	run_check ark run job typecheck
+	run_check ark run job lint
+fi
+
+# Markdown — auto-format and lint the Markdown surface rumdl owns. The
+# validation pipeline's `lint` job runs both `rumdl check` and
+# `rumdl fmt --check`; keeping this mechanical repair in the hook prevents a
+# formatting-only Markdown commit from becoming a red pipeline run.
+if [ "$initial_scaffold" != true ] && git diff --cached --name-only | grep -Eq '^(DESIGN\.md|ui/src/.*\.md)$'; then
+	run_check ark run job lint --fix --staged
+	run_check ark run job lint
+fi
+
+# 0. Runtime/build artifacts must never land in story commits. These
+# paths are ignored, but this guard catches older tracked artifacts and
+# accidental force-adds before they poison hub history.
+artifact_violation=$(git diff --cached --name-only | grep -E '^(bin/|ui/build/|ui/playwright-report/|([^/]*/)*test-results/|ui/\.playwright/|app\.db($|-)|.*\.sqlite($|-))' || true)
+# The placeholder is needed by Go's ui/build embed before the first UI build.
+if [ "$initial_scaffold" = true ]; then
+	artifact_violation=$(printf '%s\n' "$artifact_violation" | grep -v '^ui/build/\.gitkeep$' || true)
+fi
+if [ -n "$artifact_violation" ]; then
+	echo ""
+	echo "ARTIFACT VIOLATION: runtime/build artifact staged for commit."
+	echo "Remove these from git; hooks enforce tests/builds, story commits should carry source only."
+	echo "Offending paths:"
+	echo "$artifact_violation" | head -10
+	exit 1
+fi
+
+# Source semantics use the same compiled check as candidate inspection.
+# The script retains the exact initial-scaffold exemption; artifacts above do not.
+if [ "$initial_scaffold" != true ]; then
+	run_check ark run job source-policy
+fi

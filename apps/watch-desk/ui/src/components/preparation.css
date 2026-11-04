@@ -1,0 +1,10 @@
+.preparation { min-width: 0; margin-block: 1rem; overflow-wrap: anywhere; }
+.preparation fieldset { display: grid; gap: 0.75rem; min-width: 0; border: 1px solid var(--color-base-300); padding: 0.75rem; }
+.preparation legend { font-weight: 600; }
+.preparation label { display: block; }
+.preparation .input, .preparation .select, .preparation .textarea { width: 100%; min-width: 0; max-width: 100%; }
+.preparation .textarea { white-space: pre-wrap; font-family: monospace; }
+.preparation .checkbox { margin-inline-end: 0.5rem; }
+.preparation-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.preparation .btn { white-space: normal; height: auto; min-height: 2.75rem; }
+.preparation-field p, .preparation [role="alert"] { color: var(--color-error); }

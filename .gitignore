@@ -1,0 +1,9 @@
+# Original source export and external OPTASK fixtures stay local.
+workspace*.tar.gz
+apps/watch-desk/internal/service/testdata/structured-messages.json
+apps/watch-desk/ui/tests/journey/fixtures/present-extensible-structured-message-cards.json
+.env
+.env.*
+!.env.example
+.DS_Store
+__pycache__/

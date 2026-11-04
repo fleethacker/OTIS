@@ -1,0 +1,8 @@
+preload = []
+[install]
+linker = "hoisted"
+minimumReleaseAge = 604800
+
+[test]
+preload = []
+autoRestoreMocks = true

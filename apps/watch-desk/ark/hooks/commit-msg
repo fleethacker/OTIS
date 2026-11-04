@@ -1,0 +1,61 @@
+#!/bin/bash
+# Commit-msg hook — enforces Conventional Commits format.
+#
+# Lives alongside pre-commit in ark/hooks/ and is picked up by the
+# `core.hooksPath = ark/hooks` config GitManager.ConfigureHooks
+# sets at workspace init. Every agent clone inherits the config
+# and this hook from `git clone --local`, so the rule applies
+# uniformly across the hub, the workspace, and every clone.
+#
+# CC types mirror the StoryType enum in proto/wizard/v1/wizard.proto.
+# `revert` and `!`/BREAKING suffixes are deliberately omitted — Ark's
+# AI-native refinement is additive; any "I don't like this" becomes
+# a new feat/fix/refactor. If that changes, add the token here AND
+# update the enum + story decomposer's allowed set.
+#
+# The regex accepts:
+#   <type>(<scope>): <description>
+#   <type>: <description>
+# Rejects:
+#   messages without a <type>: prefix
+#   unknown types
+#   empty descriptions
+
+set -e
+
+msg_file="$1"
+msg=$(head -1 "$msg_file")
+
+# Ignore comment-only / empty / fixup / squash messages — git owns
+# these shapes and they always get rewritten before landing on main.
+#
+# NOTE: `Merge ` and `Revert "..."` (git's auto-generated subjects)
+# used to be exempted here. They no longer are: every Ark code path
+# that touches the workspace or hub now uses pull/rebase/push
+# (`ark agent push` in clones, backed by internal/hubpush, and the
+# pull-loop's rebase fallback) so merge commits should never be
+# produced by Ark itself. If a developer hand-runs `git merge` and
+# trips this rule, the right fix is to redo the operation as a rebase
+# or rename the merge subject to `chore(merge): ...`.
+case "$msg" in
+    fixup!*|squash!*) exit 0 ;;
+    \#*) exit 0 ;;
+    "") exit 0 ;;
+esac
+
+cc_pattern='^(feat|fix|refactor|chore|test|docs|perf|style|build|ci)(\([a-zA-Z0-9_.,\/-]+\))?: .+'
+
+if [[ ! "$msg" =~ $cc_pattern ]]; then
+    echo "Commit message rejected — does not match Conventional Commits."
+    echo ""
+    echo "  Expected: <type>(<scope>): <description>"
+    echo "  Example:  feat(employees): list employees table"
+    echo ""
+    echo "  Valid types: feat fix refactor chore test docs perf style build ci"
+    echo "  Got:         $msg"
+    echo ""
+    echo "Ark derives commit messages from story metadata when the orchestrator"
+    echo "drives the commit. If you're committing by hand, shape the message"
+    echo "to the rule above so release automation can read types from git log."
+    exit 1
+fi

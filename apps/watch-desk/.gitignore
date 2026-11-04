@@ -1,0 +1,134 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+tmp/
+main
+generated-app
+bin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Air temp files
+tmp/
+
+# Node (both directory and symlink forms — worktrees symlink node_modules)
+node_modules
+ui/dist/
+# ui/build/ holds the UI bundle `bun run build` emits and main.go embeds
+# via `//go:embed all:ui/build`. The bundle is a build artifact, so ignore
+# its contents — but keep a tracked .gitkeep so the embed pattern always
+# matches at least one file. Without it, a fresh clone (e.g. the validation
+# pipeline cloning the hub before any UI build has run) fails go vet / go
+# build / go test with "pattern all:ui/build: no matching files found".
+# `bun run build` preserves .gitkeep across its clean step (ui/build.ts reads
+# and restores it), so it never shows up as a deletion in a story commit.
+ui/build/*
+!ui/build/.gitkeep
+
+# Playwright. test-results/ is unanchored so it's ignored at EVERY depth —
+# Playwright writes it at the repo root (not just ui/) depending on which
+# config + cwd the run uses, and a root-level test-results/.last-run.json was
+# leaking into story commits.
+ui/playwright-report/
+test-results/
+ui/test-results/
+ui/.playwright/
+ui/playwright/.auth/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Per-dispatch Ark MCP config — written fresh by ensureArkMCPConfig
+# every time a Claude subprocess spawns and carries the absolute path
+# of the running ark binary on this machine. Not portable, not for
+# git. Ignoring keeps `git stash --include-untracked` from snapshotting
+# it (which caused safeSnapshot/pull-loop conflicts when concurrent
+# dispatches re-wrote the file between push and pop).
+.claude/mcp-ark.json
+
+# Same class, for the alternate-harness drivers (ARK_HARNESS): per-clone agent
+# config written fresh per dispatch — opencode's .opencode/agent/ and root
+# opencode.json, and codex's .codex/ (CODEX_HOME native
+# state/auth; provider, dynamic doctrine, and MCP wiring are process-local).
+# They carry clone-specific paths/IDs, so tracking them makes sibling
+# clones conflict during parallel-build rebase/push (the auto-resolver can't
+# merge a non-regenerable per-clone file). goose writes nothing to the tree, so
+# needs no entry.
+.opencode/
+opencode.json
+.codex/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Journey-test local artifacts. journey-stack.ts captures the
+# deliverable screenshot here, then shells out to
+# `ark upload-artifact` to push the bytes to the orphan
+# ark/state branch. The local copy is per-test scratch — never
+# commit it to main (it'd land as untracked drift the workspace pull
+# loop would race against, and the canonical artifact lives on the
+# orphan branch already).
+ui/tests/journey/.artifacts/
+tests/journey/.artifacts/
+
+# Runtime artifacts — SQLite databases written by `air`/the running app.
+# These are per-instance runtime state and must not be committed: when
+# regenerateAndAmend ran `git add -A` after a workspace pull, picking
+# these up rewrote the merge commit's SHA and silently forked the
+# workspace's main from the hub's main, breaking every subsequent pull.
+app.db
+app.db-shm
+app.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Ark build state (not application code)
+.worktrees/
+
+# .ark/ is scratch + sub-clone — agent clones, bare hub, feedback
+# log, heartbeat files, the sub-clone working
+# tree. All ignored on workspace main except the gate/models
+# overrides, which are workspace-instance config and travel with
+# the workspace across Ark sessions.
+#
+# .ark/state/ is intentionally NOT un-ignored on main — see
+# ADR-0010. It is a SEPARATE git clone of the bare hub checked out
+# on the orphan ark/state branch. Files inside it (stories/,
+# _artifacts/, conversation/, releases/, context/, .git/) must
+# stay invisible to workspace-main's `git add` so the workspace
+# pull loop's divergence detector doesn't observe them as
+# untracked drift.
+#
+# ADR-0010 Phase 5 lockdown is complete: every wizard-owned state
+# surface (backlog + artifacts in Phase 1, conversation in Phase 2,
+# releases in Phase 3, context in Phase 4) lives on the orphan
+# ark/state branch. Workspace main cannot track those paths even
+# by accident — `.ark/*` is unconditionally ignored except for the
+# two static config files below.
+#
+# ADR-0010 also retires the legacy `.ark/backlog/` path — old
+# workspaces with that layout are rejected with
+# ErrPreMigrationWorkspace at OpenLogStore time.
+.ark/*
+!.ark/gate.json
+!.ark/models.json

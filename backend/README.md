@@ -1,6 +1,11 @@
 # Parse Command backend
 
-The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the UI team owns the future root `ui/` directory. SDK version 0.2.0 implements ICD 1.1.0 as local, compiled crates; nothing is published to a package registry.
+The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the imported UI and its Go presentation service live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration analysis](../docs/integration/ark-export.md) and [decision to retain Go for now](../docs/decisions/0001-retain-watch-desk-go-service.md). SDK version 0.2.0 implements ICD 1.1.0 as local, compiled crates; nothing is published to a package registry.
+
+The root [`compose.intake.yml`](../compose.intake.yml) overlay runs this worker
+with Watch Desk, OpenSearch and the demo mail server in one Compose project.
+See the [combined-stack guide](../docs/integration/combined-stack.md). The existing
+standalone intake deployment in `compose.intake.yaml` remains supported.
 
 | Package | Responsibility |
 | --- | --- |
@@ -23,6 +28,16 @@ cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 cargo fmt --all --check
 python3 tools/generate_types.py --check
 ```
+
+Without a host Rust toolchain, run the workspace tests in the pinned build image
+from the repository root:
+
+```sh
+docker build --target test -t parse-command-intake-tests:local backend
+```
+
+This target includes the demo configs needed by the synthetic custody tests.
+External corpus regressions remain opt-in and are not copied into the image.
 
 Dependencies are pinned in `Cargo.lock`. Offline builds require the dependencies to have been provisioned beforehand; runtime airgap does not imply an unprepared machine can build offline. These libraries perform no network, filesystem, model or wall-clock calls during parsing. The external fixture test explicitly reads local files only when requested:
 
@@ -69,7 +84,7 @@ The embedding DTO supports separately constructed search passages; parsers do no
 
 The caller must provide all input/output/count/depth limits, enabled types, revision, recording timestamp, command IDs, cancellation and work budget. Test limits are test fixtures, not laptop capacity recommendations. No deployment resource defaults have been selected.
 
-The host hashes the exact decoded UTF-8 body, derives expiry as 365 elapsed days from a resolved issue timestamp, and leaves unresolved expiry null. It strips one leading `SUBJ:` marker from decoded email metadata while retaining the original decoded value in audit. The eventual MIME adapter must preserve original receipt/header bytes and representation provenance. Only an explicit host policy override can validate security markings. Complete parser output remains `needs_review`; partial output remains `partial`.
+The host hashes the exact decoded UTF-8 body, derives expiry as 365 elapsed days from a resolved issue timestamp, and leaves unresolved expiry null. It strips one leading `SUBJ:` marker from decoded email metadata while retaining the original decoded value in audit. The intake MIME adapter preserves original receipt/header bytes and representation provenance in custody/audit. Only an explicit host policy override can validate security markings. Complete parser output remains `needs_review`; partial output remains `partial`.
 
 The bounded sink checks fields, unique IDs, fact counts, serialized bytes and audit structure; a failed emission stays failed even if a contributor ignores the error. The host rechecks final envelope bytes and fact-to-audit links before returning either result stream. No partial result is returned after failure. Errors carry static codes and offsets, not message text; callers must also avoid logging source or output objects.
 

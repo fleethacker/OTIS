@@ -7,15 +7,17 @@ and the exported `.ark-handoff/context/` snapshot.
 
 ## Ownership and contracts
 
-- `backend/`: Rust parser SDK, core host, contributor crates and tests. Follow
-  `backend/README.md`. Parsing remains transport independent and bounded.
+- `backend/`: Rust parser SDK, core host, OPTASK contributor, durable IMAP worker
+  and tests. Follow `backend/README.md` and `backend/INTAKE.md`. Parsing remains
+  transport independent and bounded; intake stages results in its custody journal.
 - `apps/watch-desk/`: React UI plus the Go service that serves it and persists
   private drafts/preparations. Follow its `AGENTS.md` and `docs/ark-handoff.md`.
 - `docs/ICD.md`, `docs/schemas/`, `docs/opensearch/`: shared parsed-data contracts.
   Schema changes start here; regenerate Rust types rather than editing generated
   types. The UI protobuf is a different presentation contract.
-- `docker-compose.yml`: local stack; `docs/integration/`: current integration
-  analysis, original export inventory and operating instructions.
+- `docker-compose.yml`: local UI/OpenSearch stack; `compose.intake.yml`: optional
+  combined mail/intake overlay reusing `demo/` and `backend/` service definitions.
+  `docs/integration/`: current analysis, export inventory and operating instructions.
 - `.pdlc-docs/` and `.ark-handoff/context/`: retain both sets of product context.
   Historical proposals are not evidence of working implementation.
 
@@ -37,4 +39,8 @@ From `apps/watch-desk/`, use `ark run job build`, `ark run job test-go`,
 The standalone Go module uses its local `ark/go` replacement; use `GOWORK=off`.
 Validate Compose with `docker compose config --quiet`; build and smoke-test
 container changes. Do not treat service health as proof of a working data adapter.
+Validate both the base configuration and the optional `compose.intake.yml` overlay
+after Compose changes. `docker build --target test backend` runs the Rust workspace
+tests using the pinned container toolchain. Preserve separate UI, mail and custody
+volumes; never remove them as a workaround for integration errors.
 

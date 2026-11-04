@@ -1,11 +1,14 @@
 # Parse Command mail demo
 
-This is the upstream mailbox for the future Rust intake service: SMTP delivers
+This is the upstream mailbox for the Rust intake service: SMTP delivers
 email to Postfix, and Parse Command reads Dovecot's `INBOX` over IMAP. Mail and IMAP
 UID state persist in Docker volumes. It follows the repository's
 [IMAP intake plan](../docs/planning/implementation-plan.md#3-design-and-implement-durable-email-intake)
 and [email framing contract](../docs/ICD.md#21-email-subject-and-wrapper-boundary).
-The Rust intake service and parser are not implemented by this demo.
+The worker and parser live in [`../backend/`](../backend/README.md). The
+[combined-stack guide](../docs/integration/combined-stack.md) runs them alongside
+Watch Desk and OpenSearch with one Compose project. Commands below describe the
+original standalone mail project.
 
 ## Start and verify
 
@@ -38,9 +41,11 @@ to configured local recipients; IMAP requires login. Published ports bind to
 loopback, and Postfix rejects delivery to external recipients. TLS is deferred
 here as explicitly permitted for v1.
 
-This Compose project is independent of the root OpenSearch project. A future
-Rust container can join the existing external network `parse-command-demo_mail`
-and use the internal endpoints above; it can also join the OpenSearch network.
+This standalone Compose project is independent of the root UI/OpenSearch project.
+The backend's standalone intake configuration joins its external network
+`parse-command-demo_mail` and uses the internal endpoints above. The root
+`compose.intake.yml` overlay instead creates a project-local mail network for the
+combined workflow. Choose one mail deployment to avoid conflicting host ports.
 Use IMAP account identity, mailbox, UIDVALIDITY and UID for intake cursors, and
 `BODY.PEEK[]` for reads. Do not use message sequence numbers as durable cursors or
 delete upstream mail as part of polling.
@@ -63,7 +68,7 @@ including whitespace and its original line endings. Subjects must start with
 `SUBJ:`; without `--subject`, the helper supplies `SUBJ: DEMO <filename stem>`.
 That subject is explicitly demo metadata, not a recovered original email header.
 Running `send` again creates new receipts for the same bodies, useful for testing
-the host's eventual deduplication policy.
+the worker's duplicate-body custody policy.
 
 Python uses only its standard library. Its commands target this local plaintext
 demo, not production credentials. `--host`, `--smtp-port`, and `--imap-port` go

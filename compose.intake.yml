@@ -1,0 +1,41 @@
+# Optional combined local stack. Compose 2.24.4+ is required for !override.
+# docker compose -f docker-compose.yml -f compose.intake.yml up --build -d --wait
+# Reuse the mail and intake services landed in PR #2, with root-relative paths
+# and a project-local mail network rather than the standalone external network.
+services:
+  mail-config:
+    extends:
+      file: ./demo/docker-compose.yml
+      service: mail-config
+    volumes:
+      - ./demo/config:/seed:ro
+
+  mailserver:
+    extends:
+      file: ./demo/docker-compose.yml
+      service: mailserver
+
+  intake:
+    extends:
+      file: ./backend/compose.intake.yaml
+      service: intake
+    build:
+      context: ./backend
+    volumes:
+      - ./backend/config/demo-compose-intake.json:/etc/parse-command/config.json:ro
+    networks: !override
+      - mail
+    depends_on:
+      mailserver:
+        condition: service_healthy
+
+networks:
+  mail:
+    driver: bridge
+
+volumes:
+  mail-config:
+  mail-data:
+  mail-state:
+  mail-logs:
+  custody:

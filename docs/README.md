@@ -1,6 +1,6 @@
 # Parse Command design and knowledge
 
-Contract baseline: 2026-11-04. The compact parsed-message structure is approved; the ICD and schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; continuous index delivery remains separate. the [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
+Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.1.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; continuous index delivery remains separate. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
 The Ark-generated Watch Desk application is now imported under
 [`../apps/watch-desk/`](../apps/watch-desk/). The [integration analysis](integration/ark-export.md),
@@ -8,6 +8,8 @@ The Ark-generated Watch Desk application is now imported under
 and [ADR 0001](decisions/0001-retain-watch-desk-go-service.md) describe its current
 integration. Historical planning below is retained; its proposed root UI and
 direct browser-to-Rust boundary are being reconciled with the retained Go service.
+The [combined-stack guide](integration/combined-stack.md) covers the optional
+mail/intake overlay added after rebasing onto the merged PR #2 backend.
 
 The objective is an operational capability; the two-day hackathon milestone is its first proof of concept. Confirmed constraints: Rust ingestion/parsing service, OpenSearch persistence and local embedding inference, hybrid keyword/semantic search, Docker Compose, strict airgap architecture, defensive implementation, resource efficiency, resilience, and initial coverage of all OPTASK messages. A teammate owns the UI.
 

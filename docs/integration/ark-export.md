@@ -1,6 +1,7 @@
 # Watch Desk source import and integration analysis
 
-Date: 2026-11-04. Branch: `ark-export-integration`.
+Date: 2026-11-04. Branch: `ark-export-integration`. Rebased onto merged PR #2 at
+`77d5267fe29589bb99a9ce3fc5020e37c4381ffb`.
 
 ## Outcome and scope
 
@@ -11,9 +12,13 @@ service. The team's later Go-versus-Rust decision is recorded in
 [ADR 0001](../decisions/0001-retain-watch-desk-go-service.md).
 
 **The running schedule source still reads SQLite.** This import does not
-implement an OpenSearch schedule adapter, production OPTASK parser, mail intake,
-embedding pipeline, retention policy or Rust HTTP runtime. OpenSearch health and
-UI health are independent of those missing domain capabilities.
+implement an OpenSearch schedule adapter. Current `main` supplies the OPTASK
+contribution, durable IMAP worker, custody/outbox journal and ICD 1.1.0 geographic
+fields. The optional [`compose.intake.yml`](../../compose.intake.yml) overlay
+runs those services alongside the UI and OpenSearch; see the
+[combined-stack guide](combined-stack.md). Continuous index delivery, the Rust
+read API, UI mapping, embeddings and retention remain follow-up work. Service
+health is independent of those missing domain capabilities.
 
 ## Original export and review coverage
 
@@ -60,8 +65,10 @@ The archive itself is retained locally and ignored by Git.
 Parse-Command/
   AGENTS.md, CLAUDE.md       combined repository guidance
   docker-compose.yml        local Go/React + OpenSearch stack
+  compose.intake.yml         optional combined mail/Rust intake overlay
   .env.example              optional local port/auth overrides
-  backend/                  existing Rust workspace and contributor crates
+  backend/                  Rust SDK, OPTASK contribution and durable IMAP worker
+  demo/                     SMTP/IMAP demo server and local helper
   apps/watch-desk/          self-contained imported application
     AGENTS.md, CLAUDE.md     original public app guidance
     .ark-handoff/            original manifest and approved context
@@ -117,6 +124,7 @@ and private-persistence features that the UI already uses.
 | --- | --- | --- | --- |
 | Identity | String message hash, revision, revision-scoped short fact IDs | Numeric DB IDs plus `source_message_id` / `source_event_id` | Explicit stable mapping; retain revision and source links without numeric coercion |
 | Schedule | Typed periods, frequencies and activities with unresolved values | `ExtractedEvent` with title/unit/location and confirmed interval | Agree activity-to-event rules; validity periods and arbitrary frequencies do not imply ship events |
+| Geography | ICD 1.1.0 optional locations, points/shapes and explicit datum/resolution semantics | Lossless structured JSON and generic additional-field cards | Preserve unknown fields and coordinate precision; geometry is not a confirmed event or ship-ownership assignment |
 | Evidence | Separate audit index keyed by message/revision/subject | Raw text and optional one-based line references in snapshot | Authorized evidence retrieval; preserve byte offsets and distinguish unavailable/pending evidence |
 | Review | `needs_review`, partial output, review flags | Parsed/updated/needs-review records and confirmed/needs-review events | Explicit translation; parser success alone cannot confirm an operational schedule |
 | Freshness | Canonical publication, audit flush, passage enrichment differ | Successful read timestamp and a full snapshot | Preserve upstream revision/freshness and unavailable/degraded states |
@@ -130,21 +138,30 @@ do require an owner subject. Real source reads must enforce the agreed policy at
 the server boundary before exposing operational records. The loopback fictional
 Compose profile does not establish this missing authorization behavior.
 
-Proposed future data path (not implemented):
+Current custody and proposed future read/publication path:
 
 ```mermaid
 flowchart LR
     Browser[React browser] --> Go[Go presentation RPC service]
     Go --> Private[(Private UI state: SQLite)]
-    Go -. agreed adapter .-> Rust[Rust API and intake runtime]
-    Rust --> Search[(OpenSearch core / passages / audit)]
-    Mail[IMAP] -. future intake .-> Rust
+    Go -. agreed adapter .-> API[Future Rust read API]
+    API -. future reads .-> Search[(OpenSearch core / passages / audit)]
+    Mail[IMAP] --> Rust[Existing Rust intake and parser]
+    Rust --> Custody[(Custody and audit outbox)]
+    Custody -. future continuous publication .-> Search
 ```
 
 The existing UI-integration proposal has the browser talking directly to Rust;
 the retained Go service is a transitional change to that proposal. ADR 0001
 makes this explicit. Neither the ICD JSON nor the exported protobuf is silently
 declared the team's final operational HTTP contract.
+
+The archive's local-only structured reference fixtures describe the earlier
+snapshot. They are UI rendering regression inputs, not a regenerated ICD 1.1.0
+acceptance corpus. Current schema/type conformance and external OPTASK regression
+remain owned by the Rust backend and external fixtures. The app's unknown-field
+rendering and lossless JSON storage remain intact; no geographic payload creates
+a calendar event implicitly.
 
 ## Context precedence and material differences
 
@@ -296,12 +313,15 @@ Next domain implementation sequence:
 
 1. Agree the Rust read API and Go `ScheduleSource` adapter contract, including
    stable IDs, authorization, revision visibility, evidence and snapshot limits.
-2. Add the Rust runtime outside the pure contributor crates; implement canonical
-   persistence and batched durable audit publication without duplicating parsers
-   in Go. Add it as a real Compose service only when an executable exists.
+2. Extend the existing Rust intake/custody boundary with canonical publication,
+   durable audit delivery and the agreed read API outside pure contributor crates.
+   The executable already runs through the optional combined Compose overlay;
+   do not duplicate its parsing or custody responsibilities in Go.
 3. Map validated source facts into UI events with explicit confirmed/unresolved
    semantics; integrate source/audit detail retrieval. Prove configured reads,
    outage behavior and source identity against OpenSearch-backed data.
-4. Add the previously planned IMAP/durable queue, embedding/search, retention and
-   offline bootstrap work with its own acceptance gates and approved resources.
+4. Validate the existing IMAP/custody flow against its deployment requirements;
+   add embedding/search, retention and offline bootstrap with their own gates and
+   approved resources. The one-shot test loader does not acknowledge the outbox
+   or establish continuous indexing.
 5. Have the team revisit ADR 0001 before stabilizing the operational deployment.

@@ -21,7 +21,7 @@ A tool that seamlessly converts mock USMTF raw text into a synchronized 24-hour 
 
 The imported **Watch Desk** app lives in [`apps/watch-desk/`](apps/watch-desk/).
 Its Go service serves the React UI and persists private drafts/preparations in
-SQLite. The Rust parser foundation remains in [`backend/`](backend/README.md).
+SQLite. The Rust parser and durable IMAP worker live in [`backend/`](backend/README.md).
 The [integration analysis](docs/integration/ark-export.md) covers all 346 exported
 files, both sets of context, contract differences, build portability and remaining
 work. [ADR 0001](docs/decisions/0001-retain-watch-desk-go-service.md) records the
@@ -38,8 +38,10 @@ curl http://localhost:9200
 Open [Watch Desk](http://localhost:8080). This is an isolated local development
 profile with a mock role picker and clearly fictional USS Meridian schedules.
 **The UI still reads SQLite; an OpenSearch-backed schedule adapter is subsequent
-work.** The existing Rust crates are libraries and are not yet a running intake/API
-service. A healthy Compose stack does not imply a completed parser-to-UI pipeline.
+work.** The Rust intake worker stages parsed messages and audit work in its own
+SQLite custody journal. Continuous OpenSearch delivery and the Rust read API
+remain follow-up work. A healthy Compose stack does not imply a completed
+parser-to-UI pipeline.
 
 OpenSearch 3.9.0 runs at `http://localhost:9200` with a 512 MB JVM heap and a
 persistent Docker volume. Authentication and TLS are disabled for local development;
@@ -57,9 +59,24 @@ in separate volumes. Run only the search service with
 
 ### Demo email inbox
 
-See [demo/README.md](demo/README.md) for a persistent SMTP/IMAP mail server,
-demo mailbox credentials, external USMTF message delivery, and the Outlook/Exchange
-production integration boundary.
+To include the mail server and Rust intake worker in the same Compose project,
+use the optional overlay (Docker Compose 2.24.4+):
+
+```sh
+docker compose -f docker-compose.yml -f compose.intake.yml up --build -d --wait --wait-timeout 180
+docker compose -f docker-compose.yml -f compose.intake.yml exec intake parse-command-intake status /etc/parse-command/config.json
+```
+
+This reuses the services from PR #2 and creates a project-local mail network;
+it needs no separately started demo stack. SMTP/IMAP bind to loopback ports 1025
+and 1143. Do not run the standalone mail stack on the same ports simultaneously.
+The UI still shows its separate fictional dataset. See the
+[combined-stack guide](docs/integration/combined-stack.md) for data boundaries,
+verification, persistent state and offline preparation.
+
+The original standalone mail workflow remains available. See
+[demo/README.md](demo/README.md) for credentials, external message delivery and
+the Exchange production boundary:
 
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
@@ -71,11 +88,13 @@ python3 demo/mail.py check
 | Location | Responsibility |
 | --- | --- |
 | `apps/watch-desk/` | React UI, Go presentation API, private SQLite state, bundled Ark dependencies and original handoff guidance |
-| `backend/` | Rust parser SDK, host, types and contributor tests |
+| `backend/` | Rust parser SDK, OPTASK contribution, durable IMAP intake, types and tests |
+| `demo/` | SMTP/IMAP demo server and local mail helper |
 | `docs/` | Canonical ICD/schemas/mappings, original engineering planning, integration analysis and decisions |
 | `.pdlc-docs/` | Larger-project product context |
 | `apps/watch-desk/.ark-handoff/` | Original approved UI context and export provenance |
 | `docker-compose.yml` | Local stack, service health, persistent volumes and private network |
+| `compose.intake.yml` | Optional combined mail-server and Rust intake services |
 
 See [container operation and offline preparation](docs/integration/ark-export.md#docker-compose-operation)
 and [validation results](docs/integration/validation.md). Follow root
@@ -110,7 +129,7 @@ The Rust implementation is in [`backend/`](backend/README.md). The following exa
 
 This coverage reproduces all approved example facts: 13 periods, 27 frequencies, 25 activities and 8 contacts. Extraction includes frequency plans, crypto changeover points, communications windows/checks, replenishment rendezvous, explicit task records, reporting requirements and source POCs where present. Detailed evidence stays in separate audit documents.
 
-Support is specific to these tested layouts and extraction rules. Output remains marked `partial` because unprojected records are preserved for review; the example-based profiles do not establish full edition compliance. Missing dates and unresolved command/C2 mappings remain explicit. The parser performs no runtime network or model calls. UI integration lives in the separate `ui/` directory.
+Support is specific to these tested layouts and extraction rules. Output remains marked `partial` because unprojected records are preserved for review; the example-based profiles do not establish full edition compliance. Missing dates and unresolved command/C2 mappings remain explicit. The parser performs no runtime network or model calls. UI integration lives in [`apps/watch-desk/ui/`](apps/watch-desk/ui/).
 
 ## Initial inbox test
 

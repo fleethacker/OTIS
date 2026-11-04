@@ -5,6 +5,37 @@ Run date: 2026-11-04. Host: macOS arm64. Linux containers: arm64.
 These are local integration diagnostics. Exported historical Ark validation
 claims are not substituted for this run.
 
+## Rebase verification after PR #2
+
+Rebased PR #3 onto PR #2's merged `main` commit
+`77d5267fe29589bb99a9ce3fc5020e37c4381ffb` on 2026-11-04. The backend README
+conflict was resolved by retaining SDK 0.2.0 / ICD 1.1.0 and the imported app's
+actual location. A local recovery branch,
+`codex/ark-export-integration-before-rebase`, retains the original PR #3 head.
+
+| Check | Result |
+| --- | --- |
+| Upstream preservation | Rust domain code, ICD 1.1.0 schemas and OpenSearch mappings match merged `main` |
+| Base and combined Compose configuration | Passed; combined model has web, search, mail configuration, mail server and intake services |
+| Overlay paths and network | Passed: backend/config and mail seed paths resolve from the repository root; no external network dependency remains in the combined model |
+| Rust intake runtime image | Built successfully using the pinned backend Dockerfile |
+| Rust workspace container tests | 48 passed, 0 failed, 2 external-corpus regressions intentionally ignored |
+| Watch Desk runtime image | Rebuilt successfully |
+| Go tests and vet | Passed after rebase |
+| UI unit tests | 59 passed, 0 failed, including locally restored reference-rendering coverage |
+| TypeScript checker | Passed |
+| Combined-stack live startup | Not run: approval to start a separate smoke-test project was declined; no test messages were sent |
+| Diff checks | Passed; no conflict markers or unintended Rust domain/contract edits |
+
+The new optional overlay and Rust test target are described in
+[the combined-stack guide](combined-stack.md). The default UI/search runtime
+retains the original verified behavior below. Current build/configuration
+checks do not establish a live SMTP-to-custody-to-search-to-calendar workflow:
+continuous delivery and the UI adapter remain unimplemented. No new runtime
+persistence claim replaces the earlier declined write/restart probe.
+
+## Original import verification
+
 | Check | Result |
 | --- | --- |
 | Archive safety/inventory | Passed: all 346 regular UTF-8 files inventoried, original hashes and destinations recorded |
@@ -64,9 +95,10 @@ TypeScript override during unit tests. The processes exit successfully with the
 pass counts above. The tests also emit an existing JSX-transform warning. No
 dependency version was changed to suppress these messages.
 
-The Rust source was not changed. Cargo/rustfmt are absent on this host; the Rust
-type-generation check cannot run because its rustfmt executable is unavailable.
-No Rust test, clippy, format or regeneration success is claimed for this turn.
+During the original import, Cargo/rustfmt were absent on this host, so no Rust
+checks were completed then. The rebase verification above adds the pinned-container
+workspace test run. Rust clippy, formatting, type regeneration and the two
+opt-in external-corpus regressions were not rerun in this integration update.
 
 ## Scope of confidence
 

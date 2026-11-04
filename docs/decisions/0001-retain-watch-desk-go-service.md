@@ -8,8 +8,10 @@ choice so the team can revisit it.
 
 ## Context
 
-Parse Command implements a Rust parser SDK and host, with ICD 1.0.0 JSON for
-OpenSearch core/passages/audit. The imported Watch Desk application has a React
+Parse Command implements a Rust parser SDK and host, with ICD JSON for
+OpenSearch core/passages/audit. After PR #2 merged, SDK 0.2.0 / ICD 1.1.0 also
+provide OPTASK interpretation, geographic projections and durable IMAP intake.
+The imported Watch Desk application has a React
 UI and Go service with ConnectRPC, identity integration, SQLite/ENT persistence,
 private acknowledgement drafts, structured preparation and private activity.
 Removing Go immediately requires porting these contracts and behaviors before
@@ -22,12 +24,14 @@ its Go module, Bun workspace, protobuf/ENT generators, tests, Ark dependencies
 and handoff context. Its Go binary serves embedded React assets and the existing
 same-origin ConnectRPC API. Keep parsing and parser contributions in `backend/`.
 
-The present Compose stack packages Go/React and OpenSearch. The Rust workspace
-contains libraries, so it is not presented as an executable service. A later
-Rust runtime will own intake, parsing and canonical publication. The proposed
+The base Compose stack packages Go/React and OpenSearch. The optional
+`compose.intake.yml` overlay also runs the existing Rust intake executable and
+demo mail server, reusing PR #2's service definitions. Rust owns intake, parsing
+and local custody; continuous canonical publication and its read API remain
+follow-up work. The proposed
 read boundary is React → Go presentation service → Rust API → OpenSearch;
 agree it with the team before implementation. OpenSearch credentials remain
-server-side. No operational data adapter is implemented by this packaging step.
+server-side. No operational UI data adapter is implemented by this packaging step.
 
 SQLite currently holds fictional source records as well as private UI state.
 When the upstream adapter exists, canonical operational messages/facts must stay

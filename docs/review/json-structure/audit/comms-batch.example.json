@@ -1,0 +1,1169 @@
+{
+  "review_only": true,
+  "destination": "separate_opensearch_audit_index",
+  "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+  "entries": [
+    {
+      "id": "73f80b945eeb385228aa8839c48cc0941fd027dea2ef75e1bba3ea2d4fa1725e",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "source_preserved",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "source": {
+          "kind": "local_text_fixture",
+          "filename": "OPERATIONAL_TASKING_COMMUNICATIONS.txt",
+          "sha256": "d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+          "byte_length": 743,
+          "encoding": "UTF-8",
+          "span_convention": "zero_based_half_open_utf8_bytes",
+          "raw_text": "MSGID/OPTASK COMMS/MIL-STD-6040(SERIES)/B.1.01.12/CCG 7/0010\n/20090214T132530Z/-/-/USA/UNCLASSIFIED//\nPERIOD/210001ZMAR2008/151200ZMAY2008//\nCOMPLAN/CHELIBER COMPLAN/ALFA/0500Z/1700Z/UHF:213/UHF:405/HF:212\n/HF:404//\nCCTPRI/UHF:213/UHF:405/HF:212/HF:404//\nFREQPLAN/TG REPORTING/GL123/A/123.4MHZ/A3E/W/B/234.5MHZ/A3E/W/C/-/-/-\n/D/345.6MHZ/A3E/X/E/1234.5KHZ/J3E/W//\nCOMCHECK/261200ZJUL2008/HALSEY/COORD:TG TACTICAL/CND:LN210/CND:LN314\n/CND:LN405//\nCOMGUARD/LINE:NP403/AS/KEY:AKAT20313Z/260745ZMAR2008/030745ZAPR2008\n/SPRUANCE/NIMITZ//\nANTIJAM/REFERENCE DOCUMENT/ALFA/TACTICAL/FIGHTING/AAW//\nGENTEXT/RECOGNITION POLICY/PROVIDES FREE TEXT RECOGNITION POLICY//\nGENTEXT/REPORTING INSTRUCTIONS/PROVIDES FREE TEXT REPORTING\nINSTRUCTIONS//\nAKNLDG/YES//\n",
+          "transport": null
+        }
+      }
+    },
+    {
+      "id": "b0b9504b61c6a5202b432119ec035640098dc3e278444d62afe2b5525d900f88",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "parse_completed",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "header": {
+          "message_type": "OPTASK COMMS",
+          "standard_reference": "MIL-STD-6040(SERIES)",
+          "declared_version": "B.1.01.12",
+          "originator": "CCG 7",
+          "serial": "0010",
+          "issue_time": {
+            "raw": "20090214T132530Z",
+            "value": "2009-02-14T13:25:30Z",
+            "status": "explicit_timestamp",
+            "kind": "instant",
+            "evidence": {
+              "record_id": "r0001",
+              "field_positions": [
+                6
+              ]
+            },
+            "interpretation": {
+              "id": "later-msgid-issue-field",
+              "basis": "inferred_extension",
+              "review_status": "awaiting_user_validation"
+            }
+          },
+          "qualifier": null,
+          "qualifier_serial": null,
+          "security": {
+            "policy_raw": "USA",
+            "classification_raw": "UNCLASSIFIED",
+            "classification": "UNCLASSIFIED",
+            "release_to_raw": [],
+            "effective_access_policy_status": "not_validated"
+          },
+          "interpretation": {
+            "id": "later-msgid-envelope-layout",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          }
+        },
+        "parsing": {
+          "method": "one_off_design_review_extraction",
+          "baseline": "USMTF-2003",
+          "profile": "2003-with-inferred-example-extensions",
+          "structural_status": "all_source_sets_preserved",
+          "semantic_status": "partial",
+          "operational_validation": "pending",
+          "scope_validation": "partial_observed_context_only",
+          "record_count": 11
+        },
+        "retention": {
+          "basis": "usmtf_issue_time",
+          "hot_days": 90,
+          "total_days": 365,
+          "cold_at": "2009-05-15T13:25:30Z",
+          "expires_at": "2010-02-14T13:25:30Z",
+          "status": "dates_computed_from_issue_candidate",
+          "issue_time_interpretation": "inferred_extension"
+        },
+        "records": [
+          {
+            "id": "r0001",
+            "set_id": "MSGID",
+            "sequence": 1,
+            "span": {
+              "start_byte": 0,
+              "end_byte": 101,
+              "start_line": 1,
+              "end_line": 2
+            },
+            "fields": [
+              "OPTASK COMMS",
+              "MIL-STD-6040(SERIES)",
+              "B.1.01.12",
+              "CCG 7",
+              "0010",
+              "20090214T132530Z",
+              "-",
+              "-",
+              "USA",
+              "UNCLASSIFIED"
+            ],
+            "context_record_ids": [],
+            "fact_ids": []
+          },
+          {
+            "id": "r0002",
+            "set_id": "PERIOD",
+            "sequence": 2,
+            "span": {
+              "start_byte": 102,
+              "end_byte": 140,
+              "start_line": 3,
+              "end_line": 3
+            },
+            "fields": [
+              "210001ZMAR2008",
+              "151200ZMAY2008"
+            ],
+            "context_record_ids": [],
+            "fact_ids": [
+              "periods-0001"
+            ]
+          },
+          {
+            "id": "r0003",
+            "set_id": "COMPLAN",
+            "sequence": 3,
+            "span": {
+              "start_byte": 141,
+              "end_byte": 215,
+              "start_line": 4,
+              "end_line": 5
+            },
+            "fields": [
+              "CHELIBER COMPLAN",
+              "ALFA",
+              "0500Z",
+              "1700Z",
+              "UHF:213",
+              "UHF:405",
+              "HF:212",
+              "HF:404"
+            ],
+            "context_record_ids": [],
+            "fact_ids": [
+              "activities-0001"
+            ]
+          },
+          {
+            "id": "r0004",
+            "set_id": "CCTPRI",
+            "sequence": 4,
+            "span": {
+              "start_byte": 216,
+              "end_byte": 254,
+              "start_line": 6,
+              "end_line": 6
+            },
+            "fields": [
+              "UHF:213",
+              "UHF:405",
+              "HF:212",
+              "HF:404"
+            ],
+            "context_record_ids": [],
+            "fact_ids": []
+          },
+          {
+            "id": "r0005",
+            "set_id": "FREQPLAN",
+            "sequence": 5,
+            "span": {
+              "start_byte": 255,
+              "end_byte": 362,
+              "start_line": 7,
+              "end_line": 8
+            },
+            "fields": [
+              "TG REPORTING",
+              "GL123",
+              "A",
+              "123.4MHZ",
+              "A3E",
+              "W",
+              "B",
+              "234.5MHZ",
+              "A3E",
+              "W",
+              "C",
+              "-",
+              "-",
+              "-",
+              "D",
+              "345.6MHZ",
+              "A3E",
+              "X",
+              "E",
+              "1234.5KHZ",
+              "J3E",
+              "W"
+            ],
+            "context_record_ids": [],
+            "fact_ids": [
+              "frequencies-0001",
+              "frequencies-0002",
+              "frequencies-0003",
+              "frequencies-0004",
+              "frequencies-0005"
+            ]
+          },
+          {
+            "id": "r0006",
+            "set_id": "COMCHECK",
+            "sequence": 6,
+            "span": {
+              "start_byte": 363,
+              "end_byte": 444,
+              "start_line": 9,
+              "end_line": 10
+            },
+            "fields": [
+              "261200ZJUL2008",
+              "HALSEY",
+              "COORD:TG TACTICAL",
+              "CND:LN210",
+              "CND:LN314",
+              "CND:LN405"
+            ],
+            "context_record_ids": [],
+            "fact_ids": [
+              "activities-0002"
+            ]
+          },
+          {
+            "id": "r0007",
+            "set_id": "COMGUARD",
+            "sequence": 7,
+            "span": {
+              "start_byte": 445,
+              "end_byte": 531,
+              "start_line": 11,
+              "end_line": 12
+            },
+            "fields": [
+              "LINE:NP403",
+              "AS",
+              "KEY:AKAT20313Z",
+              "260745ZMAR2008",
+              "030745ZAPR2008",
+              "SPRUANCE",
+              "NIMITZ"
+            ],
+            "context_record_ids": [],
+            "fact_ids": [
+              "activities-0003"
+            ]
+          },
+          {
+            "id": "r0008",
+            "set_id": "ANTIJAM",
+            "sequence": 8,
+            "span": {
+              "start_byte": 532,
+              "end_byte": 587,
+              "start_line": 13,
+              "end_line": 13
+            },
+            "fields": [
+              "REFERENCE DOCUMENT",
+              "ALFA",
+              "TACTICAL",
+              "FIGHTING",
+              "AAW"
+            ],
+            "context_record_ids": [],
+            "fact_ids": []
+          },
+          {
+            "id": "r0009",
+            "set_id": "GENTEXT",
+            "sequence": 9,
+            "span": {
+              "start_byte": 588,
+              "end_byte": 654,
+              "start_line": 14,
+              "end_line": 14
+            },
+            "fields": [
+              "RECOGNITION POLICY",
+              "PROVIDES FREE TEXT RECOGNITION POLICY"
+            ],
+            "context_record_ids": [],
+            "fact_ids": []
+          },
+          {
+            "id": "r0010",
+            "set_id": "GENTEXT",
+            "sequence": 10,
+            "span": {
+              "start_byte": 655,
+              "end_byte": 729,
+              "start_line": 15,
+              "end_line": 16
+            },
+            "fields": [
+              "REPORTING INSTRUCTIONS",
+              "PROVIDES FREE TEXT REPORTING\nINSTRUCTIONS"
+            ],
+            "context_record_ids": [],
+            "fact_ids": []
+          },
+          {
+            "id": "r0011",
+            "set_id": "AKNLDG",
+            "sequence": 11,
+            "span": {
+              "start_byte": 730,
+              "end_byte": 742,
+              "start_line": 17,
+              "end_line": 17
+            },
+            "fields": [
+              "YES"
+            ],
+            "context_record_ids": [],
+            "fact_ids": []
+          }
+        ],
+        "entities": [
+          {
+            "id": "e0001",
+            "source_name": "CCG 7",
+            "key": "CCG 7",
+            "canonical_command_id": null,
+            "identity_status": "roster_not_supplied",
+            "occurrences": [
+              {
+                "relation": "originator",
+                "evidence": {
+                  "record_id": "r0001",
+                  "field_positions": [
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "e0002",
+            "source_name": "HALSEY",
+            "key": "HALSEY",
+            "canonical_command_id": null,
+            "identity_status": "roster_not_supplied",
+            "occurrences": [
+              {
+                "relation": "communications_check_participant",
+                "evidence": {
+                  "record_id": "r0006",
+                  "field_positions": [
+                    2
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "e0003",
+            "source_name": "SPRUANCE",
+            "key": "SPRUANCE",
+            "canonical_command_id": null,
+            "identity_status": "roster_not_supplied",
+            "occurrences": [
+              {
+                "relation": "communications_guard_participant",
+                "evidence": {
+                  "record_id": "r0007",
+                  "field_positions": [
+                    6
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "id": "e0004",
+            "source_name": "NIMITZ",
+            "key": "NIMITZ",
+            "canonical_command_id": null,
+            "identity_status": "roster_not_supplied",
+            "occurrences": [
+              {
+                "relation": "communications_guard_participant",
+                "evidence": {
+                  "record_id": "r0007",
+                  "field_positions": [
+                    7
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "VALIDITY_START_PRECEDES_ISSUE_CANDIDATE",
+            "record_ids": [
+              "r0002",
+              "r0001"
+            ],
+            "severity": "warning",
+            "detail": "Source values retained without rewriting their dates."
+          },
+          {
+            "code": "ACTIVITY_OUTSIDE_MESSAGE_PERIOD",
+            "record_ids": [
+              "r0006",
+              "r0002"
+            ],
+            "severity": "warning",
+            "detail": "Explicit event time preserved; no correction to the source date was inferred."
+          }
+        ],
+        "references": [],
+        "cancellations": [],
+        "time_candidates": []
+      }
+    },
+    {
+      "id": "694aa3c8239660c6d5138192cf4b0b41998fbb3df755b2baed60326c4945b466",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "v1",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "periods-0001",
+          "start": {
+            "raw": "210001ZMAR2008",
+            "value": "2008-03-21T00:01:00Z",
+            "status": "explicit_timestamp",
+            "kind": "instant",
+            "components": {
+              "day": 21,
+              "hour": 0,
+              "minute": 1,
+              "zone": "Z",
+              "month": 3,
+              "year": 2008
+            }
+          },
+          "end": {
+            "raw": "151200ZMAY2008",
+            "value": "2008-05-15T12:00:00Z",
+            "status": "explicit_timestamp",
+            "kind": "instant",
+            "components": {
+              "day": 15,
+              "hour": 12,
+              "minute": 0,
+              "zone": "Z",
+              "month": 5,
+              "year": 2008
+            }
+          },
+          "qualifier_time": null,
+          "purpose": "validity_period",
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0002",
+            "field_positions": [
+              1,
+              2
+            ]
+          },
+          "interpretation": {
+            "id": "period-field-roles",
+            "basis": "2003_set_definition",
+            "review_status": "awaiting_user_validation"
+          }
+        }
+      }
+    },
+    {
+      "id": "4fb88c40e670e9cd2dad412c65cb3d72873c21b837cc23b5f53f2e9bc6b1c4d6",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "f1",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "frequencies-0001",
+          "plan_name": "TG REPORTING",
+          "plan_designator": "GL123",
+          "channel": "A",
+          "measurement": {
+            "raw": "123.4MHZ",
+            "value_decimal": "123.4",
+            "unit": "MHZ",
+            "hz": 123400000,
+            "kind": "single"
+          },
+          "value_status": "explicit",
+          "emission_designator_raw": "A3E",
+          "usage_code_raw": "W",
+          "entity_ids": [],
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0005",
+            "field_positions": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "interpretation": {
+            "id": "freqplan-repeated-four-field-group",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "475b51f9328df137e71adc0cf56b24168d848262753c81bf1da1a3aab9a16e8e",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "f2",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "frequencies-0002",
+          "plan_name": "TG REPORTING",
+          "plan_designator": "GL123",
+          "channel": "B",
+          "measurement": {
+            "raw": "234.5MHZ",
+            "value_decimal": "234.5",
+            "unit": "MHZ",
+            "hz": 234500000,
+            "kind": "single"
+          },
+          "value_status": "explicit",
+          "emission_designator_raw": "A3E",
+          "usage_code_raw": "W",
+          "entity_ids": [],
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0005",
+            "field_positions": [
+              1,
+              2,
+              7,
+              8,
+              9,
+              10
+            ]
+          },
+          "interpretation": {
+            "id": "freqplan-repeated-four-field-group",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "fed54da2c738bbd9d2e31113219f153a97474f082dd38cf17efd2c1296dafa26",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "f3",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "frequencies-0003",
+          "plan_name": "TG REPORTING",
+          "plan_designator": "GL123",
+          "channel": "C",
+          "measurement": null,
+          "value_status": "not_available_withheld_or_inapplicable",
+          "emission_designator_raw": "-",
+          "usage_code_raw": "-",
+          "entity_ids": [],
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0005",
+            "field_positions": [
+              1,
+              2,
+              11,
+              12,
+              13,
+              14
+            ]
+          },
+          "interpretation": {
+            "id": "freqplan-repeated-four-field-group",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "c9934a5b7f32b3ed9306ee9b9cfc6171bb77de0600ff299f4fb379adf5ecbd5b",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "f4",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "frequencies-0004",
+          "plan_name": "TG REPORTING",
+          "plan_designator": "GL123",
+          "channel": "D",
+          "measurement": {
+            "raw": "345.6MHZ",
+            "value_decimal": "345.6",
+            "unit": "MHZ",
+            "hz": 345600000,
+            "kind": "single"
+          },
+          "value_status": "explicit",
+          "emission_designator_raw": "A3E",
+          "usage_code_raw": "X",
+          "entity_ids": [],
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0005",
+            "field_positions": [
+              1,
+              2,
+              15,
+              16,
+              17,
+              18
+            ]
+          },
+          "interpretation": {
+            "id": "freqplan-repeated-four-field-group",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "0043853cd3687f7dcd76943226d279ffd6ea0b5e554c6675706e267053f4f143",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "f5",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "frequencies-0005",
+          "plan_name": "TG REPORTING",
+          "plan_designator": "GL123",
+          "channel": "E",
+          "measurement": {
+            "raw": "1234.5KHZ",
+            "value_decimal": "1234.5",
+            "unit": "KHZ",
+            "hz": 1234500,
+            "kind": "single"
+          },
+          "value_status": "explicit",
+          "emission_designator_raw": "J3E",
+          "usage_code_raw": "W",
+          "entity_ids": [],
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0005",
+            "field_positions": [
+              1,
+              2,
+              19,
+              20,
+              21,
+              22
+            ]
+          },
+          "interpretation": {
+            "id": "freqplan-repeated-four-field-group",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "4d08c3f334cd56eb52daf311dd0e254b7ccaac8c778060778ebb8fb7bf51034a",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "a1",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "activities-0001",
+          "kind": "communications_plan_window",
+          "plan_name": "CHELIBER COMPLAN",
+          "plan_variant": "ALFA",
+          "start": {
+            "raw": "0500Z",
+            "value": null,
+            "status": "missing_date",
+            "kind": "time_of_day",
+            "components": {
+              "hour": 5,
+              "minute": 0,
+              "zone": "Z"
+            }
+          },
+          "end": {
+            "raw": "1700Z",
+            "value": null,
+            "status": "missing_date",
+            "kind": "time_of_day",
+            "components": {
+              "hour": 17,
+              "minute": 0,
+              "zone": "Z"
+            }
+          },
+          "circuit_references_raw": [
+            "UHF:213",
+            "UHF:405",
+            "HF:212",
+            "HF:404"
+          ],
+          "recurrence_status": "not_asserted_from_time_alone",
+          "entity_ids": [],
+          "applicability_status": "unresolved",
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0003",
+            "field_positions": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ]
+          },
+          "interpretation": {
+            "id": "complan-sample-layout",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "9e482fcd3050c5dec9b3c22c46e0e3b44e2d59c8323ba18cf98324b570b618e4",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "a2",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "activities-0002",
+          "kind": "communications_check",
+          "time": {
+            "raw": "261200ZJUL2008",
+            "value": "2008-07-26T12:00:00Z",
+            "status": "explicit_timestamp",
+            "kind": "instant",
+            "components": {
+              "day": 26,
+              "hour": 12,
+              "minute": 0,
+              "zone": "Z",
+              "month": 7,
+              "year": 2008
+            }
+          },
+          "entity_ids": [
+            "e0002"
+          ],
+          "applicability_status": "explicit_unit_candidate",
+          "coordination_reference_raw": "COORD:TG TACTICAL",
+          "circuit_references_raw": [
+            "CND:LN210",
+            "CND:LN314",
+            "CND:LN405"
+          ],
+          "local_coordinating_role": null,
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0006",
+            "field_positions": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "interpretation": {
+            "id": "comcheck-sample-layout",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [
+            "HALSEY"
+          ],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "a51947fdfc1a54a6d3e59eae729c000619828f3ddaee4e3302e7a7f7885aca7c",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "fact_interpreted",
+      "subject_id": "a3",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "original_fact": {
+          "id": "activities-0003",
+          "kind": "communications_guard_window",
+          "line_raw": "LINE:NP403",
+          "mode_raw": "AS",
+          "material_reference_raw": "KEY:AKAT20313Z",
+          "start": {
+            "raw": "260745ZMAR2008",
+            "value": "2008-03-26T07:45:00Z",
+            "status": "explicit_timestamp",
+            "kind": "instant",
+            "components": {
+              "day": 26,
+              "hour": 7,
+              "minute": 45,
+              "zone": "Z",
+              "month": 3,
+              "year": 2008
+            }
+          },
+          "end": {
+            "raw": "030745ZAPR2008",
+            "value": "2008-04-03T07:45:00Z",
+            "status": "explicit_timestamp",
+            "kind": "instant",
+            "components": {
+              "day": 3,
+              "hour": 7,
+              "minute": 45,
+              "zone": "Z",
+              "month": 4,
+              "year": 2008
+            }
+          },
+          "entity_ids": [
+            "e0003",
+            "e0004"
+          ],
+          "applicability_status": "explicit_unit_candidate",
+          "local_coordinating_role": null,
+          "context_record_ids": [],
+          "evidence": {
+            "record_id": "r0007",
+            "field_positions": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "interpretation": {
+            "id": "comguard-sample-layout",
+            "basis": "inferred_extension",
+            "review_status": "awaiting_user_validation"
+          },
+          "entity_keys": [
+            "SPRUANCE",
+            "NIMITZ"
+          ],
+          "command_ids": []
+        }
+      }
+    },
+    {
+      "id": "9f043f1b6cd446efcc799b7d0a2ec0cdfa24e9a4c2528ed864a483dfb740cece",
+      "message_id": "sha256:d815f6b89caa1b81bf08d53c737bd9cb29a8612826742f623847e2814c4957dc",
+      "revision": "review-1",
+      "kind": "search_projection_prepared",
+      "recorded_at": "2026-11-04T17:52:26Z",
+      "review_only": true,
+      "issued_at": "2009-02-14T13:25:30Z",
+      "security": {
+        "policy": "USA",
+        "classification": "UNCLASSIFIED",
+        "release_to": [],
+        "status": "unvalidated"
+      },
+      "payload": {
+        "passages": [
+          {
+            "id": "sha256:e459903b39a27c20b9d51ac6f9af69da4f552494f6be91730490b2bf934305de",
+            "ordinal": 1,
+            "record_ids": [
+              "r0003",
+              "r0004",
+              "r0005"
+            ],
+            "fact_ids": [
+              "frequencies-0001",
+              "frequencies-0002",
+              "frequencies-0003",
+              "frequencies-0004",
+              "frequencies-0005",
+              "activities-0001"
+            ],
+            "context_record_ids": [],
+            "source_spans": [
+              {
+                "start_byte": 141,
+                "end_byte": 215,
+                "start_line": 4,
+                "end_line": 5
+              },
+              {
+                "start_byte": 216,
+                "end_byte": 254,
+                "start_line": 6,
+                "end_line": 6
+              },
+              {
+                "start_byte": 255,
+                "end_byte": 362,
+                "start_line": 7,
+                "end_line": 8
+              }
+            ],
+            "set_ids": [
+              "COMPLAN",
+              "CCTPRI",
+              "FREQPLAN"
+            ],
+            "subjects": [],
+            "semantic": {
+              "status": "not_generated",
+              "model_id": null,
+              "chunking_profile": "review-only-complete-sets-max-three-target-1200-bytes",
+              "token_budget_status": "not_validated_model_not_selected"
+            }
+          },
+          {
+            "id": "sha256:ed3413cf63da9de6952cf0061ae0c8cba521100a7c310f919ef109f6967359ae",
+            "ordinal": 2,
+            "record_ids": [
+              "r0006",
+              "r0007",
+              "r0008"
+            ],
+            "fact_ids": [
+              "activities-0002",
+              "activities-0003"
+            ],
+            "context_record_ids": [],
+            "source_spans": [
+              {
+                "start_byte": 363,
+                "end_byte": 444,
+                "start_line": 9,
+                "end_line": 10
+              },
+              {
+                "start_byte": 445,
+                "end_byte": 531,
+                "start_line": 11,
+                "end_line": 12
+              },
+              {
+                "start_byte": 532,
+                "end_byte": 587,
+                "start_line": 13,
+                "end_line": 13
+              }
+            ],
+            "set_ids": [
+              "COMCHECK",
+              "COMGUARD",
+              "ANTIJAM"
+            ],
+            "subjects": [],
+            "semantic": {
+              "status": "not_generated",
+              "model_id": null,
+              "chunking_profile": "review-only-complete-sets-max-three-target-1200-bytes",
+              "token_budget_status": "not_validated_model_not_selected"
+            }
+          },
+          {
+            "id": "sha256:db4ad7aa8a24aae1107eebbea93135256890a62ae62040e2ccf82e0761963bac",
+            "ordinal": 3,
+            "record_ids": [
+              "r0009",
+              "r0010",
+              "r0011"
+            ],
+            "fact_ids": [],
+            "context_record_ids": [],
+            "source_spans": [
+              {
+                "start_byte": 588,
+                "end_byte": 654,
+                "start_line": 14,
+                "end_line": 14
+              },
+              {
+                "start_byte": 655,
+                "end_byte": 729,
+                "start_line": 15,
+                "end_line": 16
+              },
+              {
+                "start_byte": 730,
+                "end_byte": 742,
+                "start_line": 17,
+                "end_line": 17
+              }
+            ],
+            "set_ids": [
+              "GENTEXT",
+              "AKNLDG"
+            ],
+            "subjects": [
+              "RECOGNITION POLICY",
+              "REPORTING INSTRUCTIONS"
+            ],
+            "semantic": {
+              "status": "not_generated",
+              "model_id": null,
+              "chunking_profile": "review-only-complete-sets-max-three-target-1200-bytes",
+              "token_budget_status": "not_validated_model_not_selected"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

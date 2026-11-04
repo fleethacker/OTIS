@@ -1,0 +1,331 @@
+{
+  "aliases": {
+    "parse-command-ui-messages": {}
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "icd_version": "1.0.0",
+      "profile": "ui_fixture_lexical_no_retention"
+    },
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "revision": {
+        "type": "keyword"
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "originator": {
+        "type": "keyword"
+      },
+      "serial": {
+        "type": "keyword"
+      },
+      "issued_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "expires_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "security": {
+        "type": "object",
+        "dynamic": "strict",
+        "properties": {
+          "policy": {
+            "type": "keyword"
+          },
+          "classification": {
+            "type": "keyword"
+          },
+          "release_to": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "command_ids": {
+        "type": "keyword"
+      },
+      "status": {
+        "type": "keyword"
+      },
+      "periods": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "scope": {
+            "type": "keyword"
+          },
+          "start_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "start_time": {
+            "type": "keyword"
+          },
+          "start_label": {
+            "type": "keyword"
+          },
+          "start_status": {
+            "type": "keyword"
+          },
+          "end_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "end_time": {
+            "type": "keyword"
+          },
+          "end_label": {
+            "type": "keyword"
+          },
+          "end_status": {
+            "type": "keyword"
+          },
+          "qualifier_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "qualifier_time": {
+            "type": "keyword"
+          },
+          "qualifier_label": {
+            "type": "keyword"
+          },
+          "qualifier_status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "frequencies": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "hz": {
+            "type": "long",
+            "coerce": false
+          },
+          "upper_hz": {
+            "type": "long",
+            "coerce": false
+          },
+          "plan": {
+            "type": "keyword"
+          },
+          "designator": {
+            "type": "keyword"
+          },
+          "channel": {
+            "type": "keyword"
+          },
+          "emission": {
+            "type": "keyword"
+          },
+          "usage": {
+            "type": "keyword"
+          },
+          "scope": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "activities": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "type": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          },
+          "participants": {
+            "type": "keyword"
+          },
+          "scope": {
+            "type": "keyword"
+          },
+          "at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "time": {
+            "type": "keyword"
+          },
+          "time_label": {
+            "type": "keyword"
+          },
+          "time_status": {
+            "type": "keyword"
+          },
+          "plan": {
+            "type": "keyword"
+          },
+          "variant": {
+            "type": "keyword"
+          },
+          "equipment": {
+            "type": "keyword"
+          },
+          "material": {
+            "type": "keyword"
+          },
+          "coordination": {
+            "type": "keyword"
+          },
+          "position": {
+            "type": "keyword"
+          },
+          "course": {
+            "type": "keyword"
+          },
+          "policy": {
+            "type": "keyword"
+          },
+          "line": {
+            "type": "keyword"
+          },
+          "mode": {
+            "type": "keyword"
+          },
+          "report": {
+            "type": "keyword"
+          },
+          "responsible_party": {
+            "type": "keyword"
+          },
+          "task_type": {
+            "type": "keyword"
+          },
+          "description": {
+            "type": "text",
+            "analyzer": "standard"
+          },
+          "circuits": {
+            "type": "keyword"
+          },
+          "delivery": {
+            "type": "keyword"
+          },
+          "start_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "start_time": {
+            "type": "keyword"
+          },
+          "start_label": {
+            "type": "keyword"
+          },
+          "start_status": {
+            "type": "keyword"
+          },
+          "end_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "end_time": {
+            "type": "keyword"
+          },
+          "end_label": {
+            "type": "keyword"
+          },
+          "end_status": {
+            "type": "keyword"
+          },
+          "as_of_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "as_of_time": {
+            "type": "keyword"
+          },
+          "as_of_label": {
+            "type": "keyword"
+          },
+          "as_of_status": {
+            "type": "keyword"
+          },
+          "deadline_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "deadline_time": {
+            "type": "keyword"
+          },
+          "deadline_label": {
+            "type": "keyword"
+          },
+          "deadline_status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "contacts": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "name": {
+            "type": "keyword"
+          },
+          "position": {
+            "type": "keyword"
+          },
+          "unit": {
+            "type": "keyword"
+          },
+          "channels": {
+            "type": "object",
+            "dynamic": "strict",
+            "properties": {
+              "type": {
+                "type": "keyword"
+              },
+              "value": {
+                "type": "keyword"
+              }
+            }
+          },
+          "role": {
+            "type": "keyword"
+          },
+          "location": {
+            "type": "keyword"
+          },
+          "scope": {
+            "type": "keyword"
+          }
+        }
+      },
+      "review_flags": {
+        "type": "keyword"
+      },
+      "subject": {
+        "type": "text",
+        "analyzer": "standard"
+      }
+    }
+  }
+}

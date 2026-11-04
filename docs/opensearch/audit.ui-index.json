@@ -1,0 +1,62 @@
+{
+  "aliases": {
+    "parse-command-ui-audit": {}
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "icd_version": "1.0.0",
+      "profile": "ui_fixture_lexical_no_retention"
+    },
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "message_id": {
+        "type": "keyword"
+      },
+      "revision": {
+        "type": "keyword"
+      },
+      "kind": {
+        "type": "keyword"
+      },
+      "subject_id": {
+        "type": "keyword"
+      },
+      "recorded_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "issued_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "review_only": {
+        "type": "boolean"
+      },
+      "security": {
+        "type": "object",
+        "dynamic": "strict",
+        "properties": {
+          "policy": {
+            "type": "keyword"
+          },
+          "classification": {
+            "type": "keyword"
+          },
+          "release_to": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "payload": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}

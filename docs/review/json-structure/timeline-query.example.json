@@ -1,0 +1,35 @@
+{
+  "size": 10,
+  "query": {
+    "nested": {
+      "path": "activities",
+      "query": {
+        "bool": {
+          "filter": [
+            {
+              "term": {
+                "activities.type": "communications_check"
+              }
+            },
+            {
+              "term": {
+                "activities.participants": "HALSEY"
+              }
+            },
+            {
+              "range": {
+                "activities.at": {
+                  "gte": "2008-07-26T00:00:00Z",
+                  "lt": "2008-07-27T00:00:00Z"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "inner_hits": {
+        "size": 10
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "sha256:935eeaf8615cebf860c04467ef6a107dda8431af60e5e0199e65fc4adfc8d165",
+  "revision": "review-1",
+  "type": "OPTASK ASW",
+  "originator": "CCG 7",
+  "serial": "0010",
+  "issued_at": "2009-02-14T13:25:30Z",
+  "expires_at": "2010-02-14T13:25:30Z",
+  "security": {
+    "policy": "USA",
+    "classification": "UNCLASSIFIED",
+    "release_to": [],
+    "status": "unvalidated"
+  },
+  "command_ids": [],
+  "status": "needs_review",
+  "periods": [
+    {
+      "id": "v1",
+      "start_at": "2008-03-21T00:01:00Z",
+      "end_at": "2008-05-15T12:00:00Z"
+    }
+  ],
+  "frequencies": [],
+  "activities": [
+    {
+      "id": "a1",
+      "type": "tasking",
+      "status": "inferred",
+      "task_type": "TASMISSN",
+      "description": "SCREENING / HALSEY"
+    },
+    {
+      "id": "a2",
+      "type": "tasking",
+      "status": "inferred",
+      "task_type": "SUBMISSN",
+      "description": "SUB:SEAWOLF / DIRECT SUPPORT / SHADOWING / ISA"
+    }
+  ],
+  "contacts": [],
+  "review_flags": [
+    "time_conflict"
+  ]
+}

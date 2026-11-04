@@ -1,0 +1,30 @@
+{
+  "id": "sha256:ebe72f947928d62b773b489a06fb03fa8b90c4cb026eba4cda0b32488ab31cf8",
+  "revision": "review-1",
+  "type": "OPTASK NUC",
+  "originator": "CTF 13",
+  "serial": null,
+  "issued_at": "2009-02-14T13:25:30Z",
+  "expires_at": "2010-02-14T13:25:30Z",
+  "security": {
+    "policy": "USA",
+    "classification": "UNCLASSIFIED",
+    "release_to": [],
+    "status": "unvalidated"
+  },
+  "command_ids": [],
+  "status": "needs_review",
+  "periods": [
+    {
+      "id": "v1",
+      "start_at": "2008-09-03T02:00:00Z",
+      "end_at": "2008-09-04T06:00:00Z"
+    }
+  ],
+  "frequencies": [],
+  "activities": [],
+  "contacts": [],
+  "review_flags": [
+    "time_conflict"
+  ]
+}

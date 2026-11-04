@@ -1,0 +1,238 @@
+{
+  "id": "sha256:f5ed5ee8701dbfc099e17a7fbdfc327b239594315a7bdbaa71145402c15ea5d0",
+  "revision": "review-1",
+  "type": "OPTASK LINK",
+  "originator": "CCG 7",
+  "serial": "0001",
+  "issued_at": "2009-02-14T13:25:30Z",
+  "expires_at": "2010-02-14T13:25:30Z",
+  "security": {
+    "policy": "USA",
+    "classification": "UNCLASSIFIED",
+    "release_to": [],
+    "status": "unvalidated"
+  },
+  "command_ids": [],
+  "status": "needs_review",
+  "periods": [
+    {
+      "id": "v1",
+      "start_at": "2005-10-02T16:00:00Z",
+      "end_at": "2005-11-02T16:00:00Z"
+    }
+  ],
+  "frequencies": [
+    {
+      "id": "f1",
+      "hz": 3030500
+    },
+    {
+      "id": "f2",
+      "hz": 321500000
+    },
+    {
+      "id": "f3",
+      "hz": 234500000
+    },
+    {
+      "id": "f4",
+      "hz": 234900000,
+      "scope": "INTERFACE COORDINATION SEGMENT / LINCOLN ABRAHAM"
+    },
+    {
+      "id": "f5",
+      "hz": 345000000,
+      "scope": "INTERFACE COORDINATION SEGMENT / LINCOLN ABRAHAM"
+    },
+    {
+      "id": "f6",
+      "hz": 256900000,
+      "scope": "INTERFACE COORDINATION SEGMENT / CHOSIN"
+    },
+    {
+      "id": "f7",
+      "hz": 3037500,
+      "scope": "LINK-11 SEGMENT"
+    },
+    {
+      "id": "f8",
+      "hz": 298600000,
+      "scope": "LINK-11 SEGMENT"
+    },
+    {
+      "id": "f9",
+      "hz": 258900000,
+      "scope": "LINK-11 SEGMENT"
+    },
+    {
+      "id": "f10",
+      "hz": 309600000,
+      "scope": "LINK-11 SEGMENT"
+    },
+    {
+      "id": "f11",
+      "hz": 3045500,
+      "scope": "LINK-11B SEGMENT"
+    },
+    {
+      "id": "f12",
+      "hz": 2345500,
+      "scope": "ATDL-1 SEGMENT"
+    }
+  ],
+  "activities": [
+    {
+      "id": "a1",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "material": "AKAT6543"
+    },
+    {
+      "id": "a2",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "INTERFACE COORDINATION SEGMENT / LINCOLN ABRAHAM",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "material": "AMASL8765"
+    },
+    {
+      "id": "a3",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "LINK 1 SEGMENT",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "equipment": "BID 1650",
+      "material": "JGFT-9876"
+    },
+    {
+      "id": "a4",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "LINK-11 SEGMENT",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "equipment": "KG-40",
+      "material": "AMASL4567"
+    },
+    {
+      "id": "a5",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "LINK-11B SEGMENT",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "equipment": "KG-84C",
+      "material": "HGTF5678"
+    },
+    {
+      "id": "a6",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "ATDL-1 SEGMENT",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "equipment": "KW-7",
+      "material": "ADFG8765"
+    },
+    {
+      "id": "a7",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "SADL SEGMENT",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "equipment": "KGV-8",
+      "material": "HGTA6543"
+    },
+    {
+      "id": "a8",
+      "type": "crypto_changeover",
+      "status": "inferred",
+      "scope": "SATELLITE LINK-16 SEGMENT",
+      "time": "23:45Z",
+      "time_status": "missing_date",
+      "equipment": "KG-84",
+      "material": "ASDF7289"
+    }
+  ],
+  "contacts": [
+    {
+      "id": "c1",
+      "name": "JOHN COONTZ",
+      "position": "CDR",
+      "unit": "LINCOLN ABRAHAM",
+      "channels": [
+        {
+          "type": "TEL",
+          "value": "DSN 525-1212"
+        }
+      ],
+      "role": "JICO"
+    },
+    {
+      "id": "c2",
+      "name": "FRANCIS",
+      "position": "LCDR",
+      "unit": "LINCOLN ABRAHAM",
+      "channels": [
+        {
+          "type": "TEL",
+          "value": "619-437-1234"
+        },
+        {
+          "type": "SECTEL",
+          "value": "DSN 553-1234"
+        },
+        {
+          "type": "EMAIL",
+          "value": "FRANCIS@LINCOLN.NAVY.MIL"
+        }
+      ],
+      "role": "ICO",
+      "scope": "INTERFACE COORDINATION SEGMENT"
+    },
+    {
+      "id": "c3",
+      "name": "JOSEFOSKY",
+      "position": "LCDR",
+      "unit": "CHOSIN",
+      "channels": [
+        {
+          "type": "TEL",
+          "value": "619-553-8916"
+        }
+      ],
+      "role": "RICO",
+      "scope": "INTERFACE COORDINATION SEGMENT"
+    },
+    {
+      "id": "c4",
+      "name": "F. BURNS",
+      "position": "MAJ",
+      "unit": "4077 ASOC",
+      "channels": [
+        {
+          "type": "TEL",
+          "value": "804-555-4142"
+        },
+        {
+          "type": "SECTEL",
+          "value": "555-4311"
+        },
+        {
+          "type": "CHAT",
+          "value": "DACAS"
+        }
+      ],
+      "role": "JICO",
+      "scope": "CNR SEGMENT"
+    }
+  ],
+  "review_flags": [
+    "time_conflict"
+  ]
+}

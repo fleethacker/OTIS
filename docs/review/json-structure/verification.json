@@ -1,0 +1,15 @@
+{
+  "json_syntax": "pass",
+  "source_hashes_preserved_in_audit": "pass",
+  "all_source_records_and_diagnostics_moved_to_audit": "pass",
+  "all_interpreted_fact_detail_moved_to_audit": "pass",
+  "core_has_no_evidence_or_parser_trace_fields": "pass",
+  "core_subject_audit_links": "pass",
+  "unique_audit_ids": "pass",
+  "unchanged_14_messages_151_passages": "pass",
+  "unresolved_dates_and_channel_placeholders_preserved": "pass",
+  "opensearch_execution": "not_run",
+  "audit_bulk_submission": "not_run",
+  "embedding_inference": "not_run",
+  "sme_validation": "pending"
+}

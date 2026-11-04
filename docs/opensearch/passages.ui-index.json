@@ -1,0 +1,77 @@
+{
+  "aliases": {
+    "parse-command-ui-passages": {}
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "icd_version": "1.0.0",
+      "profile": "ui_fixture_lexical_no_retention",
+      "embedding": "not_configured_model_and_dimension_unselected"
+    },
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "message_id": {
+        "type": "keyword"
+      },
+      "revision": {
+        "type": "keyword"
+      },
+      "ordinal": {
+        "type": "long",
+        "coerce": false
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "originator": {
+        "type": "keyword"
+      },
+      "issued_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "expires_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "security": {
+        "type": "object",
+        "dynamic": "strict",
+        "properties": {
+          "policy": {
+            "type": "keyword"
+          },
+          "classification": {
+            "type": "keyword"
+          },
+          "release_to": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "command_ids": {
+        "type": "keyword"
+      },
+      "mentioned_units": {
+        "type": "keyword"
+      },
+      "text": {
+        "type": "text",
+        "analyzer": "standard"
+      },
+      "embedding_status": {
+        "type": "keyword"
+      },
+      "subject": {
+        "type": "text",
+        "analyzer": "standard"
+      }
+    }
+  }
+}

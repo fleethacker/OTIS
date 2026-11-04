@@ -1,0 +1,18 @@
+{
+ "message_records": [{"id":1,"source_message_id":"FICTIONAL-ZONES","subject":"Fictional transition watches","sender":"Fictional desk","processing_status":"updated","provenance":"fictional","received_at":"2026-11-01T05:00:00Z","raw_text":"FICTIONAL / ILLUSTRATIVE ONLY — NOT VALIDATED USMTF"}],
+ "extracted_events": [
+ {"id":1,"message_record_events":1,"title":"Fictional first watch","start_at":"2026-11-01T05:30:00Z","end_at":"2026-11-01T05:45:00Z","schedule_status":"confirmed","unit":"USS Meridian","location":"Bridge","is_revised":true},
+ {"id":2,"message_record_events":1,"title":"Fictional second watch","start_at":"2026-11-01T06:30:00Z","end_at":"2026-11-01T06:45:00Z","schedule_status":"confirmed","unit":"USS Meridian","location":"Bridge"},
+ {"id":3,"message_record_events":1,"title":"Fictional overlap","start_at":"2026-11-01T05:35:00Z","end_at":"2026-11-01T05:50:00Z","schedule_status":"confirmed","unit":"Fictional Atlas","location":"Bridge"},
+ {"id":4,"message_record_events":1,"title":"Fictional one minute","start_at":"2026-11-01T05:35:00Z","end_at":"2026-11-01T05:36:00Z","schedule_status":"confirmed","unit":"Fictional Atlas","location":"Deck"},
+ {"id":5,"message_record_events":1,"title":"Fictional dense Alpha","start_at":"2026-11-01T05:30:00Z","end_at":"2026-11-01T06:00:00Z","schedule_status":"confirmed","unit":"Fictional Atlas"},
+ {"id":6,"message_record_events":1,"title":"Fictional dense Bravo","start_at":"2026-11-01T05:30:00Z","end_at":"2026-11-01T06:00:00Z","schedule_status":"confirmed","unit":"USS Meridian"},
+ {"id":7,"message_record_events":1,"title":"Fictional dense Charlie","start_at":"2026-11-01T05:30:00Z","end_at":"2026-11-01T06:00:00Z","schedule_status":"confirmed","unit":"Fictional Atlas"},
+ {"id":8,"message_record_events":1,"title":"Fictional dense Delta","start_at":"2026-11-01T05:30:00Z","end_at":"2026-11-01T06:00:00Z","schedule_status":"confirmed","unit":"USS Meridian"},
+ {"id":9,"message_record_events":1,"title":"Fictional midnight watch","start_at":"2026-11-02T23:30:00Z","end_at":"2026-11-03T00:30:00Z","schedule_status":"confirmed","unit":"USS Meridian"},
+ {"id":10,"message_record_events":1,"title":"Fictional continuing watch","start_at":"2026-10-31T23:00:00Z","end_at":"2026-11-09T01:00:00Z","schedule_status":"confirmed","unit":"Fictional Atlas"},
+ {"id":11,"message_record_events":1,"title":"Fictional last-day watch","start_at":"2026-11-07T09:00:00Z","end_at":"2026-11-07T10:00:00Z","schedule_status":"confirmed","unit":"USS Meridian"},
+ {"id":12,"message_record_events":1,"title":"Fictional unresolved watch","schedule_status":"needs_review","review_reason":"Time unavailable"}
+ ],
+ "event_revisions":[{"id":1,"extracted_event_revisions":1,"sequence":1,"revised_at":"2026-11-01T05:00:00Z","prior_start_at":"2026-11-01T05:15:00Z","replacement_start_at":"2026-11-01T05:30:00Z","replacement_end_at":"2026-11-01T05:45:00Z"}]
+}

@@ -1,0 +1,168 @@
+version: "2"
+
+run:
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Enabled by default
+    - errcheck      # Check for unchecked errors
+    - govet         # Reports suspicious constructs
+    - ineffassign   # Detects ineffectual assignments
+    - staticcheck   # Advanced static analysis
+    - modernize     # Prefer supported Go language and standard library idioms
+    - unused        # Checks for unused code
+
+    # Additional quality linters
+    - misspell      # Finds commonly misspelled words
+    - revive        # Fast, configurable, extensible, flexible linter
+    - gosec         # Security-focused linter
+    - gocritic      # Highly opinionated linter
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Reports unused function parameters
+    - nolintlint    # Reports ill-formed or insufficient nolint directives
+    - bidichk       # Detects dangerous Unicode sequences
+    - durationcheck # Detects invalid duration arithmetic
+    - gocheckcompilerdirectives # Validates compiler directives
+    - wastedassign  # Detects overwritten or unused assignments
+
+    # Code complexity
+    - gocyclo       # Computes and checks cyclomatic complexity
+    - gocognit      # Computes and checks cognitive complexity
+    - funlen        # Tool for detection of long functions
+    - nestif        # Reports deeply nested if statements
+
+    # Error handling
+    - errname       # Checks that sentinel errors are prefixed with Err
+    - errorlint     # Find code that will cause problems with Go 1.13 error wrapping
+    - wrapcheck     # Checks that errors from external packages are wrapped
+
+    # Performance
+    - bodyclose     # Checks whether HTTP response body is closed
+    - noctx         # Finds sending http request without context.Context
+    - rowserrcheck  # Checks whether Err of rows is checked successfully
+    - sqlclosecheck # Checks that sql.Rows and sql.Stmt are closed
+
+    # Style
+    - whitespace    # Detection of leading and trailing whitespace
+
+    # Best practices
+    - dupl          # Code clone detection
+    - dogsled       # Checks assignments with too many blank identifiers
+    - nakedret      # Finds naked returns in functions greater than a specified length
+
+  settings:
+    nolintlint:
+      require-specific: true
+      require-explanation: true
+
+    modernize:
+      # Released apps use correct errors.As calls in app-owned source. A bundle
+      # refresh must not require rewriting those handlers just for this idiom.
+      disable:
+        - errorsastype
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    govet:
+      enable-all: true
+      disable:
+        - shadow         # Can be too strict
+        - fieldalignment # Pedantic struct-field memory micro-optimization; too noisy
+
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 20
+
+    funlen:
+      lines: 100
+      statements: 50
+
+    nestif:
+      min-complexity: 4
+
+    misspell:
+      locale: US
+
+    nakedret:
+      max-func-lines: 30
+
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - "checkPrivateReceivers"
+            - "disableStutteringCheck"
+        - name: package-comments
+        - name: var-naming
+        - name: unexported-return
+        - name: errorf
+        - name: error-return
+        - name: error-strings
+        - name: receiver-naming
+        - name: increment-decrement
+        - name: var-declaration
+        - name: range-val-in-closure
+        - name: range-val-address
+        - name: waitgroup-by-value
+        - name: atomic
+        - name: empty-lines
+        - name: superfluous-else
+        - name: confusing-naming
+        - name: get-return
+        - name: modifies-parameter
+        - name: deep-exit
+        - name: unused-parameter
+
+    wrapcheck:
+      ignore-sigs:
+        # Connect errors intentionally replace internal causes with safe wire messages.
+        - connectrpc.com/connect.NewError(
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - .Wrap(
+        - .Wrapf(
+        - .WithMessage(
+        - .WithMessagef(
+        - .WithStack(
+
+  exclusions:
+    # Generated and vendored package-manager code: skip entirely. Some npm
+    # packages contain Go helpers, but they are third-party inputs rather than
+    # generated-app source and must not become first-commit lint findings.
+    paths:
+      - ".*\\.pb\\.go"
+      # Match a complete directory name so handwritten codegen packages stay linted.
+      - "(^|/)gen/"
+      - "node_modules/"
+    rules:
+      # Relax noisy linters on test files.
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+          - funlen
+          - wrapcheck
+
+issues:
+  # Allow existing issues but catch new ones.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: true
+  new-from-rev: HEAD~1
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true

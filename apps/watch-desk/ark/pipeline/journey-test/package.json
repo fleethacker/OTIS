@@ -1,0 +1,6 @@
+{
+  "name": "@playwright/test",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs"
+}

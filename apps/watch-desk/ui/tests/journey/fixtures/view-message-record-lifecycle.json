@@ -1,0 +1,57 @@
+{
+  "message_records": [
+    {
+      "id": 1,
+      "source_message_id": "FICTIONAL-LIFECYCLE-001",
+      "subject": "Fictional complete processing example",
+      "received_at": "2026-11-04T23:58:00Z",
+      "processing_status": "parsed",
+      "provenance": "fictional",
+      "raw_text": "FICTIONAL / ILLUSTRATIVE ONLY\nBriefing: 05 NOV 2026 0800 UTC; Wardroom",
+      "lifecycle_entries": "[{\"id\":\"received\",\"milestone\":\"received\",\"recorded_at\":\"2026-11-04T23:58:00Z\",\"detail\":\"Fictional receipt evidence\",\"provenance\":\"fictional\"},{\"id\":\"parsed\",\"milestone\":\"parsed\",\"recorded_at\":\"2026-11-04T23:59:00Z\",\"provenance\":\"fictional\"},{\"id\":\"ingested\",\"milestone\":\"ingested\",\"recorded_at\":\"2026-11-05T00:00:00Z\",\"provenance\":\"fictional\"},{\"id\":\"ack\",\"milestone\":\"acknowledged\",\"recorded_at\":\"2026-11-05T00:01:00Z\",\"detail\":\"Fictional external acknowledgement, not a saved draft\",\"provenance\":\"fictional\"}]"
+    },
+    {
+      "id": 2,
+      "source_message_id": "FICTIONAL-LIFECYCLE-002",
+      "subject": "Fictional partial processing example",
+      "received_at": "2026-11-04T23:58:00Z",
+      "processing_status": "updated",
+      "provenance": "fictional",
+      "raw_text": "FICTIONAL / ILLUSTRATIVE ONLY",
+      "lifecycle_entries": "[{\"id\":\"z-review\",\"milestone\":\"reviewed\",\"detail\":\"Fictional undated review\",\"provenance\":\"fictional\"},{\"id\":\"b-repeat\",\"milestone\":\"parsed\",\"recorded_at\":\"2026-11-05T00:00:00Z\",\"detail\":\"Fictional second parse\",\"provenance\":\"fictional\"},{\"id\":\"a-ingest\",\"milestone\":\"ingested\",\"recorded_at\":\"2026-11-05T00:00:00Z\",\"detail\":\"Fictional tied ingestion\",\"provenance\":\"fictional\"},{\"id\":\"first-parse\",\"milestone\":\"parsed\",\"recorded_at\":\"2026-11-04T23:59:00Z\",\"detail\":\"Fictional first parse\",\"provenance\":\"fictional\"}]"
+    },
+    {
+      "id": 3,
+      "source_message_id": "FICTIONAL-LIFECYCLE-003",
+      "subject": "Fictional missing history example",
+      "processing_status": "parsed",
+      "provenance": "fictional",
+      "raw_text": "FICTIONAL / ILLUSTRATIVE ONLY"
+    },
+    {
+      "id": 4,
+      "source_message_id": "FICTIONAL-LIFECYCLE-004",
+      "subject": "Fictional legacy received-only example",
+      "received_at": "2026-11-04T06:00:00Z",
+      "processing_status": "parsed",
+      "provenance": "fictional",
+      "raw_text": "FICTIONAL / ILLUSTRATIVE ONLY"
+    }
+  ],
+  "extracted_events": [
+    {
+      "id": 1,
+      "message_record_events": 1,
+      "title": "Fictional briefing",
+      "location": "Wardroom",
+      "start_at": "2026-11-05T08:00:00Z",
+      "end_at": "2026-11-05T08:30:00Z",
+      "schedule_status": "confirmed",
+      "is_revised": false,
+      "time_source_lines": "[2]",
+      "location_source_lines": "[2]"
+    }
+  ],
+  "event_revisions": [],
+  "draft_acknowledgements": []
+}

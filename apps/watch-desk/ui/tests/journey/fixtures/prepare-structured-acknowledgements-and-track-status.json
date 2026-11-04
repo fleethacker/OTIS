@@ -1,0 +1,27 @@
+{
+  "message_records": [
+    {
+      "id": 1,
+      "source_message_id": "FICTIONAL-PREPARE-001",
+      "subject": "Fictional acknowledgement preparation",
+      "sender": "FICTIONAL FORWARDER",
+      "received_at": "2026-11-04T23:58:00Z",
+      "processing_status": "parsed",
+      "provenance": "fictional",
+      "raw_text": "FICTIONAL / ILLUSTRATIVE ONLY\nOriginal originator and issue time are unavailable. Receipt time is not issue time.",
+      "lifecycle_entries": "[{\"id\":\"received\",\"milestone\":\"received\",\"recorded_at\":\"2026-11-04T23:58:00Z\",\"detail\":\"Fictional receipt evidence\",\"provenance\":\"fictional\"}]"
+    },
+    {
+      "id": 2,
+      "source_message_id": "FICTIONAL-PREPARE-002",
+      "subject": "Fictional upstream acknowledgement",
+      "processing_status": "parsed",
+      "provenance": "fictional",
+      "raw_text": "FICTIONAL / ILLUSTRATIVE ONLY",
+      "lifecycle_entries": "[{\"id\":\"ack\",\"milestone\":\"acknowledged\",\"recorded_at\":\"2026-11-05T00:01:00Z\",\"detail\":\"Fictional upstream acknowledgement evidence\",\"provenance\":\"fictional\"}]"
+    }
+  ],
+  "extracted_events": [],
+  "event_revisions": [],
+  "draft_acknowledgements": []
+}

@@ -2,6 +2,13 @@
 
 Contract baseline: 2026-11-04. The compact parsed-message structure is approved; the ICD and schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; continuous index delivery remains separate. the [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
+The Ark-generated Watch Desk application is now imported under
+[`../apps/watch-desk/`](../apps/watch-desk/). The [integration analysis](integration/ark-export.md),
+[complete export inventory](integration/ark-export-files.tsv), [validation results](integration/validation.md)
+and [ADR 0001](decisions/0001-retain-watch-desk-go-service.md) describe its current
+integration. Historical planning below is retained; its proposed root UI and
+direct browser-to-Rust boundary are being reconciled with the retained Go service.
+
 The objective is an operational capability; the two-day hackathon milestone is its first proof of concept. Confirmed constraints: Rust ingestion/parsing service, OpenSearch persistence and local embedding inference, hybrid keyword/semantic search, Docker Compose, strict airgap architecture, defensive implementation, resource efficiency, resilience, and initial coverage of all OPTASK messages. A teammate owns the UI.
 
 Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMAP-only mail access with TLS deferred in v1, bursts of hundreds of messages every few hours, and 365 days total searchable retention measured from USMTF issue time: 90 hot days followed by 275 cold days. Use the 2003 USMTF catalog as the parser baseline; infer extensions from later examples where the evidence supports them, recording their provenance and uncertainty. Build the parser extension interface first; teams contribute Rust modules/crates compiled into the server. Physical storage topology, expiry cutoff granularity, and hardware limits remain open.

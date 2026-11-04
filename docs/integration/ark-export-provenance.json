@@ -1,0 +1,26 @@
+{
+  "archive": "workspace-826e22c7a82b67c8aa5cbec8-source-final.tar.gz",
+  "archive_sha256": "404a5dd69bd2ac557f5ab14339c1ed2a87b80aa9bcb56fefe86258033fa53135",
+  "files": 346,
+  "uncompressed_bytes": 2270446,
+  "categories": {
+    "application-go": 11,
+    "application-react": 35,
+    "approved-context": 7,
+    "build-input": 13,
+    "documentation": 5,
+    "editable-proto": 4,
+    "editable-schema": 7,
+    "fictional-seed": 1,
+    "framework-go": 63,
+    "framework-react": 29,
+    "framework-tooling": 35,
+    "generated": 76,
+    "guidance": 3,
+    "test": 54,
+    "test-input": 3
+  },
+  "non_strict_json_tooling_files": [
+    "ui/tsconfig.json"
+  ]
+}

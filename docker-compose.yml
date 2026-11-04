@@ -1,4 +1,36 @@
 services:
+  web:
+    image: parse-command/watch-desk:local
+    build:
+      context: ./apps/watch-desk
+    restart: unless-stopped
+    init: true
+    environment:
+      PORT: "8080"
+      ARK_DB_PATH: /data/watch-desk.db
+      ARK_DATA_DIR: /data
+      # Isolated local development; use a verified JWT ingress for shared use.
+      ARK_MOCK_AUTH: "${ARK_MOCK_AUTH:-1}"
+      ARK_MOCK_AUTH_AS: "${ARK_MOCK_AUTH_AS:-user}"
+    ports:
+      - "127.0.0.1:${WATCH_DESK_PORT:-8080}:8080"
+    volumes:
+      - watch-desk-data:/data
+    networks:
+      - application
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # Startup ordering only. The imported ScheduleSource still reads SQLite;
+    # it does not query OpenSearch until the documented adapter is implemented.
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
   opensearch:
     image: opensearchproject/opensearch:3.9.0
     restart: unless-stopped
@@ -19,9 +51,11 @@ services:
         soft: 65536
         hard: 65536
     ports:
-      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:${OPENSEARCH_PORT:-9200}:9200"
     volumes:
       - opensearch-data:/usr/share/opensearch/data
+    networks:
+      - application
     healthcheck:
       test:
         - CMD-SHELL
@@ -32,4 +66,11 @@ services:
       start_period: 30s
 
 volumes:
+  watch-desk-data:
   opensearch-data:
+
+networks:
+  application:
+    # Ordinary bridge permits the loopback host ports above. Runtime assets are
+    # bundled; enforce an operational enclave's egress policy at its boundary.
+    driver: bridge

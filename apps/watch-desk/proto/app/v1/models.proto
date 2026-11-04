@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package app.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/defenseunicorns/generated-app/gen/app/v1;appv1";
+
+// Wrapper presence distinguishes unavailable recipients from a known empty list.
+message Recipients {
+  repeated string values = 1;
+}
+
+// Lines are one-based references to the associated raw message. An absent
+// wrapper means unavailable evidence; a present empty wrapper means none found.
+message SourceLineReferences {
+  repeated int32 lines = 1;
+}
+
+message MessageRecord {
+  int64 id = 1;
+  string source_message_id = 2;
+  optional string subject = 3;
+  string raw_text = 4;
+  optional string sender = 5;
+  Recipients recipients = 6;
+  google.protobuf.Timestamp received_at = 7;
+  // unknown, parsed, updated, or needs_review.
+  string processing_status = 8;
+  // upstream, fictional, or reference; examples are not validated USMTF.
+  string provenance = 9;
+  repeated ExtractedEvent events = 10;
+  repeated DraftAcknowledgement drafts = 11;
+  repeated MessageLifecycleEntry lifecycle_entries = 12;
+  // Lossless JSON object text, not protobuf Struct: preserves numeric spelling,
+  // unknown nested fields and absent/null/empty/false/zero distinctions.
+  optional string structured_payload_json = 13;
+  // Original attachment identity for reference/test data, not raw USMTF evidence.
+  optional string reference_attribution = 14;
+}
+
+// Source-owned evidence, not draft activity. Dated entries precede undated
+// entries; timestamp ties and undated entries sort by stable ID.
+message MessageLifecycleEntry {
+  string id = 1;
+  // Open vocabulary: received, parsed, ingested, acknowledged, or other types.
+  string milestone = 2;
+  // Absent means time unavailable, not the previous or current read time.
+  google.protobuf.Timestamp recorded_at = 3;
+  string detail = 4;
+  string provenance = 5;
+}
+
+// All timestamps are absolute instants, displayed and calculated in UTC.
+// Absent timestamps mean unknown, including for partial prior schedules.
+message ExtractedEvent {
+  int64 id = 1;
+  int64 message_id = 2;
+  optional string source_event_id = 3;
+  string title = 4;
+  optional string unit = 5;
+  optional string location = 6;
+  google.protobuf.Timestamp start_at = 7;
+  google.protobuf.Timestamp end_at = 8;
+  // confirmed or needs_review. Consumers must also require both valid times
+  // and end > start before placing an event on a timeline.
+  string schedule_status = 9;
+  bool is_revised = 10;
+  optional string review_reason = 11;
+  SourceLineReferences time_source_lines = 12;
+  SourceLineReferences location_source_lines = 13;
+  repeated EventRevision revisions = 14;
+}
+
+message EventRevision {
+  int64 id = 1;
+  int64 event_id = 2;
+  int64 sequence = 3;
+  google.protobuf.Timestamp revised_at = 4;
+  google.protobuf.Timestamp prior_start_at = 5;
+  google.protobuf.Timestamp prior_end_at = 6;
+  google.protobuf.Timestamp replacement_start_at = 7;
+  google.protobuf.Timestamp replacement_end_at = 8;
+  optional string source_message_id = 9;
+  optional string description = 10;
+  SourceLineReferences time_source_lines = 11;
+}
+
+message DraftAcknowledgement {
+  int64 id = 1;
+  int64 message_id = 2;
+  string text = 3;
+  // Always unsent. No send operation or sent-state model exists.
+  string status = 4;
+  google.protobuf.Timestamp saved_at = 5;
+}

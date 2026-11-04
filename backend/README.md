@@ -1,6 +1,6 @@
 # Parse Command backend
 
-The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the UI team owns the future root `ui/` directory. SDK version 0.2.0 implements ICD 1.1.0 as local, compiled crates; nothing is published to a package registry.
+The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the imported UI and its Go presentation service live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration analysis](../docs/integration/ark-export.md) and [decision to retain Go for now](../docs/decisions/0001-retain-watch-desk-go-service.md). SDK version 0.2.0 implements ICD 1.1.0 as local, compiled crates; nothing is published to a package registry.
 
 | Package | Responsibility |
 | --- | --- |

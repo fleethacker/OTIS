@@ -1,0 +1,18 @@
+syntax = "proto3";
+package app.v1;
+import "app/v1/models.proto";
+import "google/protobuf/timestamp.proto";
+option go_package = "github.com/defenseunicorns/generated-app/gen/app/v1;appv1";
+
+// On-demand complete snapshot shared by Calendar and Message records.
+service SourceDataService {
+  rpc ReadSchedules(ReadSchedulesRequest) returns (ReadSchedulesResponse);
+}
+message ReadSchedulesRequest {}
+message ReadSchedulesResponse {
+  repeated MessageRecord messages = 1;
+  // Successful server read time, not an upstream extraction/freshness timestamp.
+  google.protobuf.Timestamp retrieved_at = 2;
+  string source = 3;
+  string notice = 4;
+}

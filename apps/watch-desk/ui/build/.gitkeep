@@ -1,0 +1,3 @@
+# Tracked placeholder so `//go:embed all:ui/build` (main.go) always matches
+# at least one file. `bun run build` overwrites the rest of this directory
+# but leaves this file alone. Do not delete — see .gitignore for the why.

@@ -1,0 +1,13 @@
+[global]
+# DESIGN.md and ui/src Markdown are application-owned documents.
+# The runtime supplies rumdl, so generated applications stay air-gap runnable.
+include = ["DESIGN.md", "ui/src/**/*.md"]
+exclude = ["ui/src/gen/**"]
+line-length = 100
+cache = false
+
+[MD013]
+line-length = 100
+reflow = true
+code-blocks = false
+tables = false

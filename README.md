@@ -17,26 +17,43 @@ Must:
 ### Expected Deliverables
 A tool that seamlessly converts mock USMTF raw text into a synchronized 24-hour visual schedule for watchstanders and shipboard leaders.
 
-## Technology Utilized
+## Local application stack
 
-### Local OpenSearch
+The imported **Watch Desk** app lives in [`apps/watch-desk/`](apps/watch-desk/).
+Its Go service serves the React UI and persists private drafts/preparations in
+SQLite. The Rust parser foundation remains in [`backend/`](backend/README.md).
+The [integration analysis](docs/integration/ark-export.md) covers all 346 exported
+files, both sets of context, contract differences, build portability and remaining
+work. [ADR 0001](docs/decisions/0001-retain-watch-desk-go-service.md) records the
+decision to keep Go for now for later team review.
 
-Start the single-node OpenSearch instance (Docker with Compose required):
+Build and start Watch Desk plus OpenSearch (Docker with Compose required):
 
 ```sh
-docker compose up -d --wait
+docker compose up --build -d --wait
+curl http://localhost:8080/api/health
 curl http://localhost:9200
 ```
 
+Open [Watch Desk](http://localhost:8080). This is an isolated local development
+profile with a mock role picker and clearly fictional USS Meridian schedules.
+**The UI still reads SQLite; an OpenSearch-backed schedule adapter is subsequent
+work.** The existing Rust crates are libraries and are not yet a running intake/API
+service. A healthy Compose stack does not imply a completed parser-to-UI pipeline.
+
 OpenSearch 3.9.0 runs at `http://localhost:9200` with a 512 MB JVM heap and a
 persistent Docker volume. Authentication and TLS are disabled for local development;
-the published port is bound to `127.0.0.1`.
+both published service ports bind to `127.0.0.1`. Containers share a private bridge
+network; assets are bundled for runtime use without external CDNs. Optional port
+and mock-auth overrides are in [`.env.example`](.env.example).
 
 Allocate at least 4 GB of memory to Docker. On Linux, set `vm.max_map_count` to at
 least `262144` on the Docker host, as described in the
 [OpenSearch Docker setup guide](https://docs.opensearch.org/latest/install-and-configure/install-opensearch/docker/).
 
-Stop it with `docker compose down`; indexed data remains in the volume.
+Stop with `docker compose down`; both indexed data and private app state remain
+in separate volumes. Run only the search service with
+`docker compose up -d --wait opensearch`.
 
 ### Demo email inbox
 
@@ -50,6 +67,19 @@ python3 demo/mail.py check
 ```
 
 ## Architecture
+
+| Location | Responsibility |
+| --- | --- |
+| `apps/watch-desk/` | React UI, Go presentation API, private SQLite state, bundled Ark dependencies and original handoff guidance |
+| `backend/` | Rust parser SDK, host, types and contributor tests |
+| `docs/` | Canonical ICD/schemas/mappings, original engineering planning, integration analysis and decisions |
+| `.pdlc-docs/` | Larger-project product context |
+| `apps/watch-desk/.ark-handoff/` | Original approved UI context and export provenance |
+| `docker-compose.yml` | Local stack, service health, persistent volumes and private network |
+
+See [container operation and offline preparation](docs/integration/ark-export.md#docker-compose-operation)
+and [validation results](docs/integration/validation.md). Follow root
+[`AGENTS.md`](AGENTS.md) and nested application guidance when making changes.
 
 ## Parser contract
 

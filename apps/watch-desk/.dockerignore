@@ -17,4 +17,3 @@ ui/build
 # External reference corpus is never shipped in the image.
 internal/service/testdata/structured-messages.json
 ui/tests/journey/fixtures/present-extensible-structured-message-cards.json
-

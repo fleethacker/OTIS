@@ -25,7 +25,7 @@ actual location. A local recovery branch,
 | UI unit tests | 59 passed, 0 failed, including locally restored reference-rendering coverage |
 | TypeScript checker | Passed |
 | Combined-stack live startup | Not run: approval to start a separate smoke-test project was declined; no test messages were sent |
-| Diff checks | Passed; no conflict markers or unintended Rust domain/contract edits |
+| Authored integration diff checks | Passed; no conflict markers or unintended Rust domain/contract edits |
 
 The new optional overlay and Rust test target are described in
 [the combined-stack guide](combined-stack.md). The default UI/search runtime
@@ -33,6 +33,12 @@ retains the original verified behavior below. Current build/configuration
 checks do not establish a live SMTP-to-custody-to-search-to-calendar workflow:
 continuous delivery and the UI adapter remain unimplemented. No new runtime
 persistence claim replaces the earlier declined write/restart probe.
+
+The full PR diff still reports whitespace warnings in exported generated
+protobuf/Connect files. Those files match the original archive and remain
+unchanged under the framework/generated-code ownership rules. Authored files
+have been cleaned; excluding only `apps/watch-desk/ark/` and
+`apps/watch-desk/ui/src/gen/`, `git diff --check origin/main` passes.
 
 ## Original import verification
 

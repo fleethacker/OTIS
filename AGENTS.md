@@ -43,4 +43,3 @@ Validate both the base configuration and the optional `compose.intake.yml` overl
 after Compose changes. `docker build --target test backend` runs the Rust workspace
 tests using the pinned container toolchain. Preserve separate UI, mail and custody
 volumes; never remove them as a workaround for integration errors.
-

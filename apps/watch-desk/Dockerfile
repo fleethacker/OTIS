@@ -55,4 +55,3 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
     CMD ["/app/healthcheck"]
 ENTRYPOINT ["/app/watch-desk"]
-

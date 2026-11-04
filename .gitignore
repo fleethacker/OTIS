@@ -7,4 +7,3 @@ apps/watch-desk/ui/tests/journey/fixtures/present-extensible-structured-message-
 !.env.example
 .DS_Store
 __pycache__/
-

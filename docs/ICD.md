@@ -174,38 +174,18 @@ Use stable event IDs and persist concrete backing-index targets across rollover.
 
 Audit retention/time origin and cleanup order remain deployment decisions. Never delete the only source evidence because a separate core index rolled over or a batch temporarily failed.
 
-## 7. USMTF interpretation rules
+## 7. Interpretation and uncertainty rules
 
-### 7.1 Grammar
+Detailed message-format grammar, manual-derived field tables, format coverage and source locators are maintained outside Git under `../OPTASK_Messages/knowledge`. This ICD defines the common representation and contribution obligations; it does not reproduce that format knowledge or sample traffic. Contributors obtain the applicable format specifications and external knowledge package separately.
 
-1. Separate email envelope/MIME handling from USMTF text interpretation. Source email recipient/sender does not establish the USMTF type/task applicability.
-2. Identify the exact format from the first `MSGID` field, not a filename, email subject or prefix-only match.
-3. Scan ordered sets with formatted/columnar/free-text states. A line break alone is not a record boundary.
-4. `/` separates formatted fields; a single slash within a free-text body is text. `://` inside free text MUST NOT terminate a set. A valid `//` terminator cannot be split across lines.
-5. Preserve positional hyphens, trailing truncation permitted by the profile, repeated fields/groups, set occurrences, columnar rows, segment nesting and narrative association. Do not implement a global slash split or a map keyed only by set name.
-6. `GENTEXT` contains a subject and a free-text body. `AMPN`, `NARR` and `RMKS` have different scope; their text is not automatically global tasking.
-7. Unknown records and unsupported fields are retained in audit with coverage diagnostics. Do not silently discard them or turn prose lines into new sets.
-
-### 7.2 Profile selection and inferred extensions
-
-Use the 2003 USMTF catalog as the baseline. Additional sets/layouts inferred from supplied later examples are authorized, provided they have named rules and regression cases. Preserve the declared source version rather than relabeling the message as 2003.
-
-Older and later layouts differ, including `MSGID`, crypto records and frequency records. A parser MUST use compatible profile/layout evidence, not just a set identifier or a plausible field value. If more than one interpretation remains viable, return an ambiguous state and preserve the alternatives in audit.
-
-Every semantic rule MUST cite a definition or explicitly identify example-derived inference. Audit records include the rule ID/revision, evidence, applicable profile/signature, and limitations. A source-derived interpretation can be useful while still `inferred`; do not label it validated merely because the message parsed.
-
-### 7.3 Dates, retention and applicability
-
-- Support the applicable day-time/month/full date-time/time-of-day alternatives and verified forms. Validate checksum digits where the profile requires them; do not strip them unconditionally.
-- Never substitute current host date, receipt date, message validity or an adjacent event for missing issue/event context without an approved, recorded rule.
-- Keep issue time, message/segment validity, occurrence time, deadline and recurrence distinct.
-- Retention is 90 hot days then 275 searchable cold days, 365 elapsed days total from USMTF issue time. Late arrival, replay or reindex does not restart that clock. Index age is not necessarily message age.
-- If issue time is unresolved, `issued_at` and `expires_at` are null, and the operational retention decision is explicitly unresolved. Missing/future/invalid issue-time handling and index cutoff granularity remain policy decisions.
-- Keep explicit participants, mentions, acknowledgment targets, originators and resolved tasked commands distinct. Aliases/group membership require approved roster evidence; do not reorder or merge names heuristically.
-- Source instructions, cancellation references and amendments remain distinct. Apply cancellation/precedence only under an agreed identity/lineage rule; never overwrite the original source evidence.
-- Do not infer a flight-quarters event from an unrelated aviation record. An absent required extraction case is a coverage gap.
-
-Sources and page locators: [source register](knowledge/source-register.md), [grammar notes](knowledge/usmtf-foundations.md), [OPTASK coverage](knowledge/optask-coverage.md), and [time/command notes](knowledge/time-and-command-interpretation.md). The manuals and sample payloads remain outside this Git repository.
+1. A parser MUST declare compatible profiles and select them from actual source evidence. Preserve the source's declared version; do not silently reinterpret an incompatible layout.
+2. Definition-backed and example-inferred rules MUST be distinguished in audit. Unknown or ambiguous fields remain preserved with explicit coverage limits; successful decoding is not proof of complete interpretation.
+3. Missing values, unavailable data and an explicit numeric zero are distinct. Preserve repetition and contextual association; do not overwrite entries just because a label repeats.
+4. Issue time, validity, occurrence, deadline and recurrence are different concepts. Missing date/time context MUST NOT be filled using the host clock or receipt time without an approved recorded rule. Do not invent an event duration or recurrence for display.
+5. Operational retention is 90 hot days followed by 275 searchable cold days, 365 elapsed days total from issue time. Receipt/replay/reindex does not restart that clock. Unresolved issue time means unresolved expiry, and index age is not inherently message age.
+6. Participants, mentions, originators, task applicability and local coordinating roles MUST remain distinct. Resolve command identity/group membership/routing only through approved context; preserve uncertainty otherwise.
+7. Do not silently repair contradictory dates or markings, apply unapproved amendment precedence, or fabricate a required activity from unrelated source material. Keep small user-visible review flags in core and detailed explanations in audit.
+8. The source email subject is metadata, not the parser identity or a substitute for structured message content. Original email/body evidence remains available through audit under the same applicable authorization policy.
 
 ## 8. Rust contribution interface
 

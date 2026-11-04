@@ -105,7 +105,7 @@ When intake cannot durably accept data, stop fetching/advancing rather than ackn
 
 ## 4. Implement the format-aware OPTASK parser
 
-Use [USMTF foundations](../knowledge/usmtf-foundations.md), [coverage](../knowledge/optask-coverage.md), and [time/command notes](../knowledge/time-and-command-interpretation.md) as the starting knowledge base.
+Use the externally maintained format knowledge at `../OPTASK_Messages/knowledge` relative to the Git folder. Its grammar, coverage and time/command notes are deliberately outside the repository; the shared output contract is [ICD 1.0.0](../ICD.md).
 
 1. Preserve original decoded text and provenance; explicitly map any normalization.
 2. Build a bounded scanner with distinct formatted, columnar, and free-text states. Handle wrapped fields, `://`, terminator-only lines, descriptors, hyphens, and repeated field groups.
@@ -142,7 +142,7 @@ Partition or coordinate lifecycle using verified issue-time evidence, not index 
 
 Proposed laptop implementation: keep older sealed indices open and searchable, apply a read-only/appropriate-priority policy through ISM, and retain their message and vector mappings. This is a logical cold state on existing storage, not a claimed physical tier or automatic memory/disk saving. Before sealing, account for delayed passage enrichment, replay writes, and any approved revision/control updates; persist concrete write targets so read-only transitions cannot strand accepted work. Index granularity and write-completion rules need agreement.
 
-OpenSearch also supports node-attribute allocation and searchable snapshots, but those require deliberate topology/repository choices and version compatibility checks. They are alternatives to evaluate if the budget requires separate storage. Do not add a cold node or repository service implicitly. See the [tiering notes](../knowledge/opensearch-airgap.md#searchable-cold-is-not-a-product-name).
+OpenSearch also supports node-attribute allocation and searchable snapshots, but those require deliberate topology/repository choices and version compatibility checks. They are alternatives to evaluate if the budget requires separate storage. Do not add a cold node or repository service implicitly. See the external `OPTASK_Messages/knowledge/opensearch-airgap.md` tiering notes.
 
 Coordinate parent/passages, journal payloads, quarantine, logs, snapshots, and replay tombstones. Decide how still-effective or open-ended orders are treated at retention boundaries. Agree the retention clock and deletion granularity; index deletion is not exact per-record TTL.
 

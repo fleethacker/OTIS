@@ -16,14 +16,11 @@ Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMA
 | [Sample-data location](review/json-structure/README.md) | Pointer to external fixtures; payloads are not stored in this Git folder |
 | [Decisions and questions](planning/decisions-and-questions.md) | Confirmed requirements and unresolved choices; no implied defaults |
 | [UI integration contract proposal](planning/ui-integration-contract.md) | Proposed backend boundary for the teammate; not yet an agreed API |
-| [Source register](knowledge/source-register.md) | Local source identities, hashes, review scope, and page references |
-| [USMTF foundations](knowledge/usmtf-foundations.md) | Grammar and parser implications grounded in the manuals |
-| [OPTASK coverage](knowledge/optask-coverage.md) | Fourteen supplied OPTASK variants, evidence, and edition gaps |
-| [Time and command interpretation](knowledge/time-and-command-interpretation.md) | Temporal semantics, command applicability, POC evidence, and unresolved interpretation rules |
-| [OpenSearch and airgap notes](knowledge/opensearch-airgap.md) | Verified platform behavior and proposed offline deployment approach |
 
 Evidence labels used throughout: **Confirmed** means specified by the user; **Source fact** means supported by an identified source; **Proposed** is a design recommendation awaiting agreement; **Open** means unresolved. A proposed value or approach is not an accepted requirement.
 
 The existing `.pdlc-docs/` files capture the earlier WHY/WHAT discussion. These files develop the engineering plan requested subsequently. This folder contains summaries and design notes, not copies of the manuals or operational traffic.
 
 Email framing is confirmed: SMTP delivery, IMAP retrieval, body beginning with `MSGID`, and an email subject prefixed by `SUBJ:`. Core `subject` is the decoded display/search value; original header and transformation details go to audit. Existing body-only fixtures have null subjects.
+
+Detailed USMTF knowledge and manual-derived notes are kept outside Git at `../OPTASK_Messages/knowledge`; they are distributed with the external sample data. Do not recreate a knowledge corpus under this documentation folder.

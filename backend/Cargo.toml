@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/*", "examples/reference-parser"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
+sha2 = "=0.10.9"
+parse-command-types = { path = "crates/parse-command-types" }
+parse-command-parser-api = { path = "crates/parse-command-parser-api" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

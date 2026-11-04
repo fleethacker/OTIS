@@ -1,0 +1,17 @@
+[package]
+name = "parse-command-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+parse-command-types.workspace = true
+parse-command-parser-api.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+parse-command-reference-parser = { path = "../../examples/reference-parser" }
+
+[lints]
+workspace = true

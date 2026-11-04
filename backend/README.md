@@ -1,0 +1,55 @@
+# Parse Command backend
+
+The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the UI team owns the future root `ui/` directory. SDK version 0.1.0 implements ICD 1.0.0 as local, compiled crates; nothing is published to a package registry.
+
+| Package | Responsibility |
+| --- | --- |
+| `parse-command-types` | Strict core message, passage and audit DTOs, semantic validation, UTC timestamps and deterministic IDs |
+| `parse-command-parser-api` | Borrowed scanner views, contributor trait, typed failures, cooperative work budget and bounded output sink |
+| `parse-command-core` | Explicit registry/allowlist, profile selection, host metadata, core/audit separation and validated results |
+| `examples/reference-parser` | Independent synthetic contributor crate exercised through the host; no production enablement |
+
+This milestone provides a synchronous library host. IMAP/MIME intake, durable queue/outbox, audit batching, OpenSearch writes, passage construction, embeddings, HTTP and Docker deployment are subsequent adapters. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed input must be retained by that future intake/outbox layer. OPTASK interpretation is the next branch's work.
+
+## Build and verify
+
+Use Rust 1.85 or newer, with Cargo available on PATH. From this directory:
+
+```sh
+cargo test --workspace --locked --offline
+cargo clippy --workspace --all-targets --locked --offline -- -D warnings
+cargo fmt --all --check
+python3 tools/generate_types.py --check
+```
+
+Dependencies are pinned in `Cargo.lock`. Offline builds require the dependencies to have been provisioned beforehand; runtime airgap does not imply an unprepared machine can build offline. These libraries perform no network, filesystem, model or wall-clock calls during parsing. The external fixture test explicitly reads local files only when requested:
+
+```sh
+PARSE_COMMAND_SAMPLES=/absolute/path/to/OPTASK_Messages/parsed \
+  cargo test -p parse-command-core --locked --offline external_fixture_conformance -- --ignored
+```
+
+The external test checks all message/passage/audit DTOs against the Rust contract and round-trips them without field loss. It also scans all fourteen preserved source bodies and verifies their exact message types and hashes. It does not verify OPTASK semantic interpretation. Keep supplied traffic, fixtures and USMTF knowledge outside this repository. Constructed generic contract cases live in the test sources.
+
+## Add a parser crate
+
+1. Create a crate under `crates/` (automatically a workspace member). Depend on `parse-command-parser-api` and `parse-command-types` via workspace dependencies; inherit the workspace package settings and lints.
+2. Start with [`examples/reference-parser/src/lib.rs`](examples/reference-parser/src/lib.rs). Implement `MessageParser::descriptor`, `assess` and `parse`. Declare exact message identifiers, profiles, ICD major version and emitted fact categories.
+3. Use borrowed `MessageView` records, fields, rows and UTF-8 byte spans. `FieldView::raw()` preserves alignment; `normalized()` explicitly folds wrapped whitespace. Validate message-specific field layouts yourself. Unknown records remain available in the ordered view and host audit.
+4. Assess profiles from body evidence. Return unsupported or ambiguous when appropriate. Email subjects are metadata and must not select a parser. Use static rule IDs for applicable evidence.
+5. Emit a `HeaderInterpretation`, typed core facts and separate `AuditEntry` values through `ParseSink`. Every fact needs an audit entry whose `subject_id` matches its revision-scoped ID. Put spans, rule provenance and detailed evidence in audit payloads. Do not invent absent times or C2 routing.
+6. Call `context.budget.checkpoint(units)` in loops. Return partial completeness and user-facing review flags for incomplete interpretations. No parser receives mail, storage or network clients.
+7. Add your crate to the consuming host's dependencies, construct it in `Registry::new`, and explicitly enable its full message type in the registry's `BTreeSet`. Merely compiling the crate does not enable it. Identical claims fail registration; multiple applicable candidates fail selection regardless of registration order.
+8. Exercise valid, missing, repeated, malformed, ambiguous and limit cases through `ParserHost`. Use the core integration tests as a host harness. Domain fixtures and their rule citations remain outside Git.
+
+The embedding DTO supports separately constructed search passages; parsers do not run embeddings or emit replacement message storage envelopes. Schema changes start in `docs/schemas/types.schema.json`; regenerate with `python3 tools/generate_types.py`, then inspect and test the generated diff. Handwritten semantic validation remains in `parse-command-types/src/lib.rs`.
+
+## Host guarantees and limits
+
+The caller must provide all input/output/count/depth limits, enabled types, revision, recording timestamp, command IDs, cancellation and work budget. Test limits are test fixtures, not laptop capacity recommendations. No deployment resource defaults have been selected.
+
+The host hashes the exact decoded UTF-8 body, derives expiry as 365 elapsed days from a resolved issue timestamp, and leaves unresolved expiry null. It strips one leading `SUBJ:` marker from decoded email metadata while retaining the original decoded value in audit. The eventual MIME adapter must preserve original receipt/header bytes and representation provenance. Only an explicit host policy override can validate security markings. Complete parser output remains `needs_review`; partial output remains `partial`.
+
+The bounded sink checks fields, unique IDs, fact counts, serialized bytes and audit structure; a failed emission stays failed even if a contributor ignores the error. The host rechecks final envelope bytes and fact-to-audit links before returning either result stream. No partial result is returned after failure. Errors carry static codes and offsets, not message text; callers must also avoid logging source or output objects.
+
+Compiled contributors are trusted code with process authority. Cooperative cancellation cannot preempt a loop that never checks its budget, and output limits cannot prevent allocations inside arbitrary contributor code. Dependency review, malformed-input tests and future process/container limits remain necessary. This interface does not establish durability, performance capacity or operational authorization.

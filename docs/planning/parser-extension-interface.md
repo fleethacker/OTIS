@@ -1,8 +1,8 @@
 # Parser server extension interface
 
-The normative contributor contract is now [ICD 1.0.0](../ICD.md), with [JSON Schemas](../schemas/README.md). This earlier design note provides rationale; use the ICD when a proposed interface detail differs. The shared Rust SDK is not yet implemented/published.
+The normative contributor contract is now [ICD 1.0.0](../ICD.md), with [JSON Schemas](../schemas/README.md). The [implemented SDK and host foundation](../../backend/README.md) provide the compiling contributor workflow. This earlier design note provides rationale; use the ICD and SDK when a proposed interface detail differs. The crates are local and have not been published to a package registry.
 
-Status: interface design proposal, 2026-11-04. **Confirmed:** build the server's parser interface first so other teams can contribute additional message types as Rust modules/crates compiled into the server. Initial delivered parsers remain OPTASK; the host interface must permit future non-OPTASK parsers. Application implementation has not begun.
+Status: foundation implemented, 2026-11-04; domain parsers and operational adapters remain subsequent work. **Confirmed:** build the server's parser interface first so other teams can contribute additional message types as Rust modules/crates compiled into the server. Initial delivered domain parsers remain OPTASK; the host interface permits future non-OPTASK parsers.
 
 Packaging is confirmed: compiled Rust modules/crates. Independently installable runtime plugins are outside this version's scope. The precise trait signatures, crate boundaries, common fact types, and contribution checks below remain design proposals.
 

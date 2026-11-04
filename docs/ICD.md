@@ -2,7 +2,7 @@
 
 **Contract:** PC-ICD-001 · **Version:** 1.0.0 · **Date:** 2026-11-04
 
-**Status:** approved compact data shape; initial contributor interface specification. This document and its schemas are ready for repository publication. The Rust host/SDK and operational deployment are not yet implemented. Fixture interpretation remains partial; approval of the structure does not establish operational correctness of every inferred rule.
+**Status:** approved compact data shape; initial contributor interface specification. The [Rust foundation](../backend/README.md) implements the SDK and in-memory parser host. Operational intake, durability, indexing and deployment are not yet implemented. Fixture interpretation remains partial; approval of the structure does not establish operational correctness of every inferred rule.
 
 ## 1. Scope and authority
 
@@ -189,7 +189,7 @@ Detailed message-format grammar, manual-derived field tables, format coverage an
 
 ## 8. Rust contribution interface
 
-The following is the source-interface specification for the planned shared SDK crate. It is not a claim that a published `parse_command_parser_api` crate already exists. Teams can implement their domain functions, emit schema-conformant fixtures and register their descriptor now; final host linking uses the shared SDK implementation of these types. This is a Rust source contract, not a C ABI or dynamically loaded binary ABI.
+The following trait is implemented by the local `parse-command-parser-api` crate in [`backend/`](../backend/README.md). SDK 0.1.0 is linked through workspace/path dependencies and has not been published to a package registry. See the synthetic reference parser and host integration tests for a compiling contribution example. This is a Rust source contract, not a C ABI or dynamically loaded binary ABI.
 
 ```rust
 pub trait MessageParser: Send + Sync {
@@ -216,6 +216,8 @@ pub trait MessageParser: Send + Sync {
 
 Shared core DTO fields serialize exactly as the JSON schemas specify; named operations above do not add a new wire wrapper. The host finalizes message IDs, issue-based expiry, metadata consistency, revision publication and storage/audit envelopes. A crate MUST NOT claim authority over those host-owned decisions by emitting replacement policy fields.
 
+In SDK 0.1.0, `MessageView` represents the exact decoded UTF-8 body; spans are byte offsets into that body. `ParseContext` exposes revision, explicit recording time, command IDs, optional host security override, optional reference time/provenance and a cooperative work budget. Additional MIME representations, roster/rule contexts, durable revision publication and batched storage are later adapter work; they are not implicit inputs. `ParseSummary` contains profile and complete/partial coverage, while parser identity/version comes from the descriptor. Explicit host output limits constrain the sink. The host requires an audit entry linked to every emitted fact ID and returns validated in-memory core/audit streams together.
+
 Parser output limits apply to both core facts and audit detail. Prefer borrowed views/offsets while parsing. A time limit around a synchronous call cannot forcibly cancel an infinite loop; parsers must cooperate with budgets and cancellation. Compiled Rust code runs with host authority: traits are not a sandbox. Review dependencies/unsafe code and exercise malformed/oversized input before enablement.
 
 ### Registration and conflict handling
@@ -233,7 +235,7 @@ Parser output limits apply to both core facts and audit detail. Prefer borrowed 
 - Valid/minimal, repeated-segment, missing-field, ambiguous-profile, invalid-time/checksum and resource-limit fixtures with expected core and audit JSON.
 - Schema validation, deterministic output, source-span accuracy, no field leakage into core, and byte/record/output bounds.
 - Generic unknown-type/partial UI behavior; no host transport/storage changes required to add the parser.
-- Integration/replay evidence once the shared host harness exists. Until then, do not claim live registry/SDK compatibility was exercised.
+- Integration and deterministic replay evidence through the shared host harness, with parser-specific malformed-input and boundary tests. Durable replay through mail/storage adapters remains a separate acceptance gate.
 
 Each team keeps fixture corpora outside Git under the agreed data-handling practice. The host repository contains only contract/schema/tooling, not operational or provided sample traffic.
 

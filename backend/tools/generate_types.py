@@ -35,7 +35,7 @@ def generate():
             return "serde_json::Map<String, serde_json::Value>"
         if spec.get("format") == "date-time":
             return "UtcTimestamp"
-        return {"string": "String", "integer": "i64", "number": "f32", "boolean": "bool"}[t]
+        return {"string": "String", "integer": "i64", "number": "f64" if container == "geoPoint" or field == "radius_m" else "f32", "boolean": "bool"}[t]
 
     for container, schema in defs.items():
         out += ["#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]", "#[serde(deny_unknown_fields)]", f"pub struct {names[container]} {{"]
@@ -89,12 +89,15 @@ def generate():
                 if fn:
                     checks.append(f'{fn}({current}, "{container}.{field}")?;')
                 else:
-                    prefix = {"period": "v", "frequency": "f", "activity": "a", "contact": "c"}.get(container)
+                    prefix = {"period": "v", "frequency": "f", "activity": "a", "contact": "c", "location": "g"}.get(container)
                     prefix_arg = f"Some(b'{prefix}')" if field == "id" and prefix else "None"
                     checks.append(f'validate_subject_id({current}, {prefix_arg}, "{container}.{field}")?;')
             if "minimum" in spec:
                 v = "*value" if optional else expr
-                checks.append(f'if {v} < {spec["minimum"]} {{ return Err(invalid("{container}.{field}", "minimum")); }}')
+                checks.append(f'if {v} < {float(spec["minimum"]) if spec.get("type") == "number" else spec["minimum"]} {{ return Err(invalid("{container}.{field}", "minimum")); }}')
+            if "maximum" in spec and not (spec["maximum"] == 9223372036854775807):
+                v = "*value" if optional else expr
+                checks.append(f'if {v} > {float(spec["maximum"]) if spec.get("type") == "number" else spec["maximum"]} {{ return Err(invalid("{container}.{field}", "maximum")); }}')
             if optional and checks:
                 out.append(f"        if let Some(value) = &{expr} {{")
                 out += ["            " + c for c in checks]

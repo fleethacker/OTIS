@@ -1,6 +1,6 @@
 # UI fixture index mappings
 
-These index-creation bodies implement the compact [ICD 1.0.0](../ICD.md) shape for an isolated UI test dataset. They contain no sample messages. Raw and parsed fixtures remain outside Git at `../OPTASK_Messages/parsed` relative to the repository.
+These index-creation bodies implement the compact [ICD 1.1.0](../ICD.md) shape for an isolated UI test dataset. They contain no sample messages. Raw and parsed fixtures remain outside Git at `../OPTASK_Messages/parsed` relative to the repository.
 
 | Creation body | Suggested backing index | Alias |
 | --- | --- | --- |

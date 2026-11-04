@@ -1,6 +1,6 @@
 # Parse Command design and knowledge
 
-Contract baseline: 2026-11-04. The compact parsed-message structure is approved; the ICD and schemas specify the contributor contract. The [Rust foundation](../backend/README.md) implements the parser SDK and in-memory host; operational adapters and OPTASK interpretation follow separately.
+Contract baseline: 2026-11-04. The compact parsed-message structure is approved; the ICD and schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; continuous index delivery remains separate. the [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
 The objective is an operational capability; the two-day hackathon milestone is its first proof of concept. Confirmed constraints: Rust ingestion/parsing service, OpenSearch persistence and local embedding inference, hybrid keyword/semantic search, Docker Compose, strict airgap architecture, defensive implementation, resource efficiency, resilience, and initial coverage of all OPTASK messages. A teammate owns the UI.
 
@@ -8,7 +8,7 @@ Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMA
 
 | Document | Purpose |
 | --- | --- |
-| [Parsed-message ICD 1.0.0](ICD.md) | Normative compact message/passage/audit contract and parser contribution rules |
+| [Parsed-message ICD 1.1.0](ICD.md) | Normative compact message/passage/audit contract and parser contribution rules |
 | [JSON Schemas](schemas/README.md) | Locally resolvable validation resources for the approved wire shape |
 | [UI test mappings](opensearch/README.md) | Isolated lexical test index definitions; fixtures stay outside Git |
 | [Implementation plan](planning/implementation-plan.md) | Proposed architecture, work packages, dependencies, validation gates, and two-day sequencing |

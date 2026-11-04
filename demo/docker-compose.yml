@@ -1,0 +1,72 @@
+name: parse-command-demo
+
+services:
+  mail-config:
+    image: ghcr.io/docker-mailserver/docker-mailserver:16.0.1
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["cp /seed/postfix-accounts.cf /seed/postfix-main.cf /tmp/docker-mailserver/"]
+    volumes:
+      - ./config:/seed:ro
+      - mail-config:/tmp/docker-mailserver
+    networks:
+      - mail
+    healthcheck:
+      disable: true
+
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:16.0.1
+    hostname: mail.parse-command.test
+    restart: unless-stopped
+    stop_grace_period: 1m
+    depends_on:
+      mail-config:
+        condition: service_completed_successfully
+    environment:
+      TZ: UTC
+      ACCOUNT_PROVISIONER: FILE
+      ENABLE_IMAP: "1"
+      ENABLE_POP3: "0"
+      # Demo-only plaintext IMAP, as permitted by the v1 plan.
+      SSL_TYPE: ""
+      PERMIT_DOCKER: none
+      POSTMASTER_ADDRESS: inbox@parse-command.test
+      # No online checks, signature downloads, or external spam/DNS services.
+      ENABLE_UPDATE_CHECK: "0"
+      ENABLE_CLAMAV: "0"
+      ENABLE_AMAVIS: "0"
+      ENABLE_SPAMASSASSIN: "0"
+      ENABLE_RSPAMD: "0"
+      ENABLE_OPENDKIM: "0"
+      ENABLE_OPENDMARC: "0"
+      ENABLE_POLICYD_SPF: "0"
+      ENABLE_DNSBL: "0"
+      ENABLE_FAIL2BAN: "0"
+      ENABLE_POSTGREY: "0"
+      POSTFIX_INET_PROTOCOLS: ipv4
+      DOVECOT_INET_PROTOCOLS: ipv4
+    ports:
+      - "127.0.0.1:1025:25"
+      - "127.0.0.1:1143:143"
+    volumes:
+      - mail-data:/var/mail
+      - mail-state:/var/mail-state
+      - mail-logs:/var/log/mail
+      - mail-config:/tmp/docker-mailserver
+    networks:
+      - mail
+    # The image's dms-healthcheck checks the enabled services.
+    healthcheck:
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+networks:
+  mail:
+    driver: bridge
+
+volumes:
+  mail-config:
+  mail-data:
+  mail-state:
+  mail-logs:

@@ -1,5 +1,7 @@
 use crate::{ErrorKind, ParseFailure};
-use parse_command_types::{Activity, Contact, Frequency, Period, Security, UtcTimestamp, Validate};
+use parse_command_types::{
+    Activity, Contact, Frequency, Location, Period, Security, UtcTimestamp, Validate,
+};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
 use std::{collections::BTreeSet, io};
@@ -48,11 +50,18 @@ pub trait ParseSink {
     fn frequency(&mut self, value: Frequency) -> Result<(), ParseFailure>;
     fn activity(&mut self, value: Activity) -> Result<(), ParseFailure>;
     fn contact(&mut self, value: Contact) -> Result<(), ParseFailure>;
+    fn location(&mut self, _value: Location) -> Result<(), ParseFailure> {
+        Err(ParseFailure::new(
+            ErrorKind::UnsupportedProfile,
+            "location_sink",
+        ))
+    }
     fn review_flag(&mut self, value: &str) -> Result<(), ParseFailure>;
     fn audit(&mut self, value: AuditEntry) -> Result<(), ParseFailure>;
 }
 /// No deployment defaults: callers choose count and serialized byte budgets explicitly.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OutputLimits {
     pub max_core_items: usize,
     pub max_core_bytes: usize,
@@ -86,6 +95,7 @@ pub struct ParsedFacts {
     pub frequencies: Vec<Frequency>,
     pub activities: Vec<Activity>,
     pub contacts: Vec<Contact>,
+    pub locations: Vec<Location>,
     pub review_flags: Vec<String>,
     pub audit: Vec<AuditEntry>,
 }
@@ -98,6 +108,7 @@ pub struct BoundedOutput {
     frequencies: Vec<Frequency>,
     activities: Vec<Activity>,
     contacts: Vec<Contact>,
+    locations: Vec<Location>,
     flags: Vec<String>,
     audit: Vec<AuditEntry>,
     ids: BTreeSet<String>,
@@ -116,6 +127,7 @@ impl BoundedOutput {
             frequencies: Vec::new(),
             activities: Vec::new(),
             contacts: Vec::new(),
+            locations: Vec::new(),
             flags: Vec::new(),
             audit: Vec::new(),
             ids: BTreeSet::new(),
@@ -176,6 +188,7 @@ impl BoundedOutput {
             frequencies: self.frequencies,
             activities: self.activities,
             contacts: self.contacts,
+            locations: self.locations,
             review_flags: self.flags,
             audit: self.audit,
         })
@@ -211,6 +224,11 @@ impl ParseSink for BoundedOutput {
     fn contact(&mut self, value: Contact) -> Result<(), ParseFailure> {
         self.core(&value, Some(&value.id))?;
         self.contacts.push(value);
+        Ok(())
+    }
+    fn location(&mut self, value: Location) -> Result<(), ParseFailure> {
+        self.core(&value, Some(&value.id))?;
+        self.locations.push(value);
         Ok(())
     }
     fn review_flag(&mut self, value: &str) -> Result<(), ParseFailure> {

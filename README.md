@@ -38,6 +38,17 @@ least `262144` on the Docker host, as described in the
 
 Stop it with `docker compose down`; indexed data remains in the volume.
 
+### Demo email inbox
+
+See [demo/README.md](demo/README.md) for a persistent SMTP/IMAP mail server,
+demo mailbox credentials, external USMTF message delivery, and the Outlook/Exchange
+production integration boundary.
+
+```sh
+docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
+python3 demo/mail.py check
+```
+
 ## Architecture
 
 ## Parser contract
@@ -45,3 +56,34 @@ Stop it with `docker compose down`; indexed data remains in the volume.
 The [parsed-message ICD](docs/ICD.md) defines compact core data, batched OpenSearch audit records, and the interface for teams contributing Rust parser crates. [JSON Schemas](docs/schemas/README.md), [UI test index mappings](docs/opensearch/README.md), and the [external-fixture validator](docs/tools/validate_samples.py) accompany the contract.
 
 Raw and parsed sample data are kept outside this Git folder at `../OPTASK_Messages` and `../OPTASK_Messages/parsed`. The parsed directory's README contains fixture-load instructions. No sample corpus is published in this repository.
+
+## Supported OPTASK messages
+
+The Rust implementation is in [`backend/`](backend/README.md). The following exact message identifiers have end-to-end regression coverage against the supplied examples and their approved parsed documents:
+
+| Message | Tested declared version |
+| --- | --- |
+| OPTASK AAW | B.1.01.13 |
+| OPTASK ASUW | B.1.01.12 |
+| OPTASK ASW | B.1.01.12 |
+| OPTASK COMMS | B.1.01.12 |
+| OPTASK COP-CTP | B.1.01.03 |
+| OPTASK EW | B.1.01.12 |
+| OPTASK GENERAL | B.1.01.12 |
+| OPTASK IM | B.1.01.12 |
+| OPTASK LINK | B.1.02.04 |
+| OPTASK LINK ID SUPP | B.1.01.12 |
+| OPTASK MCM | B.1.01.12 |
+| OPTASK MINING | B.1.01.12 |
+| OPTASK NUC | B.1.01.12 |
+| OPTASK RAS | B.1.01.12 |
+
+This coverage reproduces all approved example facts: 13 periods, 27 frequencies, 25 activities and 8 contacts. Extraction includes frequency plans, crypto changeover points, communications windows/checks, replenishment rendezvous, explicit task records, reporting requirements and source POCs where present. Detailed evidence stays in separate audit documents.
+
+Support is specific to these tested layouts and extraction rules. Output remains marked `partial` because unprojected records are preserved for review; the example-based profiles do not establish full edition compliance. Missing dates and unresolved command/C2 mappings remain explicit. The parser performs no runtime network or model calls. UI integration lives in the separate `ui/` directory.
+
+## Initial inbox test
+
+The [intake runbook](backend/INTAKE.md) covers starting the demo monitor, inspecting per-email custody, restart/retry behavior and loading isolated OpenSearch UI test indices. The worker retains original email bytes and commits parser results with a durable audit outbox before marking a receipt parsed. Duplicate bodies share a projection; IMAP server receipt time selects the newest subject and differences remain flagged.
+
+The [ICD 1.1.0](docs/ICD.md) adds optional geographic locations: points, channel endpoint lines and area polygons, with WGS84 as the approved default only when a datum is absent. Source evidence remains in audit. The demo worker monitors IMAP continuously; production Exchange PKI and continuous OpenSearch delivery remain subsequent acceptance work.

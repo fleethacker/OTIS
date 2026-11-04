@@ -2,7 +2,7 @@
 
 The normative contributor contract is now [ICD 1.0.0](../ICD.md), with [JSON Schemas](../schemas/README.md). The [implemented SDK and host foundation](../../backend/README.md) provide the compiling contributor workflow. This earlier design note provides rationale; use the ICD and SDK when a proposed interface detail differs. The crates are local and have not been published to a package registry.
 
-Status: foundation implemented, 2026-11-04; domain parsers and operational adapters remain subsequent work. **Confirmed:** build the server's parser interface first so other teams can contribute additional message types as Rust modules/crates compiled into the server. Initial delivered domain parsers remain OPTASK; the host interface permits future non-OPTASK parsers.
+Status: foundation and initial OPTASK contribution implemented, 2026-11-04; operational adapters remain subsequent work. **Confirmed:** build the server's parser interface first so other teams can contribute additional message types as Rust modules/crates compiled into the server. The host interface permits additional parsers. Current OPTASK example coverage is listed in the root README; no broader edition compliance is claimed.
 
 Packaging is confirmed: compiled Rust modules/crates. Independently installable runtime plugins are outside this version's scope. The precise trait signatures, crate boundaries, common fact types, and contribution checks below remain design proposals.
 

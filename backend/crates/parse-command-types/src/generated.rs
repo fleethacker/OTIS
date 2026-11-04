@@ -619,6 +619,8 @@ pub struct Message {
     pub review_flags: Vec<String>,
     #[serde(deserialize_with = "crate::required_nullable")]
     pub subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locations: Vec<Location>,
 }
 impl Validate for Message {
     fn validate(&self) -> Result<(), ValidationError> {
@@ -646,6 +648,9 @@ impl Validate for Message {
         validate_strings(&self.review_flags, true, "message.review_flags")?;
         if let Some(value) = &self.subject {
             nonempty(value, "message.subject")?;
+        }
+        for item in &self.locations {
+            item.validate()?;
         }
         self.validate_semantics()
     }
@@ -748,6 +753,85 @@ impl Validate for AuditEvent {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GeoPoint {
+    pub lat: f64,
+    pub lon: f64,
+}
+impl Validate for GeoPoint {
+    fn validate(&self) -> Result<(), ValidationError> {
+        if self.lat < -90.0 {
+            return Err(invalid("geoPoint.lat", "minimum"));
+        }
+        if self.lat > 90.0 {
+            return Err(invalid("geoPoint.lat", "maximum"));
+        }
+        if self.lon < -180.0 {
+            return Err(invalid("geoPoint.lon", "minimum"));
+        }
+        if self.lon > 180.0 {
+            return Err(invalid("geoPoint.lon", "maximum"));
+        }
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Location {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: LocationType,
+    pub label: String,
+    pub datum: String,
+    pub datum_source: LocationDatumSource,
+    pub status: LocationStatus,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub point: Option<GeoPoint>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub shape: Option<serde_json::Map<String, serde_json::Value>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub radius_m: Option<f64>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scope: Option<String>,
+}
+impl Validate for Location {
+    fn validate(&self) -> Result<(), ValidationError> {
+        validate_subject_id(&self.id, Some(b'g'), "location.id")?;
+        nonempty(&self.label, "location.label")?;
+        nonempty(&self.datum, "location.datum")?;
+        if let Some(value) = &self.point {
+            value.validate()?;
+        }
+        if let Some(value) = &self.radius_m {
+            if *value < 0.0 {
+                return Err(invalid("location.radius_m", "minimum"));
+            }
+        }
+        if let Some(value) = &self.scope {
+            nonempty(value, "location.scope")?;
+        }
+        self.validate_semantics()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecurityClassification {
     #[serde(rename = "UNCLASSIFIED")]
@@ -830,4 +914,32 @@ pub enum PassageEmbeddingStatus {
     Ready,
     #[serde(rename = "failed")]
     Failed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocationType {
+    #[serde(rename = "position")]
+    Position,
+    #[serde(rename = "area")]
+    Area,
+    #[serde(rename = "channel")]
+    Channel,
+    #[serde(rename = "circle_center")]
+    CircleCenter,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocationDatumSource {
+    #[serde(rename = "explicit")]
+    Explicit,
+    #[serde(rename = "default")]
+    Default,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LocationStatus {
+    #[serde(rename = "inferred")]
+    Inferred,
+    #[serde(rename = "unresolved")]
+    Unresolved,
 }

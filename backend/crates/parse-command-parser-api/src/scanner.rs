@@ -66,7 +66,8 @@ pub struct RecordView<'a> {
 pub enum ScanDiagnostic {
     SetNotOnNewLine { sequence: usize, offset: usize },
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ScanLimits {
     pub max_source_bytes: usize,
     pub max_records: usize,

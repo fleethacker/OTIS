@@ -120,7 +120,8 @@ impl Registry {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HostLimits {
     pub scan: ScanLimits,
     pub output: OutputLimits,
@@ -231,6 +232,7 @@ impl ParserHost {
             (!facts.frequencies.is_empty(), FactCategory::Frequency),
             (!facts.activities.is_empty(), FactCategory::Activity),
             (!facts.contacts.is_empty(), FactCategory::Contact),
+            (!facts.locations.is_empty(), FactCategory::Location),
         ] {
             if present && !selected.descriptor.fact_categories.contains(&category) {
                 return Err(failure(
@@ -246,7 +248,7 @@ impl ParserHost {
             .security_override
             .cloned()
             .unwrap_or(facts.header.security);
-        if context.security_override.is_none() {
+        if context.security_override.is_none() && security.status != SecurityStatus::Conflict {
             security.status = SecurityStatus::Unvalidated;
         }
         security.validate()?;
@@ -276,6 +278,7 @@ impl ParserHost {
             frequencies: facts.frequencies,
             activities: facts.activities,
             contacts: facts.contacts,
+            locations: facts.locations,
             review_flags: facts.review_flags,
         };
         encoded_len(&core, self.limits.output.max_core_bytes)?;
@@ -293,6 +296,7 @@ impl ParserHost {
             .chain(core.get().frequencies.iter().map(|f| &f.id))
             .chain(core.get().activities.iter().map(|f| &f.id))
             .chain(core.get().contacts.iter().map(|f| &f.id))
+            .chain(core.get().locations.iter().map(|f| &f.id))
         {
             if !covered.contains(id.as_str()) {
                 return Err(failure(ErrorKind::InvalidValue, "missing_fact_audit"));
@@ -330,7 +334,8 @@ impl ParserHost {
                 let found = core.get().periods.iter().any(|f| &f.id == subject)
                     || core.get().frequencies.iter().any(|f| &f.id == subject)
                     || core.get().activities.iter().any(|f| &f.id == subject)
-                    || core.get().contacts.iter().any(|f| &f.id == subject);
+                    || core.get().contacts.iter().any(|f| &f.id == subject)
+                    || core.get().locations.iter().any(|f| &f.id == subject);
                 if !found {
                     return Err(failure(ErrorKind::InvalidValue, "audit_subject_missing"));
                 }

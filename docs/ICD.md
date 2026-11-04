@@ -1,8 +1,8 @@
 # Parse Command Interface Control Document
 
-**Contract:** PC-ICD-001 · **Version:** 1.0.0 · **Date:** 2026-11-04
+**Contract:** PC-ICD-001 · **Version:** 1.1.0 · **Date:** 2026-11-04
 
-**Status:** approved compact data shape; initial contributor interface specification. The [Rust foundation](../backend/README.md) implements the SDK and in-memory parser host. Operational intake, durability, indexing and deployment are not yet implemented. Fixture interpretation remains partial; approval of the structure does not establish operational correctness of every inferred rule.
+**Status:** approved compact data shape; initial contributor interface specification. The [Rust foundation](../backend/README.md) implements the SDK and in-memory parser host. Local IMAP intake and SQLite custody/outbox staging are implemented for the demo. Production PKI and continuous OpenSearch delivery remain separate acceptance gates. Fixture interpretation remains partial; approval of the structure does not establish operational correctness of every inferred rule.
 
 ## 1. Scope and authority
 
@@ -43,7 +43,7 @@ Confirmed transport/framing: SMTP delivers email, Parse Command retrieves it usi
 
 The host decodes the subject header, removes one literal leading `SUBJ:` indicator and surrounding presentation whitespace for the core `subject`, and preserves the original header/decoded value and transformation in audit. Do not remove an interior occurrence of `SUBJ:` or truncate at a colon inside the subject text. Missing/empty content projects to null with audit detail; a missing expected marker must not cause source data to be discarded.
 
-The host extracts email metadata before parser dispatch and preserves a mapping to the original email/body. Email subject MUST NOT select the parser or replace `MSGID`. Receipt-level subject/header evidence belongs in an `email_received` audit event (with receipt identity in its payload); the original USMTF source/hash remains body-based. If duplicate bodies arrive under different subjects, preserve each receipt's subject in audit and flag conflicting display metadata rather than silently overwriting it; the host's display-subject selection policy still needs agreement.
+The host extracts email metadata before parser dispatch and preserves a mapping to the original email/body. Email subject MUST NOT select the parser or replace `MSGID`. For duplicate bodies, the email with the latest server IMAP INTERNALDATE supplies the display subject, with local durable receipt order breaking ties; differences retain a `subject_conflict` flag and all receipt/header history. Receipt-level subject/header evidence belongs in an `email_received` audit event (with receipt identity in its payload); the original USMTF source/hash remains body-based. If duplicate bodies arrive under different subjects, preserve each receipt's subject in audit and flag conflicting display metadata rather than silently overwriting it; the selected receipt identity remains in the custody journal.
 
 The supplied fixtures are bare USMTF text, not full emails. Their `subject` values are therefore null. A future full-email fixture should exercise Subject/SUBJ decoding and body-to-source mapping separately from domain parsing.
 
@@ -53,7 +53,7 @@ The supplied fixtures are bare USMTF text, not full emails. Their `subject` valu
 | --- | --- |
 | Message `id` | `sha256:` plus 64 lowercase hexadecimal digits of the exact UTF-8 decoded USMTF source bytes preserved in audit. Whitespace is not silently rewritten before hashing. Email receipt identity is separate. |
 | `revision` | Nonempty opaque revision token, 1-64 ASCII letters/digits/dot/underscore/hyphen, starting with a letter/digit. Stable for one immutable interpretation. |
-| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, or `vN` for activities, frequencies, contacts and periods; N starts at 1. No duplicates within the revision. |
+| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN` or `gN` for activities, frequencies, contacts, periods and locations; N starts at 1. No duplicates within the revision. |
 | Passage `id` | Content-derived `sha256:` identifier assigned by the host, stable for the same source revision and chunking inputs. |
 | Audit `id` | Host-assigned deterministic 64-digit lowercase hexadecimal event identifier for one immutable event. Persist its identity/timestamp/content before retries. |
 
@@ -81,6 +81,7 @@ Required fields are exactly the message schema's `required` list; unknown core p
 | `frequencies` | Displayable frequency entries, optionally grouped by plan/designator/channel/scope |
 | `activities` | Displayable tasking, points, windows and reporting requirements |
 | `contacts` | Source contact/coordination information |
+| `locations` | Optional geographic points/shapes with datum and interpretation state |
 | `review_flags` | Optional unique short warning codes needed by the user; full explanations live in audit |
 
 ### 4.1 Security
@@ -189,7 +190,7 @@ Detailed message-format grammar, manual-derived field tables, format coverage an
 
 ## 8. Rust contribution interface
 
-The following trait is implemented by the local `parse-command-parser-api` crate in [`backend/`](../backend/README.md). SDK 0.1.0 is linked through workspace/path dependencies and has not been published to a package registry. See the synthetic reference parser and host integration tests for a compiling contribution example. This is a Rust source contract, not a C ABI or dynamically loaded binary ABI.
+The following trait is implemented by the local `parse-command-parser-api` crate in [`backend/`](../backend/README.md). SDK 0.2.0 is linked through workspace/path dependencies and has not been published to a package registry. See the synthetic reference parser and host integration tests for a compiling contribution example. This is a Rust source contract, not a C ABI or dynamically loaded binary ABI.
 
 ```rust
 pub trait MessageParser: Send + Sync {
@@ -210,13 +211,13 @@ pub trait MessageParser: Send + Sync {
 | `MessageView<'a>` | Borrowed immutable USMTF body `&'a str`, optional decoded email subject metadata, representation identity, exact message-type evidence, ordered record views and field views, source spans |
 | `ParseContext<'a>` | Host identity/revision, immutable explicit roster/rule context, optional provenance-bearing reference time, work/output budget and cancellation access |
 | `MatchOutcome` | Unsupported, applicable with identified profile/evidence, or ambiguous with reason; not an arbitrary floating confidence score |
-| `ParseSink` | Separate bounded methods to emit header interpretations, periods, frequencies, activities, contacts, review flags and audit entries; returns a limit/error result on exhaustion |
+| `ParseSink` | Separate bounded methods to emit header interpretations, periods, frequencies, activities, contacts, locations, review flags and audit entries; returns a limit/error result on exhaustion |
 | `ParseSummary` | Declared coverage/completeness and parser/profile version; success does not mean complete semantics |
 | `ParseFailure` | Unsupported profile, ambiguous profile, malformed input, invalid value, resource limit, cancellation or internal defect, with a bounded safe reason code |
 
 Shared core DTO fields serialize exactly as the JSON schemas specify; named operations above do not add a new wire wrapper. The host finalizes message IDs, issue-based expiry, metadata consistency, revision publication and storage/audit envelopes. A crate MUST NOT claim authority over those host-owned decisions by emitting replacement policy fields.
 
-In SDK 0.1.0, `MessageView` represents the exact decoded UTF-8 body; spans are byte offsets into that body. `ParseContext` exposes revision, explicit recording time, command IDs, optional host security override, optional reference time/provenance and a cooperative work budget. Additional MIME representations, roster/rule contexts, durable revision publication and batched storage are later adapter work; they are not implicit inputs. `ParseSummary` contains profile and complete/partial coverage, while parser identity/version comes from the descriptor. Explicit host output limits constrain the sink. The host requires an audit entry linked to every emitted fact ID and returns validated in-memory core/audit streams together.
+In SDK 0.2.0, `MessageView` represents the exact decoded UTF-8 body; spans are byte offsets into that body. `ParseContext` exposes revision, explicit recording time, command IDs, optional host security override, optional reference time/provenance and a cooperative work budget. The intake adapter records MIME representation provenance and stages revisions and outbox intents in SQLite. Additional roster/rule contexts and continuous batched delivery remain later adapter work; they are not implicit inputs. `ParseSummary` contains profile and complete/partial coverage, while parser identity/version comes from the descriptor. Explicit host output limits constrain the sink. The host requires an audit entry linked to every emitted fact ID and returns validated in-memory core/audit streams together.
 
 Parser output limits apply to both core facts and audit detail. Prefer borrowed views/offsets while parsing. A time limit around a synchronous call cannot forcibly cancel an infinite loop; parsers must cooperate with budgets and cancellation. Compiled Rust code runs with host authority: traits are not a sandbox. Review dependencies/unsafe code and exercise malformed/oversized input before enablement.
 
@@ -259,7 +260,7 @@ An array of ordinary objects can produce cross-fact matches, so use `nested` onl
 
 ## 10. Compatibility and validation
 
-The schemas and index metadata identify ICD 1.0.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
+The schemas and index metadata identify ICD 1.1.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
 
 Use [the validation tool](tools/validate_samples.py) with an external fixture directory. It validates local JSON Schema resources, all three document sets, data linkage, source hashes, source spans, frequency/time invariants, Bulk framing and audit evidence preservation. `jsonschema` is a build/test dependency, not a Rust runtime dependency; local/offline installations may supply it from prepared tooling.
 
@@ -267,6 +268,14 @@ Schema/type checks do not establish semantic correctness, host crash recovery, w
 
 ## 11. Outstanding deployment decisions
 
-The following MUST be resolved before their dependent runtime behavior is enabled: actual CPU/RAM/disk budget; IMAP authentication, MIME/body encoding and multipart handling; duplicate-body subject selection; command aliases/roster and C2 routing policy; unresolved/invalid/future issue-time handling; amendment/cancellation precedence; audit retention and cleanup; batch/queue resource limits; chosen OpenSearch/model/engine versions; UI auth/routes; production ISM partition/cutoff behavior; and recovery objectives.
+The following MUST be resolved before their dependent runtime behavior is enabled: actual CPU/RAM/disk budget; IMAP authentication, MIME/body encoding and multipart handling; command aliases/roster and C2 routing policy; unresolved/invalid/future issue-time handling; amendment/cancellation precedence; audit retention and cleanup; batch/queue resource limits; chosen OpenSearch/model/engine versions; UI auth/routes; production ISM partition/cutoff behavior; and recovery objectives.
 
 These do not prevent teams from implementing schema-conformant pure parser logic and supplying fixture outputs under this ICD.
+
+## 11. Geospatial extension (1.1.0)
+
+Messages may include optional `locations`. Existing 1.0.0 payloads remain valid when it is absent. Each entry has a revision-scoped `g1`, `g2`, … ID, type, label, datum, datum source and inferred/unresolved status; optional `point` uses `{"lat": ..., "lon": ...}`, and `shape` uses GeoJSON longitude/latitude order for Point, LineString or Polygon. Circle centers retain their point and `radius_m`; no polygon approximation is manufactured. Scope remains optional. Evidence and coordinate tokens stay in audit linked by the location ID.
+
+The user has authorized WGS84 as the default when a datum is absent. `datum_source` records `default` or `explicit`. Explicit other/unknown datums, invalid/checksum-failing coordinates and unresolved names retain `unresolved` entries without indexed geometry; no silent datum transformation occurs. Source-based area rings are closed and oriented for indexing. Spatial display/search does not establish command applicability or tasking.
+
+The messages mapping uses nested `locations` with `point: geo_point` and `shape: geo_shape`; it keeps each geometry associated with its label, datum and status. Existing indices require an additive mapping update before receiving the field. See the [OpenSearch geopoint](https://docs.opensearch.org/latest/mappings/supported-field-types/geo-point/) and [geoshape](https://docs.opensearch.org/latest/mappings/supported-field-types/geo-shape/) contracts.

@@ -174,19 +174,26 @@ body { background: var(--color-base-200); color: var(--color-base-content); }
 :focus-visible { outline: 3px solid var(--color-primary); outline-offset: 4px; }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 100; padding: 12px; background: var(--color-base-100); }
 .skip-link:focus { top: 12px; }
-.desk-header { background: oklch(25% 0.04 250); color: white; padding: 11px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.wordmark { display: flex; gap: 14px; align-items: center; font-size: 20px; font-weight: 650; }
-.wordmark small { display: block; font-size: 12px; font-weight: 400; color: oklch(85% 0.02 250); margin-top: 2px; }
-.desk-mark { border: 1px solid oklch(65% 0.04 230); padding: 7px; font-size: 17px; letter-spacing: -1px; }
+.desk-header { background: oklch(25% 0.04 250); color: white; height: 64px; padding: 7px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.header-start { display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1; }
+.wordmark { min-width: 0; display: flex; gap: 14px; align-items: center; font-size: 20px; font-weight: 650; }
+.wordmark > span:last-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wordmark small { overflow: hidden; text-overflow: ellipsis; display: block; font-size: 12px; font-weight: 400; color: oklch(85% 0.02 250); margin-top: 2px; }
+.desk-mark { flex-shrink: 0; border: 1px solid oklch(65% 0.04 230); padding: 7px; font-size: 17px; letter-spacing: -1px; }
 .desk-mark span { color: oklch(78% 0.08 190); margin: 0 2px; }
 .account { display: flex; align-items: center; gap: 8px; }
 .account button:hover { background: oklch(35% 0.04 250); }
 .account [role="menu"] { color: var(--color-base-content); }
 .account :focus-visible { outline-color: oklch(80% 0.09 190); }
 .utc-label { font-size: 13px; color: oklch(85% 0.02 250); }
-.desk-nav { display: flex; gap: 28px; padding: 0 32px; background: var(--color-base-100); border-bottom: 1px solid var(--color-base-300); }
-.desk-nav a { padding: 16px 0 13px; border-bottom: 3px solid transparent; font-size: 14px; font-weight: 600; }
-.desk-nav a.active { color: var(--color-primary); border-color: var(--color-primary); }
+ .popover { position: relative; flex-shrink: 0; }
+.popover-trigger { width: 44px; height: 44px; padding: 10px; }
+.popover-trigger svg { width: 22px; height: 22px; }
+.desk-header .popover-trigger:hover { background: oklch(35% 0.04 250); }
+.popover-panel { position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; min-width: 192px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 80px); overflow-y: auto; padding: 6px; border: 1px solid var(--color-base-300); border-radius: var(--radius-box); background: var(--color-base-100); color: var(--color-base-content); box-shadow: 0 8px 24px oklch(0% 0 0 / 18%); }
+.navigation-menu { display: flex; flex-direction: column; gap: 4px; }
+.navigation-menu a { display: block; padding: 10px 12px; border-radius: var(--radius-field); font-size: 14px; font-weight: 600; }
+.navigation-menu a:hover, .navigation-menu a.active { background: var(--color-base-200); }
 main { padding: 28px 32px 40px; min-height: calc(100vh - 200px); max-width: 1800px; margin: auto; }
 h1 { font-size: 26px; line-height: 1.25; font-weight: 650; letter-spacing: -0.5px; }
 h2 { font-size: 17px; font-weight: 650; }
@@ -319,11 +326,10 @@ h2 { font-size: 17px; font-weight: 650; }
 @media (max-width: 1150px) { .reader-layout { grid-template-columns: 1fr; } .message-actions { border-left: 0; border-top: 1px solid var(--color-base-300); padding-left: 0; } }
 @media (max-width: 700px) { .messages-workspace { grid-template-columns: 1fr; } .record-list { border-right: 0; border-bottom: 1px solid var(--color-base-300); } .message-reader, .reader-empty { padding: 16px; } .message-meta { grid-template-columns: 90px minmax(0, 1fr); } }
 @media (max-width: 640px) {
-  .desk-header { padding: 8px 16px; flex-wrap: wrap; }
+  .desk-header { padding: 7px 16px; }
   .wordmark { font-size: 18px; }
   .account { gap: 10px; }
   .utc-label { display: none; }
-  .desk-nav { padding: 0 16px; gap: 24px; }
   main { padding: 24px 16px; }
   .page-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
   .search-region { gap: 8px; }

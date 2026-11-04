@@ -38,6 +38,17 @@ least `262144` on the Docker host, as described in the
 
 Stop it with `docker compose down`; indexed data remains in the volume.
 
+### Demo email inbox
+
+See [demo/README.md](demo/README.md) for a persistent SMTP/IMAP mail server,
+demo mailbox credentials, external USMTF message delivery, and the Outlook/Exchange
+production integration boundary.
+
+```sh
+docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
+python3 demo/mail.py check
+```
+
 ## Architecture
 
 ## Parser contract

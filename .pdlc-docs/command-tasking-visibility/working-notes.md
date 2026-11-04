@@ -100,3 +100,10 @@ Ask for the single end-to-end scenario the proof of concept must handle, startin
 - User added email subject capture and confirmed SMTP delivery / IMAP retrieval, MSGID at the start of the body, and SUBJ: at the start of the email subject value. Added required nullable subject to core message/passage schemas; original header and normalization evidence stay in audit. Existing body-only fixtures have null subjects.
 - ICD specifies shared Rust trait/type responsibilities and serialized shapes, without claiming a published or implemented host SDK crate. User will push the documentation to GitHub; no push is performed here.
 - JSON Schema validation and negative cases passed for all fixtures along with source/span, fact/audit/parent linkage, interval/expiry/frequency and Bulk framing checks. Live indexing, embeddings, SME semantic correctness, and Rust host/SDK integration remain untested.
+
+### Handoff verification
+
+- Installed and hash-verified the external bundle at FleetHacker/OPTASK_Messages/parsed, including Bulk files and validation/load instructions. Removed 27 earlier repository review-payload files only after external copies were verified. Original raw files were not modified.
+- User moved docs/knowledge to FleetHacker/OPTASK_Messages/knowledge and requested keeping USMTF knowledge out of Git. Removed repository knowledge links and relocated detailed ICD format rules to that external knowledge directory; kept the Git ICD focused on the data/interface contract.
+- Revalidated all external fixtures against four schemas and the original source files. Repository JSON now consists only of schemas and mappings; no fixture JSON/NDJSON remains under docs/review.
+- Concurrent Git activity committed the documentation and earlier sample payloads while this work was underway. Found sample files in commit 1f3048d, included in the locally recorded origin/main history. Current-tree sample deletions are pending. Asked whether to prepare a history-cleanup plan; no history rewrite or push was performed.

@@ -1,0 +1,11 @@
+# Local SMTP injection into configured mailboxes; no external DNS lookups.
+smtpd_sender_restrictions =
+smtpd_helo_restrictions =
+smtpd_recipient_restrictions = reject_unauth_destination
+smtpd_client_restrictions =
+postscreen_greet_action = ignore
+postscreen_greet_wait = 1s
+postscreen_dnsbl_sites =
+smtp_dns_support_level = disabled
+# Even submissions from inside the container cannot relay externally.
+smtpd_relay_restrictions = reject_unauth_destination

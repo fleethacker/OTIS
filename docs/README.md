@@ -1,6 +1,6 @@
 # Parse Command design and knowledge
 
-Contract baseline: 2026-11-04. The compact parsed-message structure is approved; the ICD and schemas specify the contributor contract. These files do not claim that the Rust host/SDK is implemented.
+Contract baseline: 2026-11-04. The compact parsed-message structure is approved; the ICD and schemas specify the contributor contract. The [Rust foundation](../backend/README.md) implements the parser SDK and in-memory host; operational adapters and OPTASK interpretation follow separately.
 
 The objective is an operational capability; the two-day hackathon milestone is its first proof of concept. Confirmed constraints: Rust ingestion/parsing service, OpenSearch persistence and local embedding inference, hybrid keyword/semantic search, Docker Compose, strict airgap architecture, defensive implementation, resource efficiency, resilience, and initial coverage of all OPTASK messages. A teammate owns the UI.
 

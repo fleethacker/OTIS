@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { HeaderClock } from "./header-clock";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
 import { Notifications } from "./notifications";
@@ -30,6 +31,7 @@ function DeskLayout() {
             </span>
           </div>
         </div>
+        <HeaderClock />
         <div className="account">
           <Notifications />
           <UserMenu />

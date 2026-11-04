@@ -1,28 +1,36 @@
 import { test, expect } from "bun:test";
-import { fireEvent } from "@testing-library/react";
 import { renderWithProviders } from "../test-utils/render";
-import { DisplayTimeProvider, civilHour, displayTimestamp, TIME_MODE_KEY } from "./display-time";
-import { TimeDisplayControl } from "./time-display-control";
+import {
+  DisplayTimeProvider,
+  civilHour,
+  displayTimestamp,
+  TIME_MODE_KEY,
+  useDisplayTime,
+} from "./display-time";
 import { calendarLocalizer } from "./calendar-localizer";
 import { monthBounds } from "./calendar-time";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 
-test("shared control mounts, selects and retains display preference", () => {
-  localStorage.removeItem(TIME_MODE_KEY);
-  const view = renderWithProviders(
-    <DisplayTimeProvider>
-      <TimeDisplayControl />
-    </DisplayTimeProvider>
-  );
-  expect(view.getByRole("button", { name: "Zulu / UTC" }).getAttribute("aria-pressed")).toBe(
-    "true"
-  );
-  fireEvent.click(view.getByRole("button", { name: "Local", exact: true }));
-  expect(
-    view.getByRole("button", { name: "Local", exact: true }).getAttribute("aria-pressed")
-  ).toBe("true");
-  expect(localStorage.getItem(TIME_MODE_KEY)).toBe("local");
-  localStorage.removeItem(TIME_MODE_KEY);
+test("application display stays in UTC despite a previously saved local preference", () => {
+  localStorage.setItem(TIME_MODE_KEY, "local");
+  function DisplayProbe() {
+    const { mode, zone, format } = useDisplayTime();
+    return (
+      <p>
+        {mode} · {zone} · {format(timestampFromDate(new Date("2026-11-04T12:00:00Z")))}
+      </p>
+    );
+  }
+  try {
+    const view = renderWithProviders(
+      <DisplayTimeProvider>
+        <DisplayProbe />
+      </DisplayTimeProvider>
+    );
+    expect(view.getByText(/utc · UTC · 2026-11-04 12:00/)).toBeTruthy();
+  } finally {
+    localStorage.removeItem(TIME_MODE_KEY);
+  }
 });
 
 test("civil days and slots preserve spring and repeated autumn instants", () => {

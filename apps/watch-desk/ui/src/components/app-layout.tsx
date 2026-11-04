@@ -2,7 +2,6 @@ import { NavLink, Outlet } from "react-router-dom";
 import { UserMenu } from "./UserMenu";
 import { Notifications } from "./notifications";
 import { DisplayTimeProvider, useDisplayTime } from "./display-time";
-import { TimeDisplayControl } from "./time-display-control";
 
 export function AppLayout() {
   return (
@@ -28,7 +27,6 @@ function DeskLayout() {
           </span>
         </div>
         <div className="account">
-          <TimeDisplayControl />
           <Notifications />
           <UserMenu />
         </div>

@@ -22,6 +22,8 @@ test("message page mounts truthful loading and keyboard search", () => {
   const view = renderWithProviders(<Messages />, { route: "/messages?record=missing" });
   expect(view.getByRole("searchbox", { name: "Search Message records" })).toBeTruthy();
   expect(view.getByRole("status").textContent).toContain("Loading");
+  expect(view.queryByRole("combobox", { name: "Search mode" })).toBeNull();
+  expect(view.queryByRole("combobox", { name: "Dataset" })).toBeNull();
 });
 test("reader preserves missing information and switches views", () => {
   const message = create(MessageRecordSchema, {

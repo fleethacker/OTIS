@@ -1,6 +1,6 @@
 # Parse Command implementation plan
 
-Status: engineering plan, updated 2026-11-04. Parser SDK/OPTASK extraction and demo IMAP/SQLite custody are implemented; the initial local OpenSearch test indices are populated. Continuous delivery, production PKI, embeddings and the UI service remain subsequent work. Unresolved decisions are tracked in [decisions and questions](decisions-and-questions.md); proposals are not implicit defaults.
+Status: engineering plan, updated 2026-11-04. Parser SDK/OPTASK extraction and demo IMAP/SQLite custody are implemented; the initial local OpenSearch test indices are populated. The UI service, explicit offline CPU embedding bootstrap, narrative passage snapshot loader and stored search templates are implemented. Continuous delivery, production PKI, lifecycle and the frontend source/search adapter remain subsequent work. Unresolved decisions are tracked in [decisions and questions](decisions-and-questions.md); proposals are not implicit defaults.
 
 ## Outcome and boundaries
 

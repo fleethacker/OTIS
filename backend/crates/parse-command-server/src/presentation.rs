@@ -1,0 +1,172 @@
+use crate::{
+    Error, Result,
+    private::{Private, text, timestamp},
+};
+use serde_json::{Value, json};
+pub fn message(
+    core: &Value,
+    private: &Private,
+    detail: bool,
+    raw: Option<&str>,
+    received: Option<&str>,
+) -> Result<Value> {
+    let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
+    let id = private.id(&key)?;
+    let mut result = json!({"id":id.to_string(),"sourceMessageId":key,"rawText":raw.unwrap_or(""),"processingStatus":"needs_review","provenance":"upstream","events":[],"lifecycleEntries":[]});
+    if let Some(subject) = core["subject"].as_str() {
+        result["subject"] = json!(subject);
+    }
+    if let Some(origin) = core["originator"].as_str() {
+        result["sender"] = json!(origin);
+    }
+    if let Some(received) = received {
+        result["receivedAt"] = json!(timestamp(received)?);
+    }
+    if detail {
+        result["structuredPayloadJson"] = json!(core.to_string());
+    }
+    let mut events = Vec::new();
+    if let Some(activities) = core["activities"].as_array() {
+        for fact in activities {
+            let event_key = format!("{key}#{}", text(fact, "id"));
+            let mut e = json!({"id":private.id(&event_key)?.to_string(),"messageId":id.to_string(),"sourceEventId":text(fact,"id"),"title":text(fact,"type").replace('_'," "),"scheduleStatus":"needs_review","reviewReason":"Extracted source fact; operational confirmation and command assignment remain unvalidated","isRevised":false,"revisions":[]});
+            for (from, to) in [("start_at", "startAt"), ("end_at", "endAt")] {
+                if let Some(t) = fact[from].as_str() {
+                    e[to] = json!(timestamp(t)?);
+                }
+            }
+            if core["command_ids"].as_array().is_some_and(|v| v.len() == 1) {
+                e["unit"] = core["command_ids"][0].clone();
+            }
+            events.push(e);
+        }
+    }
+    result["events"] = json!(events);
+    Ok(result)
+}
+pub fn timeline(core: &Value, from: &str, to: &str) -> Result<(Vec<Value>, Vec<Value>)> {
+    let mut items = Vec::new();
+    let mut review = Vec::new();
+    let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
+    let Some(facts) = core["activities"].as_array() else {
+        return Ok((items, review));
+    };
+    for fact in facts {
+        let mut item = json!({"key":format!("{key}#{}",text(fact,"id")),"messageKey":key,"factId":fact["id"],"title":text(fact,"type").replace('_'," "),"commandIds":core["command_ids"],"reviewRequired":true,"confirmation":"unvalidated","sourceType":core["type"]});
+        if let Some(at) = fact["at"].as_str() {
+            if timestamp(at)?.as_str() >= from && timestamp(at)?.as_str() < to {
+                item["kind"] = json!("point");
+                item["at"] = json!(at);
+                items.push(item);
+            }
+            continue;
+        }
+        if let (Some(start), Some(end)) = (fact["start_at"].as_str(), fact["end_at"].as_str()) {
+            let a = timestamp(start)?;
+            let b = timestamp(end)?;
+            if b > a {
+                if a.as_str() < to && b.as_str() > from {
+                    item["kind"] = json!("interval");
+                    item["start"] = json!(start);
+                    item["end"] = json!(end);
+                    items.push(item);
+                }
+                continue;
+            }
+        }
+        item["kind"] = json!("unresolved");
+        item["reason"] = json!(
+            "Date/time or positive interval is unresolved; no duration or date has been inferred"
+        );
+        review.push(item);
+    }
+    Ok((items, review))
+}
+pub fn legacy(row: &Value, private: &Private, detail: bool) -> Result<Value> {
+    let key = text(row, "source_key");
+    let id = private.id(key)?;
+    let mut result = json!({"id":id.to_string(),"sourceMessageId":key,"rawText":if detail{text(row,"raw_text")}else{""},"processingStatus":text(row,"processing_status"),"provenance":text(row,"provenance"),"events":[],"lifecycleEntries":[]});
+    for (from, to) in [
+        ("subject", "subject"),
+        ("sender", "sender"),
+        ("reference_attribution", "referenceAttribution"),
+    ] {
+        if let Some(v) = row[from].as_str() {
+            result[to] = json!(v);
+        }
+    }
+    if detail && let Some(v) = row["structured_payload_json"].as_str() {
+        result["structuredPayloadJson"] = json!(v);
+    }
+    if let Some(v) = row["received_at"].as_str() {
+        result["receivedAt"] = json!(timestamp(v)?);
+    }
+    if let Some(v) = row["recipients"].as_str() {
+        let values: Value = serde_json::from_str(v)
+            .map_err(|_| Error::config("Legacy recipient data is invalid"))?;
+        result["recipients"] = json!({"values":values});
+    }
+    if let Some(value) = row["lifecycle_entries"].as_str() {
+        let entries: Vec<Value> =
+            serde_json::from_str(value).map_err(|_| Error::config("Legacy lifecycle data"))?;
+        result["lifecycleEntries"]=json!(entries.into_iter().map(|e|{let mut value=json!({"id":e["id"],"milestone":e["milestone"],"detail":e["detail"],"provenance":e["provenance"]});if let Some(t)=e["recorded_at"].as_str(){value["recordedAt"]=json!(t);}value}).collect::<Vec<_>>());
+    }
+    let mut events = Vec::new();
+    for event in row["events"].as_array().into_iter().flatten() {
+        let mut e = json!({"id":private.id(&format!("{key}#legacy-{}",event["id"]))?.to_string(),"messageId":id.to_string(),"title":event["title"],"scheduleStatus":event["schedule_status"],"isRevised":event["is_revised"].as_i64().unwrap_or(0)!=0,"revisions":[]});
+        for (a, b) in [
+            ("source_event_id", "sourceEventId"),
+            ("unit", "unit"),
+            ("location", "location"),
+            ("review_reason", "reviewReason"),
+        ] {
+            if !event[a].is_null() {
+                e[b] = event[a].clone();
+            }
+        }
+        for (a, b) in [("start_at", "startAt"), ("end_at", "endAt")] {
+            if let Some(v) = event[a].as_str() {
+                e[b] = json!(timestamp(v)?);
+            }
+        }
+        for (a, b) in [
+            ("time_source_lines", "timeSourceLines"),
+            ("location_source_lines", "locationSourceLines"),
+        ] {
+            if let Some(v) = event[a].as_str() {
+                e[b] = json!({"lines":serde_json::from_str::<Value>(v).map_err(|_|Error::config("Legacy evidence data"))?});
+            }
+        }
+        let mut revisions = Vec::new();
+        for r in event["revisions"].as_array().into_iter().flatten() {
+            let mut revision = json!({"id":r["id"].as_i64().unwrap_or(0).to_string(),"eventId":e["id"],"sequence":r["sequence"].as_i64().unwrap_or(0).to_string()});
+            for (a, b) in [
+                ("revised_at", "revisedAt"),
+                ("prior_start_at", "priorStartAt"),
+                ("prior_end_at", "priorEndAt"),
+                ("replacement_start_at", "replacementStartAt"),
+                ("replacement_end_at", "replacementEndAt"),
+            ] {
+                if let Some(v) = r[a].as_str() {
+                    revision[b] = json!(timestamp(v)?);
+                }
+            }
+            for (a, b) in [
+                ("source_message_id", "sourceMessageId"),
+                ("description", "description"),
+            ] {
+                if !r[a].is_null() {
+                    revision[b] = r[a].clone();
+                }
+            }
+            if let Some(v) = r["time_source_lines"].as_str() {
+                revision["timeSourceLines"] = json!({"lines":serde_json::from_str::<Value>(v).map_err(|_|Error::config("Legacy evidence data"))?});
+            }
+            revisions.push(revision);
+        }
+        e["revisions"] = json!(revisions);
+        events.push(e);
+    }
+    result["events"] = json!(events);
+    Ok(result)
+}

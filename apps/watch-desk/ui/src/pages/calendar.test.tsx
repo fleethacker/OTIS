@@ -126,7 +126,7 @@ test("calendar mounts controls and truthful loading", () => {
   expect(search.closest("section")?.getAttribute("aria-label")).toBe("Calendar controls");
   expect(search).toHaveAttribute("aria-describedby", "schedule-search-hint");
   expect(view.container.querySelector("#schedule-search-hint")?.textContent).toContain(
-    "not just this period"
+    "within the selected period"
   );
   expect(view.getByRole("status").textContent).toContain("Loading schedule");
 });

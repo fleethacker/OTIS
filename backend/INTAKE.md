@@ -1,6 +1,6 @@
 # Initial mailbox test
 
-The worker retrieves SMTP-delivered email through IMAP, decodes the message body and subject, invokes the compiled OPTASK parser, and commits the result to a local SQLite custody journal. OpenSearch delivery remains a separate stage: `parsed` means locally staged for delivery, not indexed. The provided loader can populate isolated local test indices for UI testing.
+The worker retrieves SMTP-delivered email through IMAP, decodes the message body and subject, invokes the compiled OPTASK parser, and commits the result to a local SQLite custody journal. The application server continuously publishes the outbox to OpenSearch; `parsed` still means locally committed, not yet necessarily indexed. The provided loader can populate isolated local test indices for UI testing.
 
 All commands below run from the repository root. Supplied examples and runtime data stay outside Git. The host demo journal is `/tmp/parse-command-intake-demo/custody.sqlite`; choose persistent storage before relying on it beyond a local test. The container journal uses a named Docker volume.
 
@@ -23,16 +23,28 @@ The configured password environment variable is read on each poll. Credentials a
 
 ## Run with Compose
 
-Start the demo mail server first, then build during connected preparation:
+The root Compose project deploys the server alongside OpenSearch and Watch Desk:
 
 ```sh
-docker compose -f backend/compose.intake.yaml build
-docker compose -f backend/compose.intake.yaml up -d --pull never
-docker compose -f backend/compose.intake.yaml exec intake parse-command-intake status /etc/parse-command/config.json
-docker compose -f backend/compose.intake.yaml logs --tail 50 intake
+docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
+docker compose build server web
+docker compose up -d --pull never --wait --wait-timeout 180
+docker compose exec -T server parse-command-intake status /etc/parse-command/config.json
+docker compose logs --tail 50 server
 ```
 
-The runtime joins only the existing demo mail network and publishes no ports. It runs without root privileges, with a read-only root filesystem, a persistent custody volume and explicit demo memory/CPU/log limits. Runtime performs no package/model downloads or external HTTP requests. Export/load the built `parse-command-intake:local` image before offline deployment. Do not remove the custody volume to resolve a processing error.
+The service is `server`, the container is `parse-command-server`, and its image is
+`parse-command-server:local`. The crate and CLI retain `parse-command-intake`.
+The server joins the external demo mail network and the application's network and publishes no
+ports. It retains the nonroot user, read-only root filesystem, persistent custody
+volume and explicit memory/CPU/log limits. Runtime performs no package/model
+downloads or external HTTP requests. Export/load the built server image before
+offline deployment. Do not remove custody to resolve a processing error.
+
+The standalone `backend/compose.intake.yaml` remains available as an alternative
+`server` service for the standalone demo mailbox. Do not run both against the
+same custody volume. See the [combined-stack guide](../docs/integration/combined-stack.md)
+for adopting an existing custody volume.
 
 ## Custody and restart behavior
 
@@ -75,7 +87,8 @@ The stdlib-only loader checks the local cluster, uses isolated `parse-command-in
 
 ## Production boundary
 
-The intended mailbox is enclave-local on-premises Exchange protected by PKI. The current `plaintext_demo` transport is deliberately restricted to loopback or the demo `mailserver` container name. It is not a production Exchange adapter. Verified TLS/PKI, the exact approved authentication mechanism, production limits and recovery objectives require validation before enabling that endpoint. No cloud mail or token-service dependency is introduced. Continuous OpenSearch delivery, passages/embeddings and the UI HTTP service remain subsequent stages.
+The intended mailbox is enclave-local on-premises Exchange protected by PKI. The current `plaintext_demo` transport is deliberately restricted to loopback or the demo `mailserver` container name. It is not a production Exchange adapter. Verified TLS/PKI, the exact approved authentication mechanism, production limits and recovery objectives require validation before enabling that endpoint. No cloud mail or token-service dependency is introduced. The root application server now includes continuous OpenSearch publication and
+the UI API; see the [combined-stack runbook](../docs/integration/combined-stack.md).
 
 ## Initial verification evidence
 

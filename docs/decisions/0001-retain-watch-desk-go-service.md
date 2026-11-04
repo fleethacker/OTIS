@@ -1,3 +1,5 @@
+> Superseded by the user-approved bulk Rust integration on 2026-11-04. See [the current application boundary](../integration/rust-application-api.md). This ADR records the original import decision.
+
 # ADR 0001: Retain the Watch Desk Go service during integration
 
 Date: 2026-11-04

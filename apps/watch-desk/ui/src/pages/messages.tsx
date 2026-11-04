@@ -2,8 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import type { RouteMeta } from "../route-registry";
 import { calendarReturn } from "../components/calendar-links";
-import { useQuery } from "@defense-unicorns/ark-ui";
-import { readSchedules } from "../gen/app/v1/source_data-SourceDataService_connectquery";
+import { useSource, useDebounced } from "../components/source-data";
 import { MessageReader } from "../components/message-reader";
 import { recordStatus } from "../components/message-format";
 import { useDisplayTime } from "../components/display-time";
@@ -16,23 +15,25 @@ export default function Messages() {
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
   const [query, setQuery] = useState(params.get("q") ?? "");
-  const result = useQuery(readSchedules, {});
-  const messages = result.data?.messages ?? [];
-  const matches = messages.filter((m) =>
-    [
-      m.sourceMessageId,
-      m.subject,
-      m.rawText,
-      m.structuredPayloadJson,
-      ...m.events.map((e) => e.title),
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(query.toLowerCase())
+  const debounced = useDebounced(query);
+  const [pageToken, setPageToken] = useState<string>();
+  const result = useSource(debounced.trim() ? "search" : "list", {
+    query: debounced,
+    mode: "hybrid",
+    dataset: "canonical",
+    pageToken,
+  });
+  const matches = result.data?.messages ?? [];
+  const messages = matches;
+  const detail = useSource(
+    "detail",
+    { key: record, dataset: record.startsWith("legacy:") ? "legacy" : "canonical" },
+    !!record
   );
-  const selected = record ? messages.find((m) => m.sourceMessageId === record) : undefined;
+  const selected = detail.data?.messages[0];
   function update(key: string, value: string) {
     if (key === "q") {
+      setPageToken(undefined);
       setQuery(value);
       return;
     }
@@ -78,7 +79,7 @@ export default function Messages() {
         <p role="status">Loading Message records…</p>
       ) : result.isError ? (
         <div role="alert" className="alert">
-          Message records could not be loaded. No schedule data is confirmed.
+          Message records could not be loaded. {result.error.message} No schedule data is confirmed.
           <button className="btn btn-sm" onClick={() => void result.refetch()}>
             Retry
           </button>
@@ -99,7 +100,23 @@ export default function Messages() {
           )}
           <div className="messages-workspace">
             <section aria-label="Message record list" className="record-list">
-              <h2>{matches.length} matching records</h2>
+              <h2>{matches.length} records in this result window</h2>
+              {result.data.meta.windowLimited === true && (
+                <p>Search candidate limit reached. Narrow your search.</p>
+              )}
+              {(pageToken ?? "") !== "" && (
+                <button className="btn btn-sm" onClick={() => setPageToken(undefined)}>
+                  First page
+                </button>
+              )}
+              {(result.data.meta.nextPageToken ?? "") !== "" && (
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setPageToken(result.data.meta.nextPageToken)}
+                >
+                  Next page
+                </button>
+              )}
               {matches.length === 0 && messages.length > 0 && (
                 <p>No search matches. Clear search to restore all records.</p>
               )}
@@ -115,23 +132,26 @@ export default function Messages() {
                   {m.structuredPayloadJson !== undefined && (
                     <span className="review-cue">{structuredIdentifiers(m)}</span>
                   )}
-                  <span>Received: {utc(m.receivedAt)}</span>
+                  <span>Open record for receipt details and extracted facts.</span>
+                  {result.data.meta.matchedExcerpts?.[m.sourceMessageId]?.map((excerpt) => (
+                    <span key={excerpt.passageId}>{excerpt.text}</span>
+                  ))}
                   <span className={m.processingStatus === "parsed" ? "" : "review-cue"}>
                     {recordStatus(m.processingStatus)}
                   </span>
-                  {m.events.length > 0 ? (
-                    m.events.map((e) => (
-                      <span key={String(e.id)}>
-                        {e.title}: {utc(e.startAt)} → {utc(e.endAt)}
-                      </span>
-                    ))
-                  ) : (
-                    <span>Extracted schedule unavailable</span>
-                  )}
                 </button>
               ))}
             </section>
-            {selected ? (
+            {record && detail.isPending ? (
+              <p role="status">Loading selected message…</p>
+            ) : record && detail.isError ? (
+              <div role="alert">
+                Selected message could not be loaded: {detail.error.message}
+                <button className="btn btn-sm" onClick={() => void detail.refetch()}>
+                  Retry selected message
+                </button>
+              </div>
+            ) : selected ? (
               <MessageReader key={selected.sourceMessageId} message={selected} />
             ) : (
               <section className="reader-empty">

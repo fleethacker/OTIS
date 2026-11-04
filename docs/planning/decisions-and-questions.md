@@ -68,7 +68,7 @@ Status: planning, 2026-11-04. No unconfirmed implementation choice below is a de
 
 Follow-up answers recorded: IMAP only; 365 total days from USMTF issue time with searchable cold; 2003 baseline plus inferable later extensions; interface-first delivery with compiled Rust parser contributions. The remaining cold-storage decision is implementation topology, not whether cold data is searchable. Cutoff granularity and handling of unresolvable issue time remain open.
 
-No numeric memory target, model name, OpenSearch release, network port, mail interval, API library, or crate version has been selected. Do not substitute restore-only archives for the confirmed searchable-cold requirement.
+The original planning baseline left implementation versions and test limits open. Current demo settings are explicit test configuration, not production hardware guarantees; the model decision below supersedes the original unselected model state. Do not substitute restore-only archives for the confirmed searchable-cold requirement.
 
 ## Intake implementation decisions — 2026-11-04
 
@@ -77,3 +77,25 @@ No numeric memory target, model name, OpenSearch release, network port, mail int
 - WGS84 is the approved default when no coordinate datum is stated. Explicit other/unknown datums remain unresolved until a supported transformation is established.
 - Defer message types without examples; the root README lists only the fourteen tested supplied profiles.
 - Local demo intake now uses SQLite custody/outbox staging and a bounded synchronous worker. The committed numeric demo limits are explicit test configuration, not confirmed production hardware capacity. Continuous OpenSearch delivery and production PKI remain separate acceptance work.
+
+
+## Search and deployment decisions — 2026-11-04
+
+- The user approved `sentence-transformers/all-MiniLM-L6-v2` for the first test:
+  ONNX version 1.0.1, 384 dimensions, CPU only. The official archive checksum and
+  configuration are pinned in `backend/search/model.json`.
+- `parse-command-server`, OpenSearch and Watch Desk share the root Compose
+  project. The demo SMTP/IMAP environment remains separate. Existing custody is
+  retained through an explicit local volume-name override.
+- The prepared OpenSearch 3.9.0 image includes the pinned CPU helper and tokenizer
+  cache. Image verification runs without networking; runtime model downloads are
+  disabled. The current native asset lock is verified on Linux ARM64.
+- Versioned keyword, semantic and hybrid templates and their
+  [typed integration contract](../opensearch/search-contract.md) are implemented.
+  Initial fusion uses OpenSearch's default equal-weight RRF/rank constant 60;
+  domain relevance tuning and the frontend adapter remain acceptance work.
+- Narrative passages are derived from audited observed records through an
+  explicit snapshot loader, independently of canonical messages. Text remains
+  searchable when embedding inference fails; no semantic success is fabricated.
+  Continuous journal delivery and production retention are not implemented by
+  this bootstrap.

@@ -1,8 +1,8 @@
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { useQuery } from "@defense-unicorns/ark-ui";
+import { useSource, useDebounced } from "../components/source-data";
+import { ExtractedTimeline } from "../components/extracted-timeline";
 import type { RouteMeta } from "../route-registry";
-import { readSchedules } from "../gen/app/v1/source_data-SourceDataService_connectquery";
 import { DayTimeline } from "../components/day-timeline";
 import {
   geometry,
@@ -51,13 +51,35 @@ export default function Calendar() {
   const midnight = civilHour(date, 0, zone);
   const from = month ? bounds.from : week ? weekly.from : civilHour(date, startHour, zone),
     to = month ? bounds.to : week ? weekly.to : civilHour(date, endHour, zone);
-  const result = useQuery(readSchedules, {}, { retry: false });
-  const messages = result.data?.messages ?? [];
   const query = params.get("q") ?? "";
+  const debounced = useDebounced(query);
   const ships = readShips(params.get("ships"));
+  const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
+  const result = useSource("timeline", {
+    dataset,
+    query: debounced,
+    mode: "hybrid",
+    from: new Date(from).toISOString(),
+    to: new Date(to).toISOString(),
+    filters: ships
+      ? {
+          commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
+          unassignedOnly: ships.has("unassigned:"),
+          noCommands:
+            ships.size === 0 ||
+            [...ships].some((v) => !v.startsWith("unit:") && v !== "unassigned:"),
+        }
+      : {},
+  });
+  const messages = result.data?.messages ?? [];
   const options = shipOptions(messages);
   const stale = ships ? [...ships].filter((key) => !options.some(([id]) => id === key)) : [];
-  const discovery = discover(messages, query, Date.now(), ships);
+  const discovery = discover(
+    messages,
+    dataset === "legacy" ? query : "",
+    Date.now(),
+    dataset === "legacy" ? ships : undefined
+  );
   const inPeriod = discovery.timed.some(({ event }) => geometry(event, from, to));
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
@@ -190,14 +212,15 @@ export default function Calendar() {
           </select>
         </label>
         <p id="schedule-search-hint" className="schedule-search-hint">
-          Case-insensitive text search across all available records, not just this period.
+          Hybrid keyword and semantic search over indexed narratives; source times remain within the
+          selected period.
         </p>
       </section>
       {result.isPending || result.isFetching ? (
         <p role="status">Loading schedule… Previous results are not displayed while refreshing.</p>
       ) : result.isError ? (
         <div className="alert" role="alert">
-          Schedule could not be loaded. No schedule data is confirmed.
+          Schedule could not be loaded. {result.error.message} No schedule data is confirmed.
           <button className="btn btn-sm" onClick={() => void result.refetch()}>
             Retry
           </button>
@@ -322,7 +345,16 @@ export default function Calendar() {
               Events use the selected display zone and are read-only. Select an event to inspect its
               source and revision evidence.
             </p>
-            {messages.length === 0 ? (
+            {dataset === "canonical" ? (
+              <ExtractedTimeline
+                items={result.data.meta.timelineItems ?? []}
+                review={result.data.meta.reviewItems ?? []}
+                from={from}
+                to={to}
+                returnTo={returnTo}
+                limited={result.data.meta.windowLimited}
+              />
+            ) : messages.length === 0 ? (
               <div className="unfinished">
                 <h3>Schedule data unavailable</h3>
                 <p>
@@ -360,38 +392,40 @@ export default function Calendar() {
               />
             )}
           </section>
-          <section className="upcoming-section" aria-labelledby="upcoming-heading">
-            <h2 id="upcoming-heading">Next upcoming events</h2>
-            <p>
-              Next five matching starts from now, across all available dates · Absolute
-              chronological order
-            </p>
-            {discovery.upcoming.length === 0 ? (
+          {dataset === "legacy" && (
+            <section className="upcoming-section" aria-labelledby="upcoming-heading">
+              <h2 id="upcoming-heading">Next upcoming events</h2>
               <p>
-                No upcoming timed events{query ? " match this search" : " available"}. Unresolved
-                schedules are not included.
+                Next five matching starts from now, across all available dates · Absolute
+                chronological order
               </p>
-            ) : (
-              <ol>
-                {discovery.upcoming.map(({ message, event }) => (
-                  <li key={String(event.id)}>
-                    <Link to={messageHref(message.sourceMessageId, returnTo)}>
-                      <strong>{event.title}</strong>
-                    </Link>
-                    {event.isRevised && <span className="revision">Revised</span>}
-                    <p>
-                      {utc(event.startAt)} → {utc(event.endAt)} · <ShipMarker unit={event.unit} /> ·{" "}
-                      {available(event.location, "Location unavailable")}
-                    </p>
-                    <Link to={messageHref(message.sourceMessageId, returnTo)}>
-                      Source record · {message.sourceMessageId}
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-          {discovery.review.length > 0 && (
+              {discovery.upcoming.length === 0 ? (
+                <p>
+                  No upcoming timed events{query ? " match this search" : " available"}. Unresolved
+                  schedules are not included.
+                </p>
+              ) : (
+                <ol>
+                  {discovery.upcoming.map(({ message, event }) => (
+                    <li key={String(event.id)}>
+                      <Link to={messageHref(message.sourceMessageId, returnTo)}>
+                        <strong>{event.title}</strong>
+                      </Link>
+                      {event.isRevised && <span className="revision">Revised</span>}
+                      <p>
+                        {utc(event.startAt)} → {utc(event.endAt)} · <ShipMarker unit={event.unit} />{" "}
+                        · {available(event.location, "Location unavailable")}
+                      </p>
+                      <Link to={messageHref(message.sourceMessageId, returnTo)}>
+                        Source record · {message.sourceMessageId}
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          )}
+          {dataset === "legacy" && discovery.review.length > 0 && (
             <section className="feature-note" aria-label="Needs review">
               <h2>Needs review</h2>
               <p>

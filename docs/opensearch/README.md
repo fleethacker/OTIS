@@ -10,7 +10,7 @@ These index-creation bodies implement the compact [ICD 1.1.0](../ICD.md) shape f
 
 Core objects have explicit mappings and `dynamic: strict`. Period/frequency/activity/contact tuples are nested where association matters; raw evidence is not nested/indexed. Audit `payload` is stored with `enabled: false`; lookup/security/time metadata remains searchable. Date mappings accept UTC ISO instants with or without fractional seconds; the JSON Schema additionally requires full date-times ending in Z.
 
-The passage profile is lexical-only: `text` and `subject` are text fields for BM25, vectors are absent, and `embedding_status` is pending. The body-only fixtures have null subjects. Once a model/dimension/engine is selected, create a compatible vector mapping and local inference/search pipelines before semantic/hybrid queries are enabled. Do not add a dummy dimension, model ID or vector to make a test request succeed.
+The original fixture passage profile is lexical-only: `text` and `subject` are text fields for BM25, vectors are absent, and `embedding_status` is pending. The body-only fixtures have null subjects. Once a model/dimension/engine is selected, create a compatible vector mapping and local inference/search pipelines before semantic/hybrid queries are enabled. Do not add a dummy dimension, model ID or vector to make a test request succeed.
 
 No production shard/replica, lifecycle, authentication or resource settings are selected here. In particular, **no retention policy is attached**, because the fixtures have historical issue/expiry dates and must remain inspectable for UI development. This is an explicit fixture profile, not a change to operational 90-hot/365-total issue-time retention.
 
@@ -19,3 +19,14 @@ The external fixture directory contains `bulk/messages.bulk.ndjson`, `bulk/passa
 Core Bulk operations use `index` with stable IDs for repeatable fixture loads. Audit uses immutable `create`; a repeated audit load can return item-level 409s. Do not suppress those blindly: verify existing immutable source equality before treating a conflict as an idempotent replay. Inspect every Bulk response item even when the HTTP response succeeds.
 
 If an index already exists, inspect its `_mapping`/contract metadata before reusing it; creation commands do not overwrite or reset it. No existing cluster or index was changed during preparation of these files.
+
+
+## Local semantic and hybrid search
+
+The [search contract](search-contract.md) and [bootstrap tools](../../backend/search/README.md)
+add a separate vector passage generation for the approved CPU MiniLM model.
+Bootstrap installs a local text-embedding ingest pipeline and versioned keyword,
+semantic and hybrid stored templates. Historical lexical fixtures retain their
+original mappings. The root OpenSearch image packages native inference assets
+at build time and disables downloads at runtime. See the tools' runbook for
+explicit offline provisioning, snapshot loading and live verification.

@@ -28,8 +28,13 @@ bundled UI builder; it does not replace the canonical Ark validation pipeline.
 
 Keep the raw/parsed OPTASK corpus and manual-derived knowledge outside Git.
 Two imported reference fixtures are intentionally ignored; the original archive
-retains them. See the integration guide for restoring optional tests. Never
-commit source traffic, credentials, local databases, dependency caches or builds.
+retains them. See the integration guide for restoring optional tests.
+
+On `Thomas-Branch`, the user explicitly authorized tracking the 125 restored naval
+message files under `test-data/messages/` for team sharing. See
+`test-data/README.md` for provenance, layout and the branch-only sharing intent.
+This exception does not authorize committing other source traffic. Keep
+credentials, local databases, dependency caches and builds outside Git.
 
 ## Verification
 

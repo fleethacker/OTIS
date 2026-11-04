@@ -90,6 +90,7 @@ python3 demo/mail.py check
 | `apps/watch-desk/` | React UI, Go presentation API, private SQLite state, bundled Ark dependencies and original handoff guidance |
 | `backend/` | Rust parser SDK, OPTASK contribution, durable IMAP intake, types and tests |
 | `demo/` | SMTP/IMAP demo server and local mail helper |
+| `test-data/` | Shared naval message collections on Thomas-Branch, with provenance and explicit-use guidance |
 | `docs/` | Canonical ICD/schemas/mappings, original engineering planning, integration analysis and decisions |
 | `.pdlc-docs/` | Larger-project product context |
 | `apps/watch-desk/.ark-handoff/` | Original approved UI context and export provenance |
@@ -104,7 +105,13 @@ and [validation results](docs/integration/validation.md). Follow root
 
 The [parsed-message ICD](docs/ICD.md) defines compact core data, batched OpenSearch audit records, and the interface for teams contributing Rust parser crates. [JSON Schemas](docs/schemas/README.md), [UI test index mappings](docs/opensearch/README.md), and the [external-fixture validator](docs/tools/validate_samples.py) accompany the contract.
 
-Raw and parsed sample data are kept outside this Git folder at `../OPTASK_Messages` and `../OPTASK_Messages/parsed`. The parsed directory's README contains fixture-load instructions. No sample corpus is published in this repository.
+Raw and parsed OPTASK acceptance data are kept outside this Git folder at `../OPTASK_Messages` and `../OPTASK_Messages/parsed`. The parsed directory's README contains fixture-load instructions. The OPTASK acceptance corpus is not published in this repository.
+
+On `Thomas-Branch`, the project owner authorized sharing the separate naval
+message collections under [`test-data/messages/`](test-data/messages/). See
+[`test-data/README.md`](test-data/README.md) for their original locations,
+preserved revision, usage and unverified dataset status. These files are explicit
+test inputs; startup does not load or send them automatically.
 
 ## Supported OPTASK messages
 

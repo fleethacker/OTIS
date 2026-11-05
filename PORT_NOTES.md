@@ -168,3 +168,52 @@ Files: `day-timeline.tsx`, `calendar-layout.ts`, `command-roster.test.tsx`,
   passage inputs become searchable after publication/local embedding. Useful queries:
   “watch handover”, “replenishment approach”, “radio silence”. Model readiness alone
   does not prove the new passages have been published/embedded.
+
+## P4 — Admin-controlled watch context and cited Settings
+
+- **Files:** server `src/{watch_context,context_metadata,commands,private,main,lib}.rs`,
+  `tests/commands_contract.rs`; UI `pages/settings{,.test}.tsx`,
+  `components/{watch-context,watch-context-header,app-layout,navigation-menu,
+  command-roster,ships-sidebar}` and CSS. Normal UI route generation must run in
+  the container build; no generated files were edited. No protobuf/ENT changes.
+- **API:** `POST /api/v1/watch-context/get {includeSuggestions?:boolean}` returns
+  context, per-field confirmations, last server actor/time, viewer canEdit and
+  optional grouped suggestions with bounded scope/availability. Update accepts
+  either `{field,values,confirmHideUnassigned?}` or `{suggestionId,dismiss?}`.
+  Only operationName is suggestible; own ship, display ship name, group/command,
+  visible defaults and UTC turnovers remain explicit/manual. Unknown JSON fields
+  (including actor/role) fail. All updates call `access::require_admin`; a user
+  receives 403, no session receives 401. Actor comes from the current server session,
+  not the browser. Every write retains that username and recording time; field
+  confirmation keeps the verified citations and Unassigned-hide confirmation.
+- **Storage:** additive singleton table in existing protected private-state SQLite,
+  one transaction per update, bounded document. Last-write-wins; no audit history or
+  optimistic conflict machinery. Display ship name is an override only, not a roster
+  alias or acknowledgement identity. Confirmed values never change automatically.
+- **Suggestions:** read-only custody connection, latest 200 published records / 400
+  metadata fields. SQL selects only EXER/OPER fields from supported parse_completed
+  profiles; it verifies UTF-8 byte spans against that revision's preserved source
+  and computes source line bounds in SQLite. No bodies cross this read boundary,
+  no detail fan-out. Same value is grouped, newest citation first, <=20 groups and
+  <=20 citations/group; availability/limits remain explicit. Use/Dismiss applies to
+  the group; Use is recomputed server-side and cannot carry manual values. Groups
+  matching current are labelled/excluded from conflicts. No typed group metadata is
+  invented. Header reads skip suggestion work entirely.
+- **UI:** Settings via Parker's nav popover; header links to provenance with Calendar
+  state retained. Read-only users see disabled editors. Failed writes retain drafts.
+  Identity-keyed queries/remounted editors do not carry an admin draft to another
+  login. Removing Unassigned defaults requires a checked confirmation in the actual
+  request; sidebar applies defaults explicitly, without changing absent-URL=all.
+- **Tests:** server-session admin/user/no-session mutation checks and durable actor;
+  manual visibility guards, forged payload rejection, grouped Use/Dismiss; Unicode
+  source line bounds, corrupt-span exclusion, metadata-only response and caps; UI
+  request assertions, confirmed header/citations, missing source arrays, read-only
+  role and revoked-write draft preservation. No application builds/tests run here.
+- **Validation:** diff check and standalone in-memory SQLite metadata scalar check
+  passed (exact UTF-8 bytes/Unicode prefix, correct line 2, no body in result).
+  Rust/TypeScript/UI/route generation and screenshots are Claude's container gate.
+- **TODOs / Parker:** audit history, optimistic conflicts, retention and production
+  roster/own-unit/group contracts remain deferred. User lifecycle stays with the
+  other contributor at the documented identity seam; permissions are implemented.
+  Edits to shared confirmed fields can replace matching local editor drafts on an
+  explicit refresh/save; full multi-user draft conflict UX is not implemented.

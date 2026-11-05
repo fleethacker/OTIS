@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { UNASSIGNED } from "./ship-calendars";
 import { commandColor, commandName, type CommandRoster } from "./command-roster";
 
@@ -11,6 +12,7 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
   onChange: (selection: Set<string> | undefined) => void;
 }) {
   const [search, setSearch] = useState("");
+  const location = useLocation();
   const commands = roster?.commands ?? [];
   const keys = [...commands.map((c) => `unit:${c.id}`), UNASSIGNED];
   const active = selected ?? new Set(keys);
@@ -38,6 +40,7 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
           <div className="ship-actions">
             <button className="btn btn-xs" onClick={() => onChange(undefined)}>Select all</button>
             <button className="btn btn-xs" onClick={() => onChange(new Set())}>Clear all</button>
+            {roster.defaultShips && <button className="btn btn-xs" onClick={() => onChange(new Set(roster.defaultShips))}>Use app defaults</button>}
           </div>
           {[...groups].map(([group, values]) => {
             const visible = values.filter((key) => commandName(key, commands).toLowerCase().includes(search.toLowerCase()));
@@ -58,7 +61,9 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
           })}
           {selected && [...selected].some((key) => !keys.includes(key)) && <p>URL includes ships outside this roster. Selection is preserved until you change it.</p>}
           {!roster.assignmentEnabled && <p>Fixture assignment is disabled on this server.</p>}
-          <small>Roster source: {roster.source} · {roster.version}</small>
+          <small>Roster source: {roster.source} · {roster.version}<br />
+            Own ship/defaults: <Link to={`/settings?${new URLSearchParams({ returnTo: location.pathname + location.search })}`}>Settings provenance</Link>
+          </small>
         </>}
       </details>
     </aside>

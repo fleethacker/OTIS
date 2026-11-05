@@ -24,23 +24,33 @@ async fn roster_reads_and_shared_write_check_use_server_sessions() {
         let actor = access::require_admin(&app, &headers)?;
         Ok(Json(serde_json::json!({"actor":actor.username})))
     }
-    let routes = axum::Router::new().route("/commands/list", post(commands::list)).route("/write-probe", post(write)).with_state(app.clone());
+    let routes = axum::Router::new().route("/commands/list", post(commands::list)).route("/write-probe", post(write))
+        .route("/watch-context/{operation}", post(parse_command_server::watch_context::handle)).with_state(app.clone());
     for (role, expected) in [("user", StatusCode::FORBIDDEN), ("platform_admin", StatusCode::OK)] {
         let session = app.store().unwrap().create_session(role).unwrap();
-        for path in ["/commands/list", "/write-probe"] {
+        for path in ["/commands/list", "/watch-context/get", "/write-probe", "/watch-context/update"] {
             let response = routes.clone().oneshot(Request::post(path).header("content-type", "application/json")
                 .header("cookie", format!("parse_command_session={session}"))
                 .header("origin", "http://localhost").header("host", "localhost")
-                .body(Body::from("{}")).unwrap()).await.unwrap();
-            assert_eq!(response.status(), if path == "/commands/list" { StatusCode::OK } else { expected });
+                .body(Body::from(if path == "/watch-context/update" { r#"{"field":"operationName","values":["FICTIONAL COPPER"]}"# } else { "{}" })).unwrap()).await.unwrap();
+            assert_eq!(response.status(), if path == "/commands/list" || path == "/watch-context/get" { StatusCode::OK } else { expected });
             if response.status() == StatusCode::OK {
                 let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
                 let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
                 if path == "/write-probe" { assert_eq!(value["actor"], "dev-admin"); }
-                else { assert_eq!(value["commands"].as_array().unwrap().len(), 4); }
+                else if path == "/watch-context/get" { assert_eq!(value["canEdit"], role == "platform_admin"); }
+                else if path == "/watch-context/update" {
+                    assert_eq!(value["updatedBy"], "dev-admin");
+                    assert_eq!(value["context"]["operationName"], "FICTIONAL COPPER");
+                    assert_eq!(value["confirmations"]["operationName"]["actor"], "dev-admin");
+                } else { assert_eq!(value["commands"].as_array().unwrap().len(), 4); }
             }
         }
     }
+    let actor: String = app.store().unwrap().db.query_row("SELECT json_extract(document,'$.updatedBy') FROM watch_context", [], |r| r.get(0)).unwrap();
+    assert_eq!(actor, "dev-admin");
+    let response = routes.clone().oneshot(Request::post("/watch-context/update").header("content-type", "application/json").body(Body::from(r#"{"field":"operationName","values":["NO SESSION"]}"#)).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let response = routes.clone().oneshot(Request::post("/commands/list").header("content-type", "application/json").body(Body::from("{}")).unwrap()).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let response = routes.clone().oneshot(Request::post("/commands/list").header("content-type", "application/json").body(Body::from(r#"{"commands":[]}"#)).unwrap()).await.unwrap();

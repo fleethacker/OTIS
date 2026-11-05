@@ -40,7 +40,13 @@ export interface ContextResponse {
   defaultsSource: string;
   demoRoster?: boolean;
 }
+export interface ContextChange {
+  field: ContextField;
+  values: string[];
+  confirmHideUnassigned?: boolean;
+}
 export interface ContextUpdate {
+  changes?: ContextChange[];
   field?: ContextField;
   values?: string[];
   suggestionId?: string;

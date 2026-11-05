@@ -32,8 +32,10 @@ function setup(role = "platform_admin", denyWrites = false, missingSources = fal
           data.context.operationName = "FICTIONAL COPPER";
           data.confirmations.operationName = { actor: "dev-admin", recordedAt: source.recordedAt, sources: [source], confirmedHideUnassigned: false };
         }
-      } else if (request.field === "defaultShips") data.context.defaultShips = request.values!;
-      else if (request.field === "shipName") data.context.shipName = request.values![0];
+      } else for (const change of request.changes ?? []) {
+        if (change.field === "defaultShips" || change.field === "turnoverUtc") data.context[change.field] = change.values;
+        else data.context[change.field] = change.values[0];
+      }
       data.updatedBy = "dev-admin"; data.updatedAt = source.recordedAt;
       return Response.json(data);
     }
@@ -75,17 +77,44 @@ test("Use sends only a group ID and renders confirmed context/citations; Dismiss
   } finally { close(); }
 });
 
+test("one save batches changed fields; Cancel resets without a write", async () => {
+  const { view, requests, close } = setup();
+  try {
+    await waitFor(() => expect(view.getByLabelText("Display ship name")).not.toBeDisabled());
+    expect(view.getAllByRole("button", { name: "Save settings" })).toHaveLength(1);
+    expect(view.getByRole("button", { name: "Save settings" })).toBeDisabled();
+    await act(async () => {
+      fireEvent.change(view.getByLabelText("Display ship name"), { target: { value: "DISPLAY" } });
+      fireEvent.change(view.getByLabelText("Group / command"), { target: { value: "GROUP" } });
+      fireEvent.change(view.getByLabelText("UTC watch turnovers"), { target: { value: "0000Z, 0600Z" } });
+    });
+    expect(view.getByText("Unsaved changes")).toBeTruthy();
+    expect(view.getByRole("button", { name: "Use FICTIONAL COPPER" })).toBeDisabled();
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Save settings" })); });
+    await waitFor(() => expect(view.getByText("No unsaved changes")).toBeTruthy());
+    expect(requests).toEqual([{ changes: [
+      { field: "shipName", values: ["DISPLAY"] },
+      { field: "groupCommand", values: ["GROUP"] },
+      { field: "turnoverUtc", values: ["0000Z", "0600Z"] },
+    ] }]);
+    await act(async () => { fireEvent.change(view.getByLabelText("Display ship name"), { target: { value: "discard me" } }); });
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Cancel changes" })); });
+    expect(view.getByLabelText("Display ship name")).toHaveValue("DISPLAY");
+    expect(requests).toHaveLength(1);
+  } finally { close(); }
+});
+
 test("Unassigned defaults require explicit manual confirmation in the actual request", async () => {
   const { view, requests, close } = setup();
   try {
     await waitFor(() => expect(view.getByRole("checkbox", { name: "Unassigned / needs applicability review" })).not.toBeDisabled());
     await act(async () => { fireEvent.click(view.getByRole("checkbox", { name: "Unassigned / needs applicability review" })); });
-    expect(view.getByRole("button", { name: "Save Default visible ships" })).toBeDisabled();
+    expect(view.getByRole("button", { name: "Save settings" })).toBeDisabled();
     await act(async () => { fireEvent.click(view.getByRole("checkbox", { name: "I confirm hiding Unassigned from app-wide defaults." })); });
-    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Save Default visible ships" })); });
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Save settings" })); });
     await waitFor(() => expect(requests).toHaveLength(1));
-    expect(requests[0]).toEqual({ field: "defaultShips", values: ["unit:demo-meridian"], confirmHideUnassigned: true });
-    await waitFor(() => expect(view.getByRole("checkbox", { name: "I confirm hiding Unassigned from app-wide defaults." })).not.toBeChecked());
+    expect(requests[0]).toEqual({ changes: [{ field: "defaultShips", values: ["unit:demo-meridian"], confirmHideUnassigned: true }] });
+    await waitFor(() => expect(view.queryByRole("checkbox", { name: "I confirm hiding Unassigned from app-wide defaults." })).toBeNull());
   } finally { close(); }
 });
 
@@ -93,7 +122,7 @@ test("user is read-only, missing citation arrays do not crash, and revoked write
   const reader = setup("user", false, true);
   try {
     await waitFor(() => expect(reader.view.getByText(/Read only/)).toBeTruthy());
-    expect(reader.view.getByRole("button", { name: "Save Display ship name" })).toBeDisabled();
+    expect(reader.view.getByRole("button", { name: "Save settings" })).toBeDisabled();
     expect(reader.view.getByRole("button", { name: "Use FICTIONAL COPPER" })).toBeDisabled();
     expect(reader.view.getByText("Source unavailable")).toBeTruthy();
     expect(reader.requests).toHaveLength(0);
@@ -102,7 +131,7 @@ test("user is read-only, missing citation arrays do not crash, and revoked write
   try {
     await waitFor(() => expect(admin.view.getByLabelText("Display ship name")).not.toBeDisabled());
     await act(async () => { fireEvent.change(admin.view.getByLabelText("Display ship name"), { target: { value: "Fictional display override" } }); });
-    await act(async () => { fireEvent.click(admin.view.getByRole("button", { name: "Save Display ship name" })); });
+    await act(async () => { fireEvent.click(admin.view.getByRole("button", { name: "Save settings" })); });
     await waitFor(() => expect(admin.view.getByRole("alert").textContent).toContain("Platform administrator"));
     expect(admin.view.getByLabelText("Display ship name")).toHaveValue("Fictional display override");
   } finally { admin.close(); }

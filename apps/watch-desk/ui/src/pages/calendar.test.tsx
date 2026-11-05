@@ -1,6 +1,6 @@
 import "../route-registry";
 import { expect, spyOn, test } from "bun:test";
-import { act, waitFor } from "@testing-library/react";
+import { act, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -235,7 +235,14 @@ test("weekly daily windows include the last day and exclude unresolved events", 
     />
   );
   expect(view.getByRole("button", { name: "Last-day watch, event details" })).toBeTruthy();
-  expect(view.getByRole("button", { name: "Events in window (1) · Browse details" })).toBeTruthy();
+  const browse = view.getByRole("button", { name: "Browse 1 event in window" });
+  expect(browse.textContent).toBe("Events in window 1");
+  fireEvent.click(browse);
+  const close = view.getByRole("button", { name: "Close window" });
+  expect(close.textContent).toBe("");
+  fireEvent.click(view.container.querySelector(".week-details-row")!);
+  expect(view.getByRole("link", { name: "View source message" }).getAttribute("href")).toContain("SOURCE-1");
+  expect(view.container.querySelector(".week-details")?.textContent).not.toContain("SOURCE-1");
   expect(view.container.querySelector(".week-fit")).toBeTruthy();
   expect(view.queryByRole("button", { name: "Unresolved, event details" })).toBeNull();
 });

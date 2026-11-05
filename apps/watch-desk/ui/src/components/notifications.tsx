@@ -355,7 +355,6 @@ export function NotificationPanel({ identity }: { identity: string }) {
                             title="Mark as read"
                             onClick={() => mark.mutate({ id: item.id, version: item.version })}
                           >
-                            <span className="notification-dot" aria-hidden="true" />
                             <TbCheck aria-hidden="true" />
                           </AppButton>
                         )}

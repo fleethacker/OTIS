@@ -34,7 +34,7 @@
 .notification-heading h2 { font-size: 14px; font-weight: 650; }
 .notification-heading h2:focus { outline: none; }
 .notification-heading-actions { margin-left: auto; display: flex; gap: 4px; }
-.notification-icon-button { width: 32px; min-height: 32px; height: 32px; padding: 0; }
+.notification-icon-button.btn { width: 32px; min-height: 32px; height: 32px; padding: 0; }
 .notification-icon-button svg { width: 18px; height: 18px; }
 .notification-unread-total { color: var(--color-bc-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .notification-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
@@ -52,11 +52,9 @@
 .notification-unread .notification-copy strong { font-weight: 650; }
 .notification-context { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--color-bc-muted); font-size: 12px; }
 .notification-copy time, .notification-detail time { color: var(--color-bc-subtle); font-size: 11px; font-variant-numeric: tabular-nums; }
-.notification-mark { margin: 8px 6px 0 0; padding: 0; width: 32px; min-height: 32px; height: 32px; }
-.notification-dot { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); }
-.notification-mark svg { display: none; width: 16px; height: 16px; }
-.notification-mark:is(:hover, :focus-visible) .notification-dot { display: none; }
-.notification-mark:is(:hover, :focus-visible) svg { display: block; }
+.notification-mark.btn { margin: 8px 6px 0 0; padding: 0; width: 32px; min-height: 32px; height: 32px; color: var(--color-bc-muted); }
+.notification-mark svg { display: block; width: 16px; height: 16px; }
+.notification-mark:is(:hover, :focus-visible) { color: var(--color-base-content); }
 .notification-empty { padding: 32px 16px; text-align: center; color: var(--color-bc-muted); }
 .notification-error { padding: 8px 12px; color: var(--color-error); }
 .notification-more { display: flex; margin: 8px auto; }
@@ -194,7 +192,7 @@ h2 { font-size: 17px; font-weight: 650; }
 .desk-footer { border-top: 1px solid var(--color-base-300); margin: 0 32px; padding: 16px 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; color: var(--color-bc-muted); font-size: 12px; }
 .desk-footer a { text-decoration: underline; text-underline-offset: 3px; }
 .about-otis { max-width: 1080px; margin: 32px auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
-.about-otis-art { overflow: hidden; border-radius: var(--radius-box); border: 1px solid var(--color-base-300); background: transparent; }
+.about-otis-art { overflow: hidden; background: transparent; }
 .about-otis-art img { display: block; width: 100%; height: auto; }
 .about-otis-copy { min-width: 0; }
 .about-otis-copy h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.1; }
@@ -381,11 +379,24 @@ main:has(.calendar-page-week) { padding-top: 12px; }
 .week-event > * { flex-shrink: 0; }
 .ship-calendar-week .rbc-event-content .week-event strong, .week-event .ship-identity { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .week-event:focus-visible { outline-color: currentColor; outline-offset: -2px; }
-.week-index { margin: 3px 8px; }
-.week-details { overflow-wrap: anywhere; }
-.week-details p { margin: 16px 0; }
-.week-details li { border-bottom: 1px solid var(--color-base-300); }
-.week-details li .btn { white-space: normal; height: auto; min-height: 44px; text-align: left; justify-content: flex-start; }
+.week-index.btn { margin: 3px 8px; height: 25px; min-height: 25px; padding: 2px 6px; gap: 5px; color: var(--color-bc-muted); font-size: 11px; font-weight: 550; line-height: 1; }
+.week-index.btn:hover, .week-index.btn:focus-visible { color: var(--color-base-content); }
+.week-index-count { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-base-200); font: 650 10px/1 var(--font-mono); }
+.modal-box.week-details { width: min(440px, calc(100vw - 24px)); max-height: min(620px, calc(100dvh - 40px)); padding: 0; overflow: auto; }
+.week-details-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 11px 12px; border-bottom: 1px solid var(--color-base-300); }
+.week-details-heading { display: flex; align-items: flex-start; gap: 5px; min-width: 0; }
+.week-details-heading h2 { margin: 4px 0 0; font-size: 15px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.week-details-header form { flex: none; }
+.week-details-icon.btn { width: 27px; height: 27px; min-height: 27px; padding: 0; border: 0; }
+.week-details-icon svg { width: 16px; height: 16px; }
+.week-details-list { list-style: none; margin: 0; padding: 4px 8px 8px; }
+.week-details-list li + li { border-top: 1px solid var(--color-base-300); }
+.week-details-row.btn { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 3px; width: 100%; height: auto; min-height: 35px; padding: 7px 6px; text-align: left; white-space: normal; font-size: 13px; line-height: 1.3; }
+.week-details-row-title { font-weight: 600; }
+.week-details-row-meta { display: flex; align-items: center; gap: 6px; color: var(--color-bc-muted); font-size: 11px; }
+.week-details-body { padding: 12px 14px 14px; font-size: 13px; line-height: 1.45; }
+.week-details-body p { margin: 0 0 8px; }
+.week-details-source.btn { width: fit-content; height: 30px; min-height: 30px; margin-top: 3px; padding: 3px 9px; font-size: 12px; }
 .week-expanded .ship-calendar-week { min-width: 1200px; height: 1400px; }
 .week-expanded .ship-calendar.ship-calendar-week .rbc-timeslot-group { min-height: 44px; }
 @media (max-width: 900px) {

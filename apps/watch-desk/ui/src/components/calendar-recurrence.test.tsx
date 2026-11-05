@@ -36,9 +36,12 @@ for (const mode of ["day", "week", "month", "side"] as const) {
       expect(target.title).toContain("Audited rule fact: r1"); expect(target.title).not.toContain("End:");
     }
     if (mode === "week") {
-      fireEvent.click(view.getByRole("button", { name: "Events in window (2) · Browse details" }));
+      fireEvent.click(view.getByRole("button", { name: "Browse 2 events in window" }));
       // A repeated series has no legacy numeric event ID; the index must still have unique keys.
-      expect(view.getAllByRole("button", { name: /Recurring check ·/ })).toHaveLength(2);
+      const choices = [...view.container.querySelectorAll(".week-details-row")];
+      expect(choices).toHaveLength(2);
+      fireEvent.click(choices[0]);
+      expect(view.container.querySelector(".week-details")?.textContent).not.toContain("r1@");
     }
     expect(message.events).toHaveLength(0);
     view.unmount();

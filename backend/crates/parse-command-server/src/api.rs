@@ -611,7 +611,7 @@ impl App {
             .search
             .template(
                 MESSAGE_ALIAS,
-                "parse-command-timeline-v1",
+                TIMELINE_TEMPLATE,
                 json!({"filters":filters,"from":from,"to":to}),
                 false,
             )

@@ -408,3 +408,16 @@ main:has(.calendar-page-week) { padding-top: 12px; }
 .extracted-interval, .extracted-point { position: absolute; height: 1rem; background: var(--color-primary); }
 .extracted-point { width: .2rem; }
 .audit-evidence { max-height: 28rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Keep the calendar inside the viewport; only its time grid may scroll. */
+#root:has(.calendar-page) { height: 100dvh; display: flex; flex-direction: column; }
+#root:has(.calendar-page) > .desk-header, #root:has(.calendar-page) > .desk-footer { flex: none; }
+main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32px; }
+.calendar-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.calendar-page .calendar-controls { flex: none; margin: 0 0 12px; }
+.calendar-page .timeline-section { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.calendar-page .timeline-toolbar { flex: none; padding: 12px 16px; }
+.calendar-page .calendar-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.calendar-page .ship-calendar, .calendar-page .week-fit .ship-calendar-week, .calendar-page .week-expanded .ship-calendar-week { height: 100%; flex: 1; min-height: 0; }
+.calendar-page .week-index { flex: none; align-self: flex-start; }
+@media (max-width: 640px) { main:has(.calendar-page) { padding: 12px 16px; } }

@@ -18,6 +18,7 @@ export interface SourceRequest {
 export interface TimelineItem {
   key: string;
   messageKey: string;
+  factId?: string;
   title: string;
   kind: "point" | "interval" | "unresolved";
   at?: string;

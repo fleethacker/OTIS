@@ -1,3 +1,7 @@
+import { create } from "@bufbuild/protobuf";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
+import type { TimelineItem } from "./source-data";
 import { Link, useNavigate } from "react-router-dom";
 import {
   cloneElement,
@@ -5,7 +9,6 @@ import {
   useMemo,
   useState,
   useRef,
-  useLayoutEffect,
   createContext,
   useContext,
   type HTMLAttributes,
@@ -31,6 +34,8 @@ interface ScheduleEntry {
   href: string;
   before: boolean;
   after: boolean;
+  point?: boolean;
+  reviewRequired?: boolean;
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -67,6 +72,8 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
           {row.event.isRevised ? "Revised · " : ""}
           {row.title}
         </strong>
+        {row.point === true && <span>Point</span>}
+        {row.reviewRequired === true && <span>Requires review</span>}
         <ShipMarker unit={row.event.unit} />
       </button>
     );
@@ -76,8 +83,11 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
       <strong>{row.title}</strong>
       <ShipMarker unit={row.event.unit} />
       {row.event.isRevised && " · Revised"}
+      {row.reviewRequired === true && <span> · Requires review</span>}
       <span className="calendar-event-time">
-        {utc(row.event.startAt)} → {utc(row.event.endAt)}
+        {row.point === true
+          ? `Point: ${utc(row.event.startAt)}`
+          : `${utc(row.event.startAt)} → ${utc(row.event.endAt)}`}
       </span>
       {row.before && <span className="calendar-continuation"> · Continues from earlier</span>}
       {row.after && <span className="calendar-continuation"> · Continues later</span>}
@@ -87,6 +97,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
 
 export function DayTimeline({
   messages,
+  sourceItems,
   from,
   to,
   interval,
@@ -98,6 +109,7 @@ export function DayTimeline({
   expanded = false,
 }: {
   messages: MessageRecord[];
+  sourceItems?: TimelineItem[];
   from: number;
   to: number;
   interval: number;
@@ -110,36 +122,15 @@ export function DayTimeline({
 }) {
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
-  const container = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [selected, setSelected] = useState<ScheduleEntry | null>(null);
   const [showIndex, setShowIndex] = useState(false);
-  useLayoutEffect(() => {
-    if (view !== "week" || !container.current) {
-      return;
-    }
-    const node = container.current;
-    const measure = () =>
-      node.style.setProperty(
-        "--week-fit-height",
-        `${Math.max(200, window.innerHeight - node.getBoundingClientRect().top - window.scrollY - 12)}px`
-      );
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(document.querySelector("main") ?? node);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [view]);
   function disclose(row: ScheduleEntry) {
     setSelected(row);
     setShowIndex(false);
     dialog.current?.showModal();
   }
   const localizer = useMemo(() => calendarLocalizer(zone), [zone]);
-  const isMonth = view === "month";
   // A week has seven independent clock windows, not one long min/max range.
   const windows =
     view === "week"
@@ -151,7 +142,7 @@ export function DayTimeline({
           };
         })
       : [];
-  const rows: ScheduleEntry[] = messages
+  const legacyRows: ScheduleEntry[] = messages
     .flatMap((message) =>
       message.events.flatMap((event) => {
         const position = geometry(event, from, to);
@@ -176,20 +167,53 @@ export function DayTimeline({
       })
     )
     .sort((a, b) => +a.start - +b.start);
+  const parents = new Map(messages.map((message) => [message.sourceMessageId, message]));
+  const rows: ScheduleEntry[] =
+    sourceItems === undefined
+      ? legacyRows
+      : sourceItems
+          .flatMap((item) => {
+            const message = parents.get(item.messageKey);
+            const point = item.kind === "point";
+            const start = Date.parse(point ? (item.at ?? "") : (item.start ?? ""));
+            const end = point ? start : Date.parse(item.end ?? "");
+            if (
+              !message ||
+              item.kind === "unresolved" ||
+              !Number.isFinite(start) ||
+              !Number.isFinite(end) ||
+              (!point && end <= start) ||
+              (point ? start < from || start >= to : start >= to || end <= from)
+            ) {
+              return [];
+            }
+            const existing = message.events.find((event) => event.sourceEventId === item.factId);
+            const event = create(ExtractedEventSchema, existing);
+            event.title = item.title;
+            event.sourceEventId = item.factId ?? item.key;
+            event.startAt = timestampFromDate(new Date(start));
+            event.endAt = point ? undefined : timestampFromDate(new Date(end));
+            event.scheduleStatus = "needs_review";
+            return [
+              {
+                message,
+                event,
+                start: new Date(start),
+                end: new Date(end),
+                title: item.title,
+                href: messageHref(item.messageKey, returnTo),
+                before: start < from,
+                after: !point && end > to,
+                point,
+                reviewRequired: item.reviewRequired,
+              },
+            ];
+          })
+          .sort((a, b) => +a.start - +b.start);
   const midnight = civilHour(civilDate(new Date(from), zone), 0, zone);
   return (
     <>
-      {rows.length === 0 && (
-        <div className="unfinished">
-          <h3>No timed events in this {isMonth ? "month" : "window"}</h3>
-          <p>
-            Try another {label} {isMonth ? "month" : "date or a wider hours window"}. Unresolved
-            schedules are not plotted.
-          </p>
-        </div>
-      )}
       <div
-        ref={container}
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}
         role="region"
         aria-label={`${mode === "utc" ? "Zulu UTC" : label} calendar, scrollable`}
@@ -238,7 +262,12 @@ export function DayTimeline({
               getNow={() => new Date()}
               tooltipAccessor={() => ""}
               eventPropGetter={(row) => ({
-                className: row.event.isRevised ? "calendar-revised" : "",
+                className: [
+                  row.event.isRevised ? "calendar-revised" : "",
+                  row.point === true ? "calendar-point" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" "),
                 style: { borderLeft: `5px solid ${shipColor(shipKey(row.event.unit))}` },
               })}
               formats={{
@@ -277,7 +306,7 @@ export function DayTimeline({
           </CalendarAccessibility>
         </WeekDisclosure.Provider>
       </div>
-      {view === "week" && (
+      {view === "week" && rows.length > 0 && (
         <>
           <button
             className="btn btn-sm week-index"
@@ -324,7 +353,10 @@ export function DayTimeline({
                         : "Location unavailable"}
                     </p>
                     <p>
-                      {format(selected.event.startAt)} → {format(selected.event.endAt)}
+                      {selected.point === true
+                        ? `Point: ${format(selected.event.startAt)}`
+                        : `${format(selected.event.startAt)} → ${format(selected.event.endAt)}`}
+                      {selected.reviewRequired === true && " · Requires review"}
                     </p>
                     {selected.before && <p>Continues from earlier than a selected window.</p>}
                     {selected.after && <p>Continues later than a selected window.</p>}

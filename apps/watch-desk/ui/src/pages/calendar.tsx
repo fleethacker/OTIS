@@ -3,7 +3,6 @@ import { useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
-import { ExtractedTimeline } from "../components/extracted-timeline";
 import { DayTimeline } from "../components/day-timeline";
 import {
   utcDate,
@@ -76,10 +75,7 @@ export default function Calendar() {
     );
   }
   return (
-    <div className={week ? "calendar-page-week" : undefined}>
-      <div className="page-heading">
-        <h1>Calendar</h1>
-      </div>
+    <div className={`calendar-page${week ? " calendar-page-week" : ""}`}>
       <section className="calendar-controls" aria-label="Calendar controls">
         <label className="schedule-search">
           Search schedule
@@ -137,63 +133,61 @@ export default function Calendar() {
           />
         </label>
       </section>
-      {result.isPending || result.isFetching ? (
-        <p role="status">Loading schedule…</p>
-      ) : result.isError ? (
+      {(result.isPending || result.isFetching) && <p role="status">Loading schedule…</p>}
+      {result.isError && (
         <div className="alert" role="alert">
           Calendar could not be loaded. {result.error.message}
           <button className="btn btn-sm" onClick={() => void result.refetch()}>
             Retry
           </button>
         </div>
-      ) : (
-        <section
-          className={`timeline-section ${date === today ? "is-today" : ""}`}
-          aria-labelledby="schedule-heading"
-        >
-          <div className="timeline-toolbar">
-            <h2 id="schedule-heading">
-              {week
-                ? `${moment.tz(from, zone).format("DD MMM YYYY")} – ${moment.tz(to, zone).subtract(1, "day").format("DD MMM YYYY")}`
-                : new Date(midnight).toLocaleDateString("en-GB", {
-                    timeZone: zone,
-                    weekday: month ? undefined : "long",
-                    day: month ? undefined : "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-              {date === today && <span className="revision">Today</span>}
-            </h2>
-          </div>
-          {dataset === "canonical" ? (
-            <ExtractedTimeline
-              items={result.data.meta.timelineItems ?? []}
-              from={from}
-              to={to}
-              returnTo={returnTo}
-              limited={result.data.meta.windowLimited}
-            />
-          ) : (
-            <DayTimeline
-              messages={messages}
-              from={from}
-              to={to}
-              interval={interval}
-              returnTo={returnTo}
-              view={view}
-              expanded={params.get("layout") === "expanded"}
-              startHour={0}
-              endHour={24}
-              onDay={(chosen) => {
-                const next = new URLSearchParams(canonical);
-                next.set("date", chosen);
-                next.set("view", "day");
-                setParams(next);
-              }}
-            />
-          )}
-        </section>
       )}
+      <section
+        className={`timeline-section ${date === today ? "is-today" : ""}`}
+        aria-labelledby="schedule-heading"
+      >
+        {result.data?.meta.windowLimited === true && !result.isFetching && !result.isError && (
+          <p role="status">Result limit reached. Narrow the range or search.</p>
+        )}
+        <div className="timeline-toolbar">
+          <h2 id="schedule-heading">
+            {week
+              ? `${moment.tz(from, zone).format("DD MMM YYYY")} – ${moment.tz(to, zone).subtract(1, "day").format("DD MMM YYYY")}`
+              : new Date(midnight).toLocaleDateString("en-GB", {
+                  timeZone: zone,
+                  weekday: month ? undefined : "long",
+                  day: month ? undefined : "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+            {date === today && <span className="revision">Today</span>}
+          </h2>
+        </div>
+        <DayTimeline
+          messages={result.isError || result.isFetching ? [] : messages}
+          sourceItems={
+            dataset === "canonical"
+              ? result.isError || result.isFetching
+                ? []
+                : (result.data?.meta.timelineItems ?? [])
+              : undefined
+          }
+          from={from}
+          to={to}
+          interval={interval}
+          returnTo={returnTo}
+          view={view}
+          expanded={params.get("layout") === "expanded"}
+          startHour={0}
+          endHour={24}
+          onDay={(chosen) => {
+            const next = new URLSearchParams(canonical);
+            next.set("date", chosen);
+            next.set("view", "day");
+            setParams(next);
+          }}
+        />
+      </section>
     </div>
   );
 }

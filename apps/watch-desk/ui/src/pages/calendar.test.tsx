@@ -277,3 +277,21 @@ test("Day source links and Week detail buttons are the only interactive event ta
     view.unmount();
   }
 });
+
+for (const calendarView of ["day", "week", "month"] as const) {
+  test(`calendar page retains the full ${calendarView} grid while source data is empty or loading`, () => {
+    const view = renderWithProviders(<Calendar />, {
+      route: `/calendar?date=2008-11-04&view=${calendarView}`,
+    });
+    expect(view.getByRole("region", { name: "Zulu UTC calendar, scrollable" })).toBeTruthy();
+    expect(view.queryByRole("heading", { name: "Calendar", exact: true })).toBeNull();
+    expect(
+      view.container.querySelector(calendarView === "month" ? ".rbc-month-view" : ".rbc-time-view")
+    ).toBeTruthy();
+    expect(view.queryByText(/No timed events/)).toBeNull();
+    expect(view.queryByText(/Ship schedule/)).toBeNull();
+    if (calendarView === "month") {
+      expect(view.container.querySelectorAll(".rbc-day-bg").length).toBeGreaterThanOrEqual(28);
+    }
+  });
+}

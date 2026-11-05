@@ -12,7 +12,9 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
   onChange: (selection: Set<string> | undefined) => void;
 }) {
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(() => !window.matchMedia("(max-width: 900px)").matches);
+  // A zero-width/non-layout environment is not evidence of a narrow viewport.
+  const [open, setOpen] = useState(() => typeof window.matchMedia !== "function" ||
+    !window.matchMedia("(min-width: 1px) and (max-width: 900px)").matches);
   const location = useLocation();
   const commands = roster?.commands ?? [];
   const keys = [...commands.map((c) => `unit:${c.id}`), UNASSIGNED];

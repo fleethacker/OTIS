@@ -17,7 +17,7 @@ export default function Messages() {
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
   const criteria = JSON.stringify(
-    ["q", "mode", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) => params.get(key))
+    ["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) => params.get(key))
   );
   const [page, setPage] = useState<{ criteria: string; token?: string }>({ criteria: "" });
   const pageToken = page.criteria === criteria ? page.token : undefined;
@@ -107,12 +107,6 @@ export default function Messages() {
           placeholder="Message ID, subject, event or raw text"
           onChange={(e) => update("q", e.target.value)}
         />
-        <label>Search mode
-          <select className="select select-sm" value={search.request.mode} onChange={(e) => update("mode", e.target.value)}>
-            <option value="keyword">Keyword passages</option>
-            <option value="hybrid">Related messages (hybrid)</option>
-          </select>
-        </label>
         <div className="message-search-actions">
           <button className="btn btn-ghost btn-sm" onClick={() => update("q", "")}>
             Clear search

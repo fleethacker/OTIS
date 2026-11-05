@@ -18,8 +18,8 @@ test("all returned title hits survive absent passages; semantic-only hits are ne
   expect(calendarSearch(items, messages, "communications", new Set([keys[2]]))).toHaveLength(3);
   expect(calendarSearch(items, messages, "radio rehearsal", new Set())).toEqual([]);
   expect(calendarSearch(undefined, messages, "radio", new Set())).toBeUndefined();
-  expect(messageSearchState(new URLSearchParams(), "radio rehearsal").request.mode).toBe("keyword");
-  expect(messageSearchState(new URLSearchParams("mode=hybrid"), "radio rehearsal").request.mode).toBe("hybrid");
+  expect(messageSearchState(new URLSearchParams(), "radio rehearsal").request.mode).toBe("hybrid");
+  expect(messageSearchState(new URLSearchParams("mode=keyword"), "radio rehearsal").request.mode).toBe("hybrid");
 });
 
 test("Calendar requests unfiltered timeline plus keyword search and discloses executed mode and limits", async () => {
@@ -38,6 +38,6 @@ test("Calendar requests unfiltered timeline plus keyword search and discloses ex
     expect(view.getByText(/Only the returned keyword page/)).toBeTruthy();
     expect(requests.find((r) => r.operation === "timeline")?.body.query).toBe("");
     expect(requests.find((r) => r.operation === "search")?.body.mode).toBe("keyword");
-    expect(view.getByRole("link", { name: "Find related messages (hybrid)" }).getAttribute("href")).toContain("mode=hybrid");
+    expect(view.getByRole("link", { name: "Find related messages" }).getAttribute("href")).not.toContain("mode=");
   } finally { view.unmount(); fetch.mockRestore(); }
 });

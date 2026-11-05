@@ -317,7 +317,7 @@ export function DayTimeline({
   }
   return (
     <>
-      {view !== "month" && overflow && <div className="calendar-overflow" role="status">
+      {view !== "month" && overflow && <div className="calendar-overflow">
         Readable lanes extend beyond this view. Scroll horizontally for more {side ? "ships" : "days"}.
         <button className="btn btn-xs" aria-label="Scroll calendar left" onClick={() => calendarRoot.current?.scrollBy({ left: -320, behavior: "smooth" })}>←</button>
         <button className="btn btn-xs" aria-label="Scroll calendar right" onClick={() => calendarRoot.current?.scrollBy({ left: 320, behavior: "smooth" })}>→</button>

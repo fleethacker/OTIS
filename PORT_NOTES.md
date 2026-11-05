@@ -1,445 +1,386 @@
-# Watch Desk demo port — PR notes
+# Watch Desk multi-ship port — ready-to-paste PR descriptions
 
-Branch: `feat/watchdesk-port`, base `60ac735`. Local commits only; Neal owns publication.
-All added cases are constructed fictional data. No excluded traffic restored/read.
-Builds and runtime tests are delegated to Claude's containers, not claimed locally.
+Port base: `60ac735`; polish base: `ad95629`. These are local PR drafts, not
+publication. Each section below can be pasted into its slice PR. P5 watch changes
+and P5b recurrence belong to a separate branch and are not claimed here.
 
-## P1 — Calendar Needs review (placement needs Parker's call)
+Shared boundaries: synthetic demo bodies only in `backend/config/watchdesk-fixtures/`;
+no automatic fixture submission, volume resets, production assignment inference or
+new transmission capability. Ship selection is a view filter, not authorization.
+New shared context writes resolve the current server session and require admin;
+private draft writes remain owner-scoped. No credentials, generated bindings,
+bundled framework files or dependency locks are changed by polish.
 
-Parker deliberately removed the Calendar review list in `971ac11`. `DESIGN.md`
-(notification/review guidance around lines 132/200) points unresolved schedules to
-inbox Action items, but `60ac735` has no unresolved-schedule producer. **This slice
-restores review on Calendar, or we route it to the inbox instead — Parker's call.**
-It is not a claim that his simplified calendar was an accidental regression.
+## P1 — Bounded Calendar review
 
-- **Files:** `apps/watch-desk/ui/src/components/calendar-review{,.test}.tsx`,
-  `ui/src/pages/calendar.tsx`, `ui/src/index.css` (UI paths under `apps/watch-desk/`).
-- **Contract:** consumes existing `meta.reviewItems` and `windowLimited`; no Rust/API
-  change. Each row links its exact `messageKey` (including revision), identifies the
-  supplied fact ID, and preserves Calendar `returnTo`. No source ID means no link.
-- **Behavior:** unresolved facts stay outside the time grid. Review is a compact,
-  scrollable disclosure; counts explicitly cover returned records, not the whole
-  watch or all ships. Missing review data differs from an empty returned set.
-  Ship/search filtering always discloses potentially hidden review and offers an
-  explicit Show-all/clear-search action; it never persists preferences. Refresh,
-  pending search and errors hide stale rows. Day/Week/cards/zoom remain unchanged.
-  Theme-aware gutter and readable warning text avoid white-on-white dark gutters.
-- **Tests added:** exact revision/return links, bounded/hidden notices, missing
-  source, empty versus unavailable, Calendar integration with point events and
-  failed-refresh stale-data suppression. JSON fetch is mocked and awaited; the
-  console-error guard stays enabled. Not run locally (container handoff).
-- **Validation:** `git diff --check` only; container UI/checks and light/dark/mobile
-  screenshots remain outstanding.
-- **TODO / Parker:** hidden review *totals* need a server-wide bounded projection;
-  this slice says unavailable, never fabricates zero or subtracts filtered pages.
-  Review rows are source uncertainty, not operational approval.
+### Summary
 
-## Demo-grade deferrals (apply to subsequent slices)
+Restore a compact Needs review disclosure on Calendar. Unresolved facts stay out
+of the time grid. Counts cover returned records only; unavailable, filtered,
+limited and empty results remain distinct. Source links retain exact revisions,
+fact IDs and the Calendar return URL. Failed refreshes hide stale source results.
+Review placement is a product decision: the earlier removal of the Calendar list
+was deliberate, and the current notification inbox does not produce schedule review.
 
-Deferred: audit tables, optimistic-revision conflicts, durable amendment/cancellation
-producers and retention. **Permissions are not deferred (Neal's P2 steer): every new
-application write calls `access::require_admin`, resolving the current server session,
-and records that identity's username as actor.** No caller-supplied actor/role.
-Keep authenticated same-origin reads, input bounds and source citations. Production
-command assignment is Parker's Q6 decision; no message-text inference is permitted.
-Context is not acknowledgement authority or authorization.
+### Files
 
-## P2 — Synthetic roster, explicit applicability and ship sidebar
+Under `apps/watch-desk/ui/src/`: `components/calendar-review{,.test}.tsx`,
+`pages/calendar.tsx` and `watchdesk-port.css` (styles moved here in the fixes slice).
 
-- **Files:** `backend/config/watchdesk-demo.json`, six newly constructed bodies in
-  `backend/config/watchdesk-fixtures/`, intake config (now default-off; see the
-  P4 review follow-up and `compose.watchdesk-demo.yml`); intake
-  `src/{demo,config,service,lib}.rs`, `tests/custody.rs`; server
-  `src/{commands,access,error,main,lib}.rs`, `tests/commands_contract.rs`; UI
-  `components/{command-roster,ships-sidebar,day-timeline,calendar-review,source-data}`,
-  Calendar, related tests and CSS.
-- **API:** `POST /api/v1/commands/list {}` returns `commands` with id/name/shortLabel/
-  group/colorIndex/isOwnShip, config source/version/provenance and assignmentEnabled.
-  Authenticated, strict unknown-field rejection, <=32 commands. No roster write API.
-- **Assignment:** `demo_fixture_assignments` defaults false. The P4 review follow-up
-  moved the Compose opt-in to a separate Watch Desk override. Exact decoded-body
-  SHA-256 allowlist (LF and CRLF variants)
-  supplies `ParseContext.command_ids`. Changed/unlisted bodies remain Unassigned;
-  sender/participants/mentions/unit never supply IDs. Shared fixture assigns Tern
-  and Halyard; the unassigned fixture names Meridian/Halyard but assigns neither.
-  Existing audit outbox records the fixture/config/version and message-level scope.
-  No operational per-fact assignment is asserted. **Parker to decide production
-  assignment (Q6).** Fixture policy is versioned source configuration, not a UI edit.
-- **UI:** own ship pinned, grouped checkboxes/Only/select-all/clear, search above six
-  ships, mobile native disclosure; Parker's JSON `ships` and server filters remain.
-  None stays `[]`, malformed/stale selection never becomes all. Show/URL hydration
-  writes no storage (P2 has URL-only preferences). Canonical chips use all explicit
-  IDs; empty IDs show REVIEW even with a unit/sender. Amber only denotes review.
-  Roster reads never fall back to examples on failure. Presentation clones protobuf
-  messages instead of mutating cache entries.
-- **Tests added:** allowlist hashes/line endings, changed-body denial, opt-in intake
-  through canonical projection + assignment audit, multi-command/empty chips,
-  outgoing URL/filter requests, roster failures, real server-session read/write-role
-  checks and server actor. Updated old Calendar mount tests to mock/settle JSON reads.
-- **Validation:** static diff/JSON/hash checks only; no builds/tests run here.
-- **Demo setup:** fixtures are *not* automatically sent or loaded. Neal must verify
-  the isolated demo mailbox/destination before using the existing mail helper with
-  `backend/config/watchdesk-fixtures/*.txt`. Use 5 Nov 2026 in Calendar. Receipt/change
-  time will be actual custody time, not the authored issue time. Do not clear volumes
-  or reprocess existing records as a shortcut; config changes are not a backfill.
-- **TODOs:** persistent user preferences, complete hidden-review aggregation, and
-  production roster/assignment policy. P1 placement remains Parker's decision.
+### API contract
 
-### User-lifecycle seam — interface only; owned by the other contributor
+Consumes existing `meta.reviewItems` and `windowLimited` from messages/timeline.
+No P1 server change. Missing source identity creates no borrowed link. Review does
+not mean approval; even plotted extracted facts require operational confirmation.
 
-- Keep `App::headers_identity(headers) -> Result<Identity>` as the server integration
-  point. Future resolver: `resolve_session(cookie) -> {subjectId, username, roles,
-  enabled, sessionVersion}`; reject disabled/revoked/expired sessions on every request.
-  Adapt it to the current Identity until multi-role identity is agreed.
-- New mutators call `access::require_admin(app, headers) -> Identity`; writes store
-  the returned `username` (future stable subject ID plus username snapshot). Never
-  accept actor, role, or enabledness from JSON/browser state. Current demo sessions
-  still resolve role-based `dev-user`/`dev-admin`; they are not a user directory.
-- Other contributor owns `create_user`, `disable_user`, `assign_roles`, session
-  invalidation/role refresh, replacement of demo identities and migration of existing
-  sessions. Disable/role removal must take effect before the next write, including
-  already-open Settings pages. Do not reuse display ship selection as access control.
-- Coordinate `api.rs` identity resolution, `web.rs`, `private.rs` sessions and identity
-  response/cache invalidation before merging. No user-management endpoints/tables or
-  lifecycle behavior are implemented by this port.
+### Tests
 
-## P2 follow-up — preserve Parker's title controls
+Added exact revision/return-link, missing source, empty/unavailable/limited/filter,
+point separation and failed-refresh tests. Container execution is required;
+static diff review alone does not establish runtime behavior.
 
-Container report for `1a3e36d`: Rust green, TypeScript green; UI 73 passed / 2 failed
-because REVIEW entered existing event controls' `textContent`. Badges now render as
-noninteractive siblings of the link/button; each control still contains only its
-original title/icon. Intrinsic collision-label measurements include sibling badges.
-Restored the original title-only assertion changed in P2, and added the sibling-badge
-assertion to the new command test. Parker's reported failing assertions remain intact.
-Files: `day-timeline.tsx`, `calendar-layout.ts`, `command-roster.test.tsx`,
-`pages/calendar.test.tsx`, `index.css`. Static diff check only; container rerun pending.
+### Screenshots to attach
+
+Day/Week/Month review with two demo unresolved rows; filtered/empty/unavailable
+states; source record and exact Calendar return; desktop light/dark and 400px.
+
+### TODOs
+
+A complete hidden-review count needs a bounded server projection. Do not infer
+zero or subtract filtered pages. Copy improvements are in the polish slice.
+
+### Questions for Parker
+
+Keep review on Calendar, or implement a separate review destination? The current
+inbox is not a substitute for unresolved schedule review.
+
+## P2 — Explicit command roster and Ships sidebar
+
+### Summary
+
+Add four fictional commands plus Unassigned, grouped checkboxes, Only/select-all/
+clear and URL-owned selection. Applicability comes only from explicit command IDs.
+The shared synthetic fixture belongs to both Tern and Halyard; a fixture mentioning
+ships but lacking assignment stays Unassigned. Chips are siblings of title controls.
+
+### Files
+
+- `backend/config/watchdesk-demo.json`, `backend/config/watchdesk-fixtures/*.txt`.
+- Intake `src/{demo,config,service,lib}.rs`, `tests/custody.rs` (P2 only, not polish).
+- Server `src/{commands,access,error,main,lib}.rs`, `tests/commands_contract.rs`.
+- UI command roster, Ships sidebar, Calendar, DayTimeline, review, source-data,
+  associated tests and port CSS.
+- Final opt-in packaging: `compose.watchdesk-demo.yml` and default-off intake config.
+
+### API contract
+
+`POST /api/v1/commands/list {}` returns at most 32 commands with
+id/name/shortLabel/group/colorIndex/isOwnShip and configuration provenance.
+Authenticated read; strict unknown-field rejection; no roster-write API.
+`ships` is a JSON array: absent means all; `[]` means none. Invalid/stale selections
+never silently become all. Sender, recipients, unit and mentions are not authority.
+
+Exact LF/CRLF decoded-body SHA-256 allowlists supply message-level command IDs only
+when the demo is explicitly enabled. Changed bodies are new IDs, not amendments.
+The audit outbox records assignment policy/configuration. No per-fact production
+assignment or acknowledgement identity is inferred.
+
+### Tests
+
+Added allowlist hashes/line endings, changed-body denial, opt-in custody/audit,
+command chips, URL/filter requests, roster failure and server-session role/actor
+coverage. The title-control follow-up restored original assertions after reported
+badge-text failures. Current container gates remain required after integration.
+
+### Screenshots to attach
+
+All ships, Only Halyard, Clear all, stale ship URL, both shared chips, Unassigned
+with a named source participant, and demo-off empty roster.
+
+### TODOs
+
+Explicitly verify an isolated mailbox/destination before submitting the six demo
+bodies. Use 5 Nov 2026 in Calendar. Resubmission into an existing database retains
+old/new bodies; do not delete volumes or rewrite evidence to tidy a screenshot.
+No persistent per-user ship preferences or production roster policy in this slice.
+
+### Questions for Parker
+
+What is the authoritative production roster/assignment policy (Q6)? Should absent
+URL selection remain all, or eventually use explicit per-user preferences?
 
 ## P3 — Side-by-side Day
 
-- **Files:** UI `components/{calendar-resources,calendar-resources.test,day-timeline}`,
-  `pages/calendar.tsx`, `index.css`.
-- **Contract:** UI-only `shipLayout=combined|side`; existing `ships` JSON and Week's
-  `layout=expanded` are unchanged. Side is applied only to Day. Source links retain
-  the whole Calendar URL. No server or permission changes (view state only).
-- **Behavior:** RBC resources render selected named ships plus Unassigned; empty
-  selection stays empty. Shared facts are copied for presentation only into each
-  explicitly assigned visible ship, never inferred from unit. Combined/Month/Week
-  remain deduplicated. Parker's lane algorithm runs per resource; 220px minimum
-  columns scroll inside the calendar. Header labels replace repeated ship chips in
-  Side; title controls retain the P2 follow-up contract, icons and exact-time hover.
-- **Tests:** shared point duplication/deduplication, unchanged source objects,
-  empty/invalid selection, Unassigned despite a reported unit, independent collision
-  lanes, exact source/return URLs and Week ignoring `shipLayout=side`.
-- **Validation:** static diff review only; Claude owns typecheck, UI suite and
-  desktop/mobile/zoom/collision screenshots. No builds/tests run locally.
-- **TODO / Parker:** confirm minimum column width and review placement; no resource
-  layout is added to Week. No source timestamps/durations or counts are fabricated.
+### Summary
 
-## P3 visual/fixture follow-up — fit columns and open at useful times
+Add Combined / Side by side for Day. Shared facts appear once per explicitly
+assigned visible resource, without mutating the cached source. Combined/Week/Month
+remain deduplicated. Collision partitioning runs per resource. Opening scroll uses
+the earlier of first visible source time and now minus one hour, once per view/query;
+manual scrolling is not repeatedly overridden by polling.
 
-- **Observed:** the live `74a9413` screenshots show seven timed facts in the Week
-  index, but only Sunday/Monday horizontally and midnight at the top of Day.
-  Baseline `60ac735` already used `7 * collision_lanes * 128px` as Week minimum
-  width and `scrollToTime=from`; P2's sidebar further reduced available space.
-  P3 likewise multiplied every resource's width by the largest collision count.
-- **Fix:** Week minimum is now seven 112px days plus gutter, independent of lanes;
-  five demo resources fit at 168px minimum each and grow with available width.
-  At >=1280px, legacy Expanded minimum width no longer forces horizontal scroll.
-  Week keeps seven days, collision lanes, icons, hover/details and wheel zoom;
-  its time grid scrolls vertically, with compact ellipsized titles, not narrower type.
-  Opening scroll chooses the earlier of the first visible source time and now-1h
-  (within the shown dates); pinned historical days use source time. It waits for
-  source readiness and runs once per view/query, never fighting manual wheel/scroll.
-- **Fixture oracle:** six messages, four resolved intervals (Meridian 0800–0900Z,
-  Tern 1400–1600Z, Halyard 1500–1700Z, shared Tern+Halyard 1430–1530Z), three points
-  and two deliberately unresolved times, all resolved times on 5 Nov 2026.
-  Added fictional GENTEXT paragraphs to Meridian/Halyard/Tern/shared: handover,
-  replenishment rehearsal, logistics coordination and simulated EMCON/radio silence.
-  These are narrative search inputs, not additional extracted tasking.
-- **Config/data:** `watchdesk-demo-v2` updates exact LF/CRLF hashes for those four
-  files. Changed bodies are NEW message IDs, not amendments. Existing stored records
-  are untouched; re-sending into the same database retains old and new versions as
-  distinct messages. Use a separately isolated demo mailbox/database for a clean
-  six-record screenshot; never reset shared volumes or silently erase old evidence.
-- **Tests:** viewport width/scroll policy and one-shot/manual-scroll behavior; intake
-  parser oracle for 4 intervals / 3 points / 2 unresolved, exact shared timing and
-  the publisher's real narrative audit/span eligibility in four source bodies.
-  Existing hash tests cover both line endings. No parser/publisher behavior changed.
-- **Validation:** static JSON/hash and diff checks only. Claude must rerun UI/Rust,
-  inspect all seven days/five columns at 1280/1440px, and confirm four narrative
-  passage inputs become searchable after publication/local embedding. Useful queries:
-  “watch handover”, “replenishment approach”, “radio silence”. Model readiness alone
-  does not prove the new passages have been published/embedded.
+### Files
 
-## P4 — Admin-controlled watch context and cited Settings
+UI `components/{calendar-resources,day-timeline,calendar-viewport}`, their tests,
+`pages/calendar.tsx`, port CSS. Fixture narrative additions and updated allowlist
+hashes are in the P3 follow-up; no parser or publisher behavior changed there.
 
-- **Files:** server `src/{watch_context,context_metadata,commands,private,main,lib}.rs`,
-  `tests/commands_contract.rs`; UI `pages/settings{,.test}.tsx`,
-  `components/{watch-context,watch-context-header,app-layout,navigation-menu,
-  command-roster,ships-sidebar}` and CSS. Normal UI route generation must run in
-  the container build; no generated files were edited. No protobuf/ENT changes.
-- **API:** `POST /api/v1/watch-context/get {includeSuggestions?:boolean}` returns
-  context, per-field confirmations, last server actor/time, viewer canEdit and
-  optional grouped suggestions with bounded scope/availability. Update accepts
-  either `{field,values,confirmHideUnassigned?}` or `{suggestionId,dismiss?}`.
-  Only operationName is suggestible; own ship, display ship name, group/command,
-  visible defaults and UTC turnovers remain explicit/manual. Unknown JSON fields
-  (including actor/role) fail. All updates call `access::require_admin`; a user
-  receives 403, no session receives 401. Actor comes from the current server session,
-  not the browser. Every write retains that username and recording time; field
-  confirmation keeps the verified citations and Unassigned-hide confirmation.
-- **Storage:** additive singleton table in existing protected private-state SQLite,
-  one transaction per update, bounded document. Last-write-wins; no audit history or
-  optimistic conflict machinery. Display ship name is an override only, not a roster
-  alias or acknowledgement identity. Confirmed values never change automatically.
-- **Suggestions:** read-only custody connection, latest 200 published records / 400
-  metadata fields. SQL selects only EXER/OPER fields from supported parse_completed
-  profiles; it verifies UTF-8 byte spans against that revision's preserved source
-  and computes source line bounds in SQLite. No bodies cross this read boundary,
-  no detail fan-out. Same value is grouped, newest citation first, <=20 groups and
-  <=20 citations/group; availability/limits remain explicit. Use/Dismiss applies to
-  the group; Use is recomputed server-side and cannot carry manual values. Groups
-  matching current are labelled/excluded from conflicts. No typed group metadata is
-  invented. Header reads skip suggestion work entirely.
-- **UI:** Settings via Parker's nav popover; header links to provenance with Calendar
-  state retained. Read-only users see disabled editors. Failed writes retain drafts.
-  Identity-keyed queries/remounted editors do not carry an admin draft to another
-  login. Removing Unassigned defaults requires a checked confirmation in the actual
-  request; sidebar applies defaults explicitly, without changing absent-URL=all.
-- **Tests:** server-session admin/user/no-session mutation checks and durable actor;
-  manual visibility guards, forged payload rejection, grouped Use/Dismiss; Unicode
-  source line bounds, corrupt-span exclusion, metadata-only response and caps; UI
-  request assertions, confirmed header/citations, missing source arrays, read-only
-  role and revoked-write draft preservation. No application builds/tests run here.
-- **Validation:** diff check and standalone in-memory SQLite metadata scalar check
-  passed (exact UTF-8 bytes/Unicode prefix, correct line 2, no body in result).
-  Rust/TypeScript/UI/route generation and screenshots are Claude's container gate.
-- **TODOs / Parker:** audit history, optimistic conflicts, retention and production
-  roster/own-unit/group contracts remain deferred. User lifecycle stays with the
-  other contributor at the documented identity seam; permissions are implemented.
-  Edits to shared confirmed fields can replace matching local editor drafts on an
-  explicit refresh/save; full multi-user draft conflict UX is not implemented.
+### API contract
 
-## P4 build follow-up — checked SQLite integer reads
+UI-only `shipLayout=combined|side`, applied only to Day. Existing `ships` JSON and
+Week `layout=expanded` retain their meanings. Source links preserve the whole URL.
+No new API, timestamp/duration inference or permission change.
 
-Container report for `aea938d`: UI 83/83 and TypeScript passed; Rust failed with five
-E0277 errors because this rusqlite version does not implement `FromSql` for `u64`.
-`context_metadata.rs` now reads SQLite integers as `i64`; citation byte/line bounds
-use checked `u64::try_from`, returning a sanitized unavailable error for negatives.
-COUNT remains signed internally. Added zero/max/negative conversion coverage.
-Static diff check only here; the Rust container rerun remains outstanding.
+### Tests
 
-## P4 review follow-up — explicit demo scope and bounded suggestions
+Shared point duplication/deduplication, independent lanes, unchanged source objects,
+empty/invalid selection, exact source returns and Week ignoring Side. Opening-scroll
+and width policy tests. Synthetic oracle: four intervals, three points and two
+unresolved times; resolved facts occur on 5 Nov 2026. Narrative passage eligibility
+is tested separately from successful embedding/publication.
 
-- **H1 / L8:** `commands::catalog` gates the fictional roster on the effective
-  `intake.demo_fixture_assignments` flag. Off means an empty roster and empty own ship,
-  including when earlier demo context is stored. Out-of-scope IDs/confirmations are
-  suppressed in responses, not erased from SQLite by reads or unrelated updates.
-  Fresh off-mode defaults retain Unassigned and the built-in UTC turnover schedule.
-  Header: “Own ship not set”; non-demo defaults are not labelled demo defaults.
-  Manual writes validate against the active roster and still use `require_admin`.
-- Root/default `demo-compose-intake.json` now sets the flag **false**. The separate
-  `compose.watchdesk-demo.yml` opts in via server-only `PARSE_COMMAND_WATCHDESK_DEMO=true`;
-  this overrides the loaded intake flag for both ingestion and presentation. Invalid
-  environment values fail configuration; no duplicate copy of the intake config.
-  For the fictional demo use `docker compose -f docker-compose.yml -f
-  compose.watchdesk-demo.yml ...`. Neither option reloads fixtures, rewrites existing
-  canonical assignments, resets volumes, nor establishes production authority.
-- **M2 / Parker's call:** Week Fit retains all seven days at desktop width. Expanded
-  again uses `52 + 7 * collisionColumns * 128` and Parker's existing expanded CSS.
-  Fit/resource overrides are scoped to `.calendar-with-ships`; zoom still takes
-  precedence. Day resources keep their bounded width. Live screenshots must confirm
-  both modes and zoom; this is not a claim that the entire Week redesign is approved.
-- **M3:** only the read-only metadata job has a seven-second deadline. Timeouts/errors
-  degrade to `suggestionState: unavailable`; ordinary context reads/manual updates
-  still run. At most two metadata jobs retain worker permits until they really exit.
-  Context transactions are awaited outside that deadline, with admin authority
-  resolved again before writing. There is no timed-out background context writer.
-  This does not solve ordinary network-disconnect ambiguity, audit history or CAS.
-- **L5:** regenerated `route-registry.generated.ts` using the actual bundled
-  `ark/pipeline/generate-routes.ts` invoked by `build-ui.ts`. Bun is absent locally:
-  Node's TS stripping plus a narrow `Glob('*.tsx')` adapter ran that unchanged
-  generator; all four pages, including Settings, are present. No app build, installs,
-  framework edits or manually authored registry entries.
-- **L6:** removed the contradictory reported-unit tooltip line. Canonical test data
-  uses explicit IDs and a sole-ID unit only together; the separate pure-helper
-  adversarial/legacy test still proves unit is never used as assignment authority.
-- **L10:** port styles live in `ui/src/watchdesk-port.css`, imported once. Compared
-  with `60ac735`, Parker's `index.css` now differs only by that import.
-- **Tests added/extended:** demo on/off session/API and header cases, stored-context
-  suppression without destruction, opt-in configuration parsing, unavailable/slow
-  suggestions with readable/editable context, Fit versus Expanded width, canonical
-  applicability tooltip. Container tests/builds and new screenshots remain pending.
-- **Deferred:** L7 skipped as requested (demo links pin `?date=`). L9 is note-only;
-  its finding text has not yet been supplied, so no mechanism or fix is inferred.
-  P5 work remains uncommitted and outside this review-fix commit.
+### Screenshots to attach
 
-## Next slice order
+All five resources, Tern + Halyard shared fact in Side and Combined, first useful
+opening time, dense lanes and source return at 1280/1440px; mobile overflow and zoom.
 
-Finish P5, then **P5b recurrence** under Addenda R/R2, then P6. No new crates or
-lockfile change. R2 permits additive baseline crypto recurrence with explicit source
-periods; preserve existing activity fields/IDs, retain unresolved behavior without
-an anchor, and never use issue/receipt time. Keep the synthetic radio-check path and
-add a baseline crypto fixture, schema/types/mapping updates and expansion tests.
-Parker must run the external OPTASK regression against his unavailable samples.
+### TODOs
 
-## Polish 1 — One Settings save
+Verify publication/embedding of the four synthetic narrative additions, not only
+model health. Polish supersedes the initial fixed-width fit policy with readable
+lane floors and an explicit overflow indication. No Week resource layout added.
 
-- One form, dirty status, disabled unchanged Save settings and Cancel changes.
-  Only changed fields are sent in one request; failures/refresh retain drafts.
-  Use/Dismiss remain distinct actions and wait for manual drafts to be saved/cancelled.
-- Minimal server seam: `watch_context.rs` accepts `changes` (1–6 unique fields),
-  validates and commits atomically in the existing transaction; legacy single-field
-  requests still work. Existing server-session admin checks, actor/citations and
-  last-write-wins semantics remain. There is no `expectedRevision` in this base.
-  No routes, intake/parser, changes or recurrence modules touched.
-- Tests added/updated: form batching/reset/read-only/revocation, batch rollback and
-  forged/duplicate/mixed inputs, admin/user/no-session batch authorization.
-- Validation: static diff review only; Claude must run container build/tests.
-- Screenshots to attach: Settings pristine/dirty/saved, hide-Unassigned confirmation,
-  read-only user, light/dark and 400px. Parker: accept changed-fields last-write-wins?
+### Questions for Parker
 
-## Polish 2 — Month overflow affordance
+Accept dense-column horizontal scrolling in exchange for readable lane labels?
+Should resource comparison remain Day-only?
 
-- Month events now use the same 24px height as RBC's dummy capacity measurement;
-  ship chips and titles stay on one ellipsized row. A 600px month floor keeps date
-  headings and show-more reachable even when controls/review consume the viewport.
-- Files: `watchdesk-port.css`, monthly journey. No API changes.
-- Added containment + real hit-test assertion before the existing popup click.
-  Existing journey has older workflow expectations; Claude must exercise the current
-  canonical demo at 05 NOV in both themes and narrow/short viewports as well.
-- Static diff check only; no build/browser run. Attach Month + open popup screenshots.
+## P4 — Admin watch context and cited Settings
 
-## Polish 3 — Fast Calendar input
+### Summary
 
-- `git show 60ac735:apps/watch-desk/ui/src/pages/calendar.tsx` confirms the same
-  URL-controlled input and stale `new URLSearchParams(canonical)` update in base.
-  This is a source-level finding; base was not run here.
-- `calendar-params.ts` keeps input state synchronous while Router transitions the
-  URL. All Calendar edits compose against the latest params; Back/Forward restores
-  routed state. Added burst/paste/clear/same-turn view/back regression coverage.
-- No API change. Static diff check only. Container UI tests and a zero-delay typing
-  browser check remain required; attach the final query/URL screenshot.
+Add app-wide display context and Settings provenance. Own ship, display-name override,
+group/command, visible defaults and UTC turnovers are explicit/manual. Only operation/
+exercise has source suggestions. No confirmed value is automatically overwritten.
+Read-only users can inspect values/citations; shared writes require current admin
+permission. Header links retain Calendar return context.
 
-## Polish 4 — Lexical Calendar and explicit related search (Parker's call)
+### Files
 
-- Source check: Calendar searched narrative passages first, then restricted timeline
-  to the first message-search page. A title need not have a narrative passage; hybrid
-  top-k does not establish a literal match. No relevance score threshold is calibrated.
-- Least invasive policy implemented entirely in UI: fetch the bounded selected-ship
-  timeline independently, include every returned title/header containing all query
-  words, union with returned keyword-passage message matches. Preserve source limits;
-  disclose first keyword page truncation, search pending/error and actual executed mode.
-  Keyword failure retains local matches with an explicit partial-search warning.
-- Related messages is an explicit link to hybrid Message search, not silent plotting.
-  Message search defaults keyword and offers Related (hybrid); executed mode comes
-  from response metadata, not the requested mode. Hybrid results are labelled ranked,
-  possibly without literal matches. No uncalibrated threshold or completeness claim.
-- Files: Calendar, Messages, `calendar-search{,.test}.tsx`/`.ts`, message search state
-  and tests, port CSS. API contract unchanged; no server edits or new search templates.
-- Tests added: both communications-title hits survive empty passage hits, no automatic
-  radio-rehearsal semantic fallback, keyword requests/limits/mode and explicit related URL.
-- Static diff check only; container tests and live searches pending. Attach communications
-  Calendar, radio rehearsal empty/local versus Related hybrid, and unavailable search.
-- Parker: accept keyword-first default? Server-side exhaustive title/narrative union,
-  relevance calibration and cross-page aggregation remain separate search work.
+Server `src/{watch_context,context_metadata,commands,private,main,lib}.rs`,
+`tests/commands_contract.rs`; UI Settings/tests, watch-context/header, navigation,
+Ships sidebar, command-roster and port CSS. Route registry is generated by the
+bundled generator, not manually authored. No protobuf/ENT changes.
 
-## Polish 5 — Selection is not an empty watch
+### API contract
 
-- Combined/Side/Week/Month explicitly say No ships selected for empty or wholly
-  out-of-roster selections. Suppress timeline/search requests when none is selected;
-  review says not queried, never an all-clear. Filtered empty review has distinct copy.
-- Files: Calendar, CalendarReview and roster/review tests. No API changes.
-- Static diff check only. Container tests pending; attach Clear all and stale-ship URL
-  screenshots in Combined and Side. Mixed known/unknown keys remain preserved, not broadened.
+- `POST /api/v1/watch-context/get {includeSuggestions?:boolean}` returns context,
+  per-field confirmations, server actor/time, canEdit and bounded suggestion metadata.
+- Original update: `{field,values,confirmHideUnassigned?}` or
+  `{suggestionId,dismiss?}`. Polish adds atomic `{changes:[...]}`; see below.
+- Server-session admin required (user 403, no session 401). Actor/role in JSON is
+  rejected. A singleton private SQLite document stores last-write-wins state;
+  no `expectedRevision`, durable edit audit or optimistic-conflict UI in this base.
+- Suggestions inspect at most 200 published records / 400 metadata fields, group
+  at most 20 values with 20 verified citations each, and verify UTF-8 source spans.
+  No bodies cross this metadata boundary and no detail fan-out occurs. Use recomputes
+  source evidence server-side; Dismiss is independent. Context reads without
+  suggestions skip metadata work. Failure/timeout degrades suggestions, not manual edits.
+- Hiding Unassigned defaults requires explicit confirmation. Defaults apply only
+  through Use app defaults, not through silent URL hydration.
 
-## Polish 6 — Explain missing time, not a generic warning
+### Tests
 
-- Minimal server seam in `presentation::timeline`: additive `reasonCode` and
-  `timeDetails[{endpoint,status,clock,label,at}]` for unresolved activities. Five
-  canonical endpoint groups, each string capped at 128 characters; no source-body
-  reads, schema/generated-type changes or parser edits. Coordinate this small
-  presentation hunk when merging recurrence work; no new recurrence modules touched.
-- Copy uses typed endpoint statuses and raw labels where present. The demo's
-  1200Z/1800Z source tokens survive canonically as normalized 12:00Z/18:00Z clocks,
-  NOT raw labels, so UI says “normalized clocks”. Missing end, missing zone/year,
-  open end and non-positive intervals remain distinct. Old responses get a fallback.
-- View-independent explanation is limited to undated items. Verified the existing
-  timeline template includes activities lacking start_at regardless of view bounds;
-  dated intervals/points still use normal bounds. No source timestamp is invented.
-- Files: `presentation.rs`, private-state tests, UI source-data/review/review-time tests.
-  Projection tests cover Day/Week/Month; renderer tests cover clocks, raw labels and
-  missing/invalid endpoints. Static diff check only; container execution pending.
-- Attach both demo review rows and unchanged source return links in Day/Week/Month.
-  Parker: accept additive presentation fields and retain Calendar review placement?
+Admin/user/no-session writes and durable actor, forged payloads, visibility guard,
+grouped Use/Dismiss, Unicode line bounds/corrupt spans/caps, missing citation arrays,
+read-only UI and revoked-write draft preservation. Earlier container report at
+`aea938d`: UI 83/83 and TypeScript passed, Rust failed checked integer reads;
+`e9356e7` fixes that conversion. Current integration gates remain required.
 
-## Polish 7 — Narrow layout
+### Screenshots to attach
 
-- Ships starts collapsed at <=900px, shows selection count and retains user toggles.
-  Narrow Calendar uses page flow, not a fixed viewport that compresses the grid;
-  time surface has a ~420px floor. Header clock occupies its own row below controls
-  at <=640px. Header menu/initial contrast is also explicit in both themes.
-- Files: ShipsSidebar/test, port CSS. No API change. Static diff check only.
-- Container gate: 400x900 Day/Week/Month with Ships closed/open, header/bell separation,
-  footer below review and no document horizontal overflow; repeat dark and desktop.
-  Attach those screenshots; no browser-size claim made locally.
+Settings pristine/confirmed, source citations/conflicting suggestions, user read-only,
+admin revoked-write error with draft retained, header context and demo-off defaults.
 
-## Polish 8 — Readable collision lanes
+### TODOs
 
-- Fit Week widens only busy days to 128px per visual lane; sparse days stay 128px.
-  Day resources reserve the same lane floor. Dense calendars scroll inside the named
-  calendar region with an explicit overflow notice and left/right buttons. Titles
-  ellipsize on one line; existing full-title/time tooltips and Week detail/index remain.
-- This intentionally trades dense-view all-columns-at-once fit for legibility;
-  Expanded retains equal lane-proportional widths. Parker's call: accept this tradeoff?
-- Files: DayTimeline, calendar-viewport/test, port CSS. No API or source-time changes.
-  Corrected narrow override specificity against the later base stylesheet; Month
-  retains a 620px floor even on mobile. Dark grid separators use theme border tokens.
-- Static diff check only; container geometry gate required: 5 overlapping Week facts,
-  2 overlapping per-ship facts, full titles/tooltips, header/body alignment, keyboard
-  overflow controls, 1280/1440/400px and zoom. Attach dense Week/Side screenshots.
+Audit history, concurrency conflicts, retention and production command authority.
+User lifecycle is a separate integration: preserve `App::headers_identity` and
+`access::require_admin`; never use browser roles/ship preferences as authorization.
+Session disable/revoke/role removal must be effective on the next server write.
 
-## Polish 9 — Side-by-side ship identity
+### Questions for Parker
 
-- Ship-coloured header chips plus subtle per-resource event fill identify Side Day
-  columns without relying on a thin border. Full ship names remain in tooltips;
-  Unassigned says Unassigned. Named ships never use amber; review/revised cues do.
-- Files: DayTimeline, calendar-resources test, port CSS. No API changes.
-- Tests assert distinct header and event identity colours without changing title-only
-  controls or shared-event source URLs. Static diff check only; attach Side light/dark
-  screenshots and check text contrast in Claude's browser/container gate.
+Accept changed-fields last-write-wins for this demo? What are the production own-unit,
+group and display-override contracts? Where should audit/conflict UX live?
 
-## Polish 10 — Acknowledgement authorization checked; control unchanged
+## Fixes — Demo scope, bounded metadata and validation follow-ups
 
-- `message-acknowledgement.tsx` opens a modal and calls DraftService.SavePreparation
-  with generate=true; Copy draft uses the clipboard. It has no transmission call.
-- `rpc.rs` SavePreparation uses `scope`: `App::identity` validates same-origin/session,
-  then `App::scope` verifies the exact source revision. The returned username scopes
-  private state. No admin role is required, so authenticated `user` is allowed to
-  generate/save their own unsent preparation. Shared Settings permissions are different.
-- `private.rs::save_preparation` validates and saves private fields/text only.
-  RecordAcknowledgement is separate, owner-scoped, and requires confirmed_external
-  to record a user-reported external acknowledgement; neither route sends mail.
-- Files: notes only. No API/UI behavior change, no live write/send attempted.
-  Existing private-state tests cover owner separation; no new runtime test claimed.
-- Attach user modal + Draft saved / unsent screenshots from an isolated container.
-  Parker: rename “Send Acknowledgement” to “Prepare acknowledgement” in a later slice?
+### Summary
 
-## P6 queue from live review (remaining items)
+Gate fictional roster/context on effective demo configuration; default is off.
+Suppress out-of-roster stored values in responses without destructive reads.
+Bound source suggestion jobs (seven seconds, at most two workers); context writers
+are awaited and recheck admin authority rather than timing out in the background.
+Read SQLite integers as signed and convert citation bounds with checked conversion.
+Keep original title-only event controls, regenerate Settings route correctly and
+isolate port styles from the base stylesheet.
 
-- Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live
-  Rust/OpenSearch stack. Screenshots: `specs/watchdesk/port/e4c7ddc/` in the handoff repo.
-- Per-ship collision labels still become “communi” around 1400Z. Prefer readable
-  stacking/minimum ~120px label width with ellipsis/full-title tooltip, without
-  moving source instants or reintroducing seven-day/five-column overflow.
-- Add ship-tinted fill/header chips so identity is more than a thin rule; keep amber
-  reserved for review/revised. Preserve title-only link/button textContent.
-- Needs-review copy should explain missing information, e.g. “No date in source:
-  1200Z–1800Z (day not given) · not plotted · open source”, using typed reason codes
-  and available source time text. Current `meta.reviewItems` has only a generic
-  reason; inspect canonical clock/status fields before adding small presentation
-  fields. Do not present normalized clock values as verbatim raw source text or
-  fan out raw-body reads. Document the exact server-field seam for Parker.
-- Undated review stays independent of Day/Week/Month. Explain: “Dates are unknown,
-  so these items are shown in every calendar view until resolved.” Verify the server
-  query as well as the component; calendar view bounds must not silently drop them.
+### Files
+
+`compose.watchdesk-demo.yml`, default intake config, server watch_context/
+context_metadata/commands and tests; UI generated route output, header, command
+chips, layout/tests and `watchdesk-port.css`. The generator/framework is unchanged.
+See commits `9b8ee50`, `e9356e7`, `ad95629` for the original follow-ups.
+
+### API contract
+
+Demo opt-in uses server-only `PARSE_COMMAND_WATCHDESK_DEMO=true`. Off returns no
+fictional own ship/roster. Stored out-of-scope context is not erased. Enabling does
+not backfill canonical assignments, reparse messages or reset data. Metadata timeouts
+return unavailable suggestions while manual context remains readable/editable.
+
+### Tests
+
+Demo on/off, stored-context suppression without destruction, session API checks,
+slow/unavailable suggestions, UTF-8 bounds, Fit/Expanded widths and command badges.
+Static JSON/hash/diff checks were recorded for original slices; container gates
+remain necessary. No healthcheck alone proves a working source adapter.
+
+### Screenshots to attach
+
+Demo-off header/Settings, enabled roster, unavailable suggestions with usable manual
+form, all routes including Settings, original title-only event links and Week modes.
+
+### TODOs
+
+Canonical Ark generation/checks plus base/compatibility/demo Compose validation in
+containers. Never modify protected pipeline or reuse a shared database for journeys.
+The earlier L9 finding was not supplied; no mechanism or fix is claimed for it.
+
+### Questions for Parker
+
+Confirm production defaults when no roster is configured. Confirm Calendar review
+placement and the later readable-lane policy before merging presentation changes.
+
+## Polish — Settings, discoverability and readable calendars
+
+### Summary
+
+1. One Settings form: Save settings sends only changed fields; Cancel resets to the
+   latest loaded values. Dirty/unchanged/pending states are explicit. Failed writes
+   and refresh preserve drafts. Use/Dismiss remain separate and wait for manual edits.
+2. Month uses identical 24px dummy/real event heights, single-line chips/titles and a
+   620px month floor so show-more stays inside its row and can open the popup.
+3. Calendar input is synchronous while URL navigation transitions; updates compose
+   from latest params and Back/Forward restores routed state. Source inspection
+   confirms the same stale URL-controlled pattern at `60ac735`; base was not run here.
+4. Keep the single hybrid search box and existing server ranking/filtering. Calendar
+   and Messages show the returned executed mode as plain text only, never infer it
+   from the request. No UI mode selector, local lexical union, extra keyword request,
+   Related section or similarity threshold is implemented. Search quality is an open
+   server-side question below, not a ranking change in this slice.
+5. No ships selected is explicit in every layout; no source/search request or “all
+   clear” review claim is made for none. Filtered empty review has distinct copy.
+6. Review explains missing date/zone/year/end, open end or invalid interval using
+   canonical status and available labels. Normalized clocks are labelled as such,
+   never represented as verbatim source tokens. Undated view independence is explained.
+7. Ships defaults collapsed only when a positive narrow viewport matches (<=900px).
+   Mobile scrolls the page instead of crushing the time grid; ~420px floor and separate
+   header clock row prevent grid/footer/notification collisions. Header contrast improves.
+8. Fit Week widens only busy days to 128px per visual lane; Side Day reserves lane
+   width too. Dense views scroll internally with explicit controls. Full-title/time
+   tooltips, Week details/index and source instants remain unchanged. Expanded retains
+   equal lane-proportional columns. This trades all-columns-at-once fit for legibility.
+9. Side headers have ship-tinted chips and events have subtle ship fill. Named ships
+   never use amber; review/revised cues retain it. Unassigned is labelled explicitly.
+10. Authorization check: the enabled Send Acknowledgement control opens a private
+    preparation modal, calls SavePreparation(generate=true), and offers Copy draft.
+    It does not send mail. `rpc.rs::scope` checks session/same-origin/source revision
+    and uses server username for private ownership; `user` is allowed, so the control
+    stays enabled. Separate RecordAcknowledgement requires confirmation of an external
+    event and also transmits nothing. No live write was attempted for this check.
+
+### Files
+
+UI Calendar/Settings/Messages, calendar-params/search/review/review-time, ShipsSidebar,
+DayTimeline, calendar-viewport, watch-context/source-data, port CSS and their tests;
+monthly popup journey assertion. Server changes are limited to `watch_context.rs`,
+`presentation.rs`, one execution-metadata forwarding hunk in `api.rs::timeline`,
+and focused tests. No `api.rs` route registration, intake/parser,
+new changes/recurrence modules, schema or generated-type edits in polish.
+
+### API contract
+
+- Settings: additive `changes` with 1–6 unique `{field,values,confirmHideUnassigned?}`
+  entries. One transaction, all-or-nothing validation; cannot mix batch and single/
+  suggestion actions. Preserve untouched confirmations, current admin checks,
+  server actor and existing last-write-wins semantics. Old requests still work.
+- Review: additive `reasonCode` plus
+  `timeDetails[{endpoint,status,clock,label,at}]` on unresolved timeline items.
+  At most five endpoint groups, each value capped at 128 characters; no raw-body
+  reads or inference. Coordinate the small presentation hunk when merging recurrence.
+- Search: existing endpoints/templates/ranking only. `api.rs::timeline` forwards the
+  existing search response's `executedMode` (or browse for an empty query). The UI
+  retains the fixed hybrid request and reports missing execution metadata explicitly.
+  Existing timeline query includes activities with no start_at independent of date bounds.
+
+### Tests
+
+Added/updated form batch/reset/roles/revocation; atomic rollback/duplicate/mixed/
+forged batch checks; burst/paste/clear/Back URL state; single hybrid request and actual
+executed-mode disclosure without extra controls/live regions; all-layout no-selection;
+typed time explanations across views;
+narrow disclosure; lane widths; resource colours and source links. Month journey adds
+row containment and hit-testing, not just DOM visibility. Some older journey workflow
+expectations predate the current Rust UI; live synthetic-stack checks are also needed.
+
+Supplied container report at `694e55a`: **Rust green, TypeScript green,
+UI 91 passed / 3 failed** (collapsed test sidebar, duplicate status role, mode selector).
+`a1f4e8e` removes the extra live role/selector without weakening existing Calendar/
+Messages assertions and restores the original search-state expectation. Report at
+`d261c03`: **94 passed / 1 failed**, roster controls unavailable. `5677f87` adds an
+independent positive innerWidth guard; `2a826ef` implements clarified search scope.
+Report at `2a826ef`: **Cargo OK, TypeScript OK, UI 93 passed / 2 failed**. The remaining
+mode/roster failures were traced to the shared ConnectQuery cache, not product behavior.
+`31c62a5` supplies isolated QueryClients per test iteration and clears them on cleanup;
+assertions are unchanged. Container rerun required. Locally: `git diff --check` only;
+no builds, test execution or fresh screenshots claimed.
+
+### Screenshots to attach
+
+- One Settings Save: unchanged/dirty/saved/Cancel, hide-Unassigned confirmation,
+  read-only user and failed-write draft retention.
+- 05 NOV Month show-more visible/hit-testable, open popup with every returned event.
+- Zero-delay communications input + URL; executed mode for communications and radio
+  rehearsal; unchanged result sets, loading/error and missing mode metadata.
+- Clear all / unknown ship in Combined and Side; missing-date review in all three views
+  with exact source returns.
+- 400x900 Day/Week/Month, Ships closed/open, clock/bell separation and footer below review.
+- Dense Week/Side at 1280/1440px, title/tooltips, header-body alignment, keyboard overflow,
+  zoom, ship tint/contrast in light and dark.
+- User acknowledgement modal and Draft saved · unsent, on an isolated test database.
+
+### TODOs
+
+Container Ark build/test/check/journey and Rust tests; live browser geometry/contrast.
+No source-wide completeness, calibrated semantic threshold, audit history, optimistic
+revision conflict handling, production assignment, or session lifecycle implementation
+is claimed. Keep mail, custody and private-state volumes separate and intact.
+
+### Questions for Parker
+
+- **Search quality:** the supplied live review found `communications` omits two
+  communications-check titles, while `radio rehearsal` returns the same five events /
+  four messages despite no title word match. Does semantic top-k make effectively
+  every query look like a match on this small corpus? Source inspection confirms the
+  Calendar restricts to the first ranked passage-backed message page; generated event
+  titles need not have a narrative passage. The finding is not proof of useful relevance.
+  **Proposed server-side fix, not implemented:** lexical hits first; semantic-only hits
+  listed separately as **Related** only above a calibrated similarity threshold. Keep
+  the single box. Which score/model calibration, title indexing, candidate depth and
+  paging contract should govern it? Do not threshold an RRF rank as if it were cosine
+  similarity or silently change ranking in a UI polish patch.
+- Accept scrolling dense lanes instead of shrinking labels? Keep Calendar review and
+  additive time details? Retain changed-fields last-write-wins?
+- Rename the misleading Send Acknowledgement label to Prepare acknowledgement later?

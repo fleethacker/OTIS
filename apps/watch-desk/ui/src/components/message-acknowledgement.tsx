@@ -71,7 +71,7 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
       </span>
       <AppButton
         variant="outline"
-        size="sm"
+        size="xs"
         type="button"
         disabled={read.isPending || read.isError}
         onClick={() => {

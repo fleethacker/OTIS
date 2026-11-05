@@ -1,5 +1,6 @@
 import type { RouteMeta } from "../route-registry";
 import patch from "../assets/otis/otis-logo.png";
+import plexLicense from "../assets/fonts/ibm-plex-mono/LICENSE.txt" with { type: "file" };
 
 export const route: RouteMeta = { path: "/about", label: "About OTIS", order: 30 };
 
@@ -25,6 +26,9 @@ export default function About() {
         <p>
           Meet OTIS, our watchstanding sea otter. Cap on, headset ready, keeping an eye on what
           comes next.
+        </p>
+        <p>
+          Operational readouts use IBM Plex Mono. <a href={plexLicense}>Font license</a>
         </p>
       </div>
     </section>

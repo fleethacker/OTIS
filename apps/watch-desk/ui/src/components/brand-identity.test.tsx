@@ -5,17 +5,17 @@ import { MessageRecordSchema } from "../gen/app/v1/models_pb";
 import { ShipMarker } from "./ship-marker";
 import { HullNumber } from "./ship-name";
 import { ShipSymbol } from "./ship-symbol";
-import { SignalFlag } from "./signal-flag";
 import { StructuredMessage } from "./structured-message";
 import { OptaskIcon } from "./optask-icons";
 
-test("ship names do not imply a friendly affiliation or a vessel class", () => {
+test("ship names do not imply a domain, friendly affiliation, or vessel class", () => {
   const view = renderWithProviders(<ShipMarker unit="  USS Test DDG-999  " />);
   expect(view.getByText("USS Test DDG-999")).toBeTruthy();
   const symbol = view.getByRole("img", {
-    name: "Sea surface vessel: affiliation and type unavailable",
+    name: "Unknown-domain symbol: affiliation unknown; entity unspecified",
   });
-  expect(symbol.getAttribute("data-sidc")).toBe("10013000000000000000");
+  expect(symbol.getAttribute("data-sidc")).toBe("10010000000000000000");
+  expect(symbol.textContent).toBe("?");
   expect(view.container.querySelector(".hull-number")).toBeNull();
   // Calendar series identity remains separate from military affiliation.
   expect(view.container.querySelector(".ship-marker")).toBeTruthy();
@@ -29,12 +29,23 @@ test("missing unit text remains unavailable rather than displaying a vessel iden
 });
 
 test("explicit source affiliation can select the friendly sea-surface symbol", () => {
-  const view = renderWithProviders(<ShipSymbol affiliation="friend" />);
+  const view = renderWithProviders(<ShipSymbol domain="surface" affiliation="friend" />);
   expect(
     view
-      .getByRole("img", { name: "Sea surface vessel: friendly; type unavailable" })
+      .getByRole("img", { name: "Sea surface symbol: friendly; entity unspecified" })
       .getAttribute("data-sidc")
   ).toBe("10033000000000000000");
+});
+
+test("explicit ship metadata selects the subsurface domain without parsing the name", () => {
+  const view = renderWithProviders(
+    <ShipMarker unit="Test vessel" domain="subsurface" affiliation="friend" />
+  );
+  expect(
+    view
+      .getByRole("img", { name: "Sea subsurface symbol: friendly; entity unspecified" })
+      .getAttribute("data-sidc")
+  ).toBe("10033500000000000000");
 });
 
 test("hull identifiers preserve supplied characters and never interpret markup", () => {
@@ -43,21 +54,29 @@ test("hull identifiers preserve supplied characters and never interpret markup",
   expect(view.container.querySelector("source")).toBeNull();
 });
 
-test("standalone signal flags expose letter names", () => {
-  const view = renderWithProviders(<SignalFlag letter="A" />);
-  expect(view.getByRole("img", { name: "A — Alfa signal flag" })).toBeTruthy();
-});
-
-test("ship message category icons do not invent vessel class or affiliation", () => {
-  for (const type of ["OPTASK ASUW", "OPTASK ASW"]) {
+test("maritime message categories use their correct domain without inventing vessel identity", () => {
+  for (const [type, domain, sidc] of [
+    ["OPTASK ASUW", "surface", "10013000000000000000"],
+    ["OPTASK ASW", "subsurface", "10013500000000000000"],
+  ]) {
     const view = renderWithProviders(<OptaskIcon type={type} />);
     const symbol = view.getByRole("img", {
-      name: `${type} message category. Sea surface vessel: affiliation and type unavailable`,
+      name: `${type} message category. Sea ${domain} symbol: affiliation unknown; entity unspecified`,
     });
-    expect(symbol.getAttribute("data-sidc")).toBe("10013000000000000000");
+    expect(symbol.getAttribute("data-sidc")).toBe(sidc);
     expect(symbol.classList.contains("optask-icon")).toBe(true);
     view.unmount();
   }
+});
+
+test("explicit friendly subsurface identity retains the subsurface frame", () => {
+  const view = renderWithProviders(<ShipSymbol domain="subsurface" affiliation="friend" />);
+  const symbol = view.getByRole("img", {
+    name: "Sea subsurface symbol: friendly; entity unspecified",
+  });
+  expect(symbol.getAttribute("data-sidc")).toBe("10033500000000000000");
+  expect(symbol.querySelector("circle")).toBeNull();
+  expect(symbol.querySelector("path")).toBeTruthy();
 });
 
 test("other message categories retain their existing category icon", () => {
@@ -67,7 +86,7 @@ test("other message categories retain their existing category icon", () => {
   expect(icon.hasAttribute("data-sidc")).toBe(false);
 });
 
-test("section flags preserve ordered source-set cards, repeated narratives, and table rows", () => {
+test("reader preserves ordered source-set cards, repeated narratives, and table rows", () => {
   const set = (set_id: string, values: string[]) => ({
     set_id,
     fields: values.map((value, index) => ({ position: index + 1, value })),
@@ -108,11 +127,4 @@ test("section flags preserve ordered source-set cards, repeated narratives, and 
   expect(view.getByRole("cell", { name: "Original table cell" })).toBeTruthy();
   expect(view.container.querySelector("source")).toBeNull();
   expect(view.queryByText("Internal metadata is not a source set")).toBeNull();
-  expect(
-    Array.from(view.container.querySelectorAll(".signal-flag")).map((flag) =>
-      flag.getAttribute("data-letter")
-    )
-  ).toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "A"]);
-  // The headings carry the meaning; flags must not duplicate screen-reader content.
-  expect(view.queryByRole("img")).toBeNull();
 });

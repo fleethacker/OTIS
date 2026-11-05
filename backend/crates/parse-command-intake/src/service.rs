@@ -5,7 +5,7 @@ use crate::{
     mailbox::Mailbox,
 };
 use parse_command_core::{ParserHost, Registry};
-use parse_command_parser_api::{DecodedMessage, ErrorKind, ParseContext, WorkBudget};
+use parse_command_parser_api::{DecodedMessage, ErrorKind, MessageParser, ParseContext, WorkBudget};
 use parse_command_types::UtcTimestamp;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -18,8 +18,11 @@ pub struct Service {
 impl Service {
     pub fn open(config: Config) -> Result<Self> {
         config.validate()?;
+        let parser: Box<dyn MessageParser> = if config.demo_fixture_assignments {
+            Box::new(crate::demo_recurrence::DemoOptaskParser)
+        } else { Box::new(parse_command_optask::OptaskParser) };
         let registry = Registry::new(
-            vec![Box::new(parse_command_optask::OptaskParser)],
+            vec![parser],
             config.enabled_types.iter().cloned().collect(),
         )
         .map_err(|_| IntakeError("parser_registry"))?;
@@ -149,11 +152,17 @@ impl Service {
             let at =
                 UtcTimestamp::new(&job.received_at).map_err(|_| IntakeError("receipt_time"))?;
             let assignment = self.demo.as_ref().and_then(|c| c.assignment(&email.body));
+            // Baseline has no source security marking. Only this exact fictional
+            // allowlist may supply its declared, unvalidated demo policy.
+            let security = assignment.filter(|f| f.baseline_security).map(|_| parse_command_types::Security {
+                policy: "FICTIONAL_DEMO_ONLY".into(), classification: Some(parse_command_types::SecurityClassification::Unclassified),
+                release_to: Vec::new(), status: parse_command_types::SecurityStatus::Unvalidated,
+            });
             let context = ParseContext {
                 revision: &self.config.revision,
                 recorded_at: &at,
                 command_ids: assignment.map(|f| f.command_ids.as_slice()).unwrap_or(&[]),
-                security_override: None,
+                security_override: security.as_ref(),
                 reference_time: None,
                 budget: &budget,
             };

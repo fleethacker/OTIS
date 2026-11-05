@@ -11,6 +11,7 @@ pub mod notifications;
 pub mod pagination;
 pub mod preparation;
 pub mod presentation;
+pub mod recurrence;
 pub mod private;
 pub mod publisher;
 pub mod search;

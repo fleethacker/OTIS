@@ -62,6 +62,7 @@ pub enum FactCategory {
     Activity,
     Contact,
     Location,
+    Recurrence,
 }
 #[derive(Debug)]
 pub struct ParserDescriptor {

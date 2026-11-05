@@ -117,19 +117,52 @@ pub async fn message(
     Ok(result)
 }
 pub fn timeline(core: &Value, from: &str, to: &str) -> Result<(Vec<Value>, Vec<Value>)> {
+    timeline_with_limit(core, from, to, 2048)
+}
+fn timeline_add(target: &mut Vec<Value>, other: usize, item: Value, limit: usize) -> Result<()> {
+    if target.len() + other >= limit { return Err(Error::new("resource_exhausted", "Timeline fact bound reached; narrow the window")); }
+    target.push(item);
+    Ok(())
+}
+pub fn timeline_with_limit(core: &Value, from: &str, to: &str, limit: usize) -> Result<(Vec<Value>, Vec<Value>)> {
     let mut items = Vec::new();
     let mut review = Vec::new();
     let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
+    let mut represented = std::collections::BTreeSet::new();
+    for raw in core["recurrences"].as_array().into_iter().flatten() {
+        let rule: parse_command_types::Recurrence = serde_json::from_value(raw.clone()).map_err(|_| Error::unavailable())?;
+        match crate::recurrence::expand(&rule, from, to, limit.saturating_sub(items.len()+review.len()))? {
+            crate::recurrence::Expansion::Ready { instants, description, ongoing } => {
+                if let Some(activity) = &rule.activity_id { represented.insert(activity.clone()); }
+                for at in instants {
+                    let occurrence = format!("{}@{at}",rule.id);
+                    let item = json!({"key":format!("{key}#{occurrence}"),"messageKey":key,"factId":occurrence,
+                        "sourceFactId":rule.id,"title":rule.kind.replace('_'," "),"commandIds":core["command_ids"],
+                        "reviewRequired":true,"confirmation":"unvalidated","sourceType":core["type"],"kind":"point","at":at,
+                        "recurrence":{"ruleFactId":rule.id,"occurrenceId":occurrence,"rule":rule.rule,"description":description,"ongoing":ongoing}});
+                    timeline_add(&mut items, review.len(), item, limit)?;
+                }
+            }
+            crate::recurrence::Expansion::Review { code, reason } => {
+                let item = json!({"key":format!("{key}#{}",rule.id),"messageKey":key,"factId":rule.id,
+                    "title":rule.kind.replace('_'," "),"commandIds":core["command_ids"],"reviewRequired":true,"sourceType":core["type"],
+                    "kind":"unresolved","reasonCode":code,"reason":format!("{reason}; not plotted. Rule: {}",rule.rule)});
+                timeline_add(&mut review, items.len(), item, limit)?;
+            }
+        }
+    }
     let Some(facts) = core["activities"].as_array() else {
         return Ok((items, review));
     };
     for fact in facts {
+        // A companion replaces only the unresolved prototype, never an independently dated fact.
+        if represented.contains(text(fact,"id")) && fact["at"].is_null() && fact["start_at"].is_null() && fact["end_at"].is_null() { continue; }
         let mut item = json!({"key":format!("{key}#{}",text(fact,"id")),"messageKey":key,"factId":fact["id"],"title":text(fact,"type").replace('_'," "),"commandIds":core["command_ids"],"reviewRequired":true,"confirmation":"unvalidated","sourceType":core["type"]});
         if let Some(at) = fact["at"].as_str() {
             if timestamp(at)?.as_str() >= from && timestamp(at)?.as_str() < to {
                 item["kind"] = json!("point");
                 item["at"] = json!(at);
-                items.push(item);
+                timeline_add(&mut items, review.len(), item, limit)?;
             }
             continue;
         }
@@ -141,7 +174,7 @@ pub fn timeline(core: &Value, from: &str, to: &str) -> Result<(Vec<Value>, Vec<V
                     item["kind"] = json!("interval");
                     item["start"] = json!(start);
                     item["end"] = json!(end);
-                    items.push(item);
+                    timeline_add(&mut items, review.len(), item, limit)?;
                 }
                 continue;
             }
@@ -150,7 +183,7 @@ pub fn timeline(core: &Value, from: &str, to: &str) -> Result<(Vec<Value>, Vec<V
         item["reason"] = json!(
             "Date/time or positive interval is unresolved; no duration or date has been inferred"
         );
-        review.push(item);
+        timeline_add(&mut review, items.len(), item, limit)?;
     }
     Ok((items, review))
 }

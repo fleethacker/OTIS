@@ -23,6 +23,8 @@ pub struct Fixture {
     pub file: String,
     pub body_hashes: Vec<String>,
     pub command_ids: Vec<String>,
+    #[serde(default)] pub recurrence: Option<String>,
+    #[serde(default)] pub baseline_security: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,6 +45,8 @@ impl Catalog {
             || value.fixtures.len() > 32
             || value.fixtures.iter().any(|f| {
                 f.body_hashes.is_empty() || f.body_hashes.len() > 2
+                    || f.recurrence.as_deref().is_some_and(|v| v != "daily_radio_check" || f.file != "recurring-radio.txt")
+                    || (f.baseline_security && f.file != "baseline-crypto.txt")
                     || f.command_ids.iter().any(|id| !ids.contains(id))
                     || f.body_hashes.iter().any(|h| {
                         parse_command_types::validate_hash_id(h, "demo_hash").is_err()
@@ -76,6 +80,8 @@ impl Catalog {
                 ("fixture".into(), json!(fixture.file)),
                 ("command_ids".into(), json!(fixture.command_ids)),
                 ("assignment_scope".into(), json!("message; synthetic demo only")),
+                ("baseline_security_override".into(), json!(fixture.baseline_security)),
+                ("security_override_scope".into(), json!("Exact fictional fixture only; no production baseline security default")),
             ]),
         }
     }
@@ -94,7 +100,10 @@ mod tests {
             include_str!("../../../config/watchdesk-fixtures/halyard.txt"),
             include_str!("../../../config/watchdesk-fixtures/shared.txt"),
             include_str!("../../../config/watchdesk-fixtures/unassigned.txt"),
+            include_str!("../../../config/watchdesk-fixtures/recurring-radio.txt"),
+            include_str!("../../../config/watchdesk-fixtures/baseline-crypto.txt"),
         ];
+        assert_eq!(bodies.len(), c.fixtures.len());
         for (body, fixture) in bodies.iter().zip(&c.fixtures) {
             assert_eq!(c.assignment(body).unwrap().command_ids, fixture.command_ids);
             assert_eq!(c.assignment(&body.replace('\n', "\r\n")).unwrap().command_ids, fixture.command_ids);

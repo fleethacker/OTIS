@@ -623,7 +623,7 @@ impl App {
             let store = self.store()?;
             for hit in hits.iter().take(100) {
                 let core = &hit["_source"];
-                let (mut dated, mut unresolved) = presentation::timeline(core, &from, &to)?;
+                let (mut dated, mut unresolved) = presentation::timeline_with_limit(core, &from, &to, 2048usize.saturating_sub(items.len()+review.len()))?;
                 items.append(&mut dated);
                 review.append(&mut unresolved);
                 messages.push(presentation::message(core, store, false, None, None).await?);

@@ -31,6 +31,9 @@ export interface TimelineItem {
   key: string;
   messageKey: string;
   factId?: string;
+  /** Audited rule fact; factId is the stable ruleFactId@instant for an occurrence. */
+  sourceFactId?: string;
+  recurrence?: { ruleFactId: string; occurrenceId: string; rule: string; description: string; ongoing: boolean };
   /** Explicit message-level applicability from the canonical source, never event.unit. */
   commandIds?: string[];
   sourceType?: string;

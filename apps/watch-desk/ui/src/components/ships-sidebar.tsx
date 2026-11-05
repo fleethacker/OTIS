@@ -12,6 +12,7 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
   onChange: (selection: Set<string> | undefined) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(() => !window.matchMedia("(max-width: 900px)").matches);
   const location = useLocation();
   const commands = roster?.commands ?? [];
   const keys = [...commands.map((c) => `unit:${c.id}`), UNASSIGNED];
@@ -30,8 +31,8 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
   }
   return (
     <aside className="ships-sidebar" aria-label="Ship calendars">
-      <details open>
-        <summary>Ships</summary>
+      <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+        <summary>Ships <small>({keys.filter((key) => active.has(key)).length} of {keys.length})</small></summary>
         {pending && <p aria-live="polite">Loading ship roster…</p>}
         {error && <p role="alert">Ship roster unavailable. <button className="btn btn-sm" onClick={retry}>Retry roster</button></p>}
         {roster && !error && <>

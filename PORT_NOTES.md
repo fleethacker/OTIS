@@ -373,6 +373,17 @@ Parker must run the external OPTASK regression against his unavailable samples.
 - Attach both demo review rows and unchanged source return links in Day/Week/Month.
   Parker: accept additive presentation fields and retain Calendar review placement?
 
+## Polish 7 — Narrow layout
+
+- Ships starts collapsed at <=900px, shows selection count and retains user toggles.
+  Narrow Calendar uses page flow, not a fixed viewport that compresses the grid;
+  time surface has a ~420px floor. Header clock occupies its own row below controls
+  at <=640px. Header menu/initial contrast is also explicit in both themes.
+- Files: ShipsSidebar/test, port CSS. No API change. Static diff check only.
+- Container gate: 400x900 Day/Week/Month with Ships closed/open, header/bell separation,
+  footer below review and no document horizontal overflow; repeat dark and desktop.
+  Attach those screenshots; no browser-size claim made locally.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

@@ -17,6 +17,12 @@ Must:
 ### Expected Deliverables
 A tool that seamlessly converts mock USMTF raw text into a synchronized 24-hour visual schedule for watchstanders and shipboard leaders.
 
+## Judge briefing
+
+The animated judge-facing slick sheet is in [`site/index.html`](site/index.html).
+See the [GitHub Pages guide](docs/integration/github-pages.md) for local preview,
+publishing setup, and the deployment workflow.
+
 ## Local application stack
 
 The imported **Watch Desk** app lives in [`apps/watch-desk/`](apps/watch-desk/).

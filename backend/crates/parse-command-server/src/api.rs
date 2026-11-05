@@ -86,7 +86,15 @@ impl App {
         Ok(())
     }
     pub async fn execute(&self, op: &str, request: ReadRequest, owner: &str) -> Result<Value> {
-        let filters = request.filters.validate()?;
+        let mut value = self.execute_inner(op, request, owner).await?;
+        crate::xnet::view::decorate(&self.custody, &mut value).await?;
+        Ok(value)
+    }
+    async fn execute_inner(&self, op: &str, request: ReadRequest, owner: &str) -> Result<Value> {
+        let mut filters = request.filters.validate()?;
+        if matches!(op, "list" | "options" | "search" | "timeline") {
+            crate::xnet::view::apply(&self.private.state, &self.custody, owner, &mut filters).await?;
+        }
         if request.dataset == Dataset::Legacy {
             if !self.config.allow_fixtures {
                 return Err(Error::config("Legacy fixture mode is disabled"));

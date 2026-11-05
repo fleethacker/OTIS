@@ -20,6 +20,7 @@ pub mod publisher;
 pub mod recurrence;
 pub mod search;
 pub mod settings;
+pub mod xnet;
 pub use error::{Error, Result};
 
 pub mod api;

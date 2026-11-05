@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fromJson, type JsonValue } from "@bufbuild/protobuf";
 import { ReadSchedulesResponseSchema } from "../gen/app/v1/source_data_pb";
 import { sessionFetch } from "./session-access";
+import { useSettings } from "./settings-data";
 
 export type Dataset = "canonical" | "legacy";
 export type MessageSort = "relevance" | "issued_desc" | "issued_asc";
@@ -69,6 +70,7 @@ export interface MessageHeader {
   issuedAt?: string;
 }
 export interface SourceMeta {
+  arrivalNetworks?: Record<string, ("HIGH" | "LOW")[]>;
   messageHeaders?: Record<string, MessageHeader>;
   dataset?: Dataset;
   currentPageToken?: string;
@@ -115,8 +117,9 @@ export async function readJson(response: Response) {
   return payload;
 }
 export function useSource(operation: string, request: SourceRequest, enabled = true) {
+  const { deskNetwork = "ALL" } = useSettings();
   return useQuery({
-    queryKey: ["parse-command-source", operation, request],
+    queryKey: ["parse-command-source", operation, request, ...(deskNetwork === "ALL" ? [] : [deskNetwork])],
     queryFn: ({ signal }) => readSource(operation, request, signal),
     enabled,
     retry: false,

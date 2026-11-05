@@ -83,7 +83,7 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    let mut intake = parse_command_intake::service::Service::open(config.intake.clone())?;
+    let mut intake = parse_command_intake::fleet::Fleet::open(config.intake.clone())?;
     let status = Status {
         ready: Arc::new(AtomicBool::new(false)),
         model: Arc::new(AtomicBool::new(false)),
@@ -91,42 +91,11 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let publisher = Publisher::open(config.clone(), status.clone())?;
     let cancelled = Arc::new(AtomicBool::new(false));
     let poll_cancel = cancelled.clone();
-    let poll_config = config.clone();
     let intake_thread = std::thread::Builder::new()
         .name("imap-intake".into())
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let mut retry = poll_config.intake.poll_seconds;
-                while !poll_cancel.load(Ordering::Relaxed) {
-                    let result = (|| {
-                        intake.process(&poll_cancel)?;
-                        let password =
-                            std::env::var(&poll_config.intake.password_env).map_err(|_| {
-                                parse_command_intake::IntakeError("password_environment")
-                            })?;
-                        let poll = intake.poll(&password, &poll_cancel);
-                        drop(password);
-                        intake.process(&poll_cancel)?;
-                        poll
-                    })();
-                    let delay = if result.is_ok() {
-                        retry = poll_config.intake.poll_seconds;
-                        retry
-                    } else {
-                        eprintln!("intake_error: retry_pending");
-                        let delay = retry;
-                        retry = retry
-                            .saturating_mul(2)
-                            .min(poll_config.intake.retry_max_seconds);
-                        delay
-                    };
-                    for _ in 0..delay * 5 {
-                        if poll_cancel.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        std::thread::sleep(Duration::from_millis(200));
-                    }
-                }
+                intake.run(&poll_cancel);
             }));
             if result.is_err() {
                 std::process::exit(1);
@@ -212,6 +181,9 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     .is_err()
                     {
                         eprintln!("notification_error: retry_pending");
+                    }
+                    if parse_command_server::xnet::sync(&background.private.state, &background.custody).await.is_err() {
+                        eprintln!("xnet_error: retry_pending");
                     }
                 }
                 if background.private.state.cleanup().await.is_err() {

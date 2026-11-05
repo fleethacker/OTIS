@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { readJson } from "./source-data";
 import { sessionFetch } from "./session-access";
+import { useDeskNetwork } from "./xnet-data";
 
 export interface DeskNotification {
   id: number;
@@ -47,8 +48,9 @@ export async function notificationRequest<T>(
   return (await readJson(response)) as unknown as T;
 }
 export function useNotifications(identity: string) {
+  const network = useDeskNetwork();
   return useInfiniteQuery({
-    queryKey: ["notifications", identity, "list"],
+    queryKey: ["notifications", identity, "list", ...(network === "ALL" ? [] : [network])],
     initialPageParam: null as number | null,
     queryFn: ({ pageParam, signal }) =>
       notificationRequest<NotificationPage>("list", { before: pageParam }, signal),
@@ -61,8 +63,9 @@ export function useNotifications(identity: string) {
   });
 }
 export function useNotificationMembers(identity: string, id?: number) {
+  const network = useDeskNetwork();
   return useInfiniteQuery({
-    queryKey: ["notifications", identity, "members", id],
+    queryKey: ["notifications", identity, "members", id, ...(network === "ALL" ? [] : [network])],
     initialPageParam: null as number | null,
     queryFn: ({ pageParam, signal }) =>
       notificationRequest<MemberPage>("members", { id, before: pageParam }, signal),

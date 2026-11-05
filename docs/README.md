@@ -45,3 +45,5 @@ Detailed USMTF knowledge and manual-derived notes are kept outside Git at `../OP
 - [Settings, OIDC and hidden state](integration/settings-oidc.md): implementation contract, roles, configuration and migration.
 
 - [CASREP support](integration/casrep.md): profiles, typed casualty reports, indexing, search and source-history rules.
+
+- [Fictional cross-network traffic notices](integration/xnet-notices.md): content-free bell-ringer workflow, desk preferences, synthetic two-mailbox demo and verification handoff.

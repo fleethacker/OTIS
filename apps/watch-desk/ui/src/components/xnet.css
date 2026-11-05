@@ -1,0 +1,9 @@
+.xnet-banner { margin-block: 0.75rem; }
+.xnet-view-note, .xnet-message-status { font-size: 0.8rem; color: var(--color-base-content); }
+.xnet-notices ul { list-style: none; padding: 0; margin-block: 0.5rem; }
+.xnet-notice { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; padding: 0.75rem; margin-block: 0.5rem; border: 1px solid var(--color-base-300); border-inline-start-width: 4px; border-radius: var(--radius-box); }
+.xnet-notice span { font-size: 0.8rem; }
+.xnet-prominent { border-inline-start-color: var(--color-warning); background: var(--brand-warning-bg); }
+.xnet-quiet { background: var(--color-base-200); }
+.notification-scroll > .xnet-notices { margin-inline: 0.75rem; }
+.xnet-message-status { margin-block: 0.5rem; }

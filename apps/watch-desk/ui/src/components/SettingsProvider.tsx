@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { DeskNetwork } from "./xnet-data";
 import { useQuery } from "@tanstack/react-query";
 import { SettingsContext, settingsRequest, type SettingsReply } from "./settings-data";
 import { AppButton, Notice } from "./ui";
@@ -10,7 +11,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   });
   const preferences = useQuery({
     queryKey: ["settings", "preferences"],
-    queryFn: () => settingsRequest<{ timezone: string }>("preferences"),
+    queryFn: () => settingsRequest<{ timezone: string; deskNetwork?: DeskNetwork }>("preferences"),
     retry: false,
   });
   if (shared.isError || preferences.isError) {
@@ -37,6 +38,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       value={{
         shared: shared.data,
         timezone: preferences.data.timezone || shared.data.settings.defaultTimezone,
+        deskNetwork: preferences.data.deskNetwork ?? "ALL",
       }}
     >
       {children}

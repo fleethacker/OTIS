@@ -59,7 +59,7 @@ test("Viewer can save timezone and sees no administration controls", async () =>
     fireEvent.change(view.getByLabelText("Timezone"), { target: { value: "America/Chicago" } });
     fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
     await waitFor(() => expect(view.getByRole("status").textContent).toBe("Saved"));
-    expect(writes).toEqual([{ timezone: "America/Chicago" }]);
+    expect(writes).toEqual([{ timezone: "America/Chicago", deskNetwork: "ALL" }]);
     expect(view.queryByRole("button", { name: "Users", exact: true })).toBeNull();
     expect(view.queryByRole("button", { name: "AI", exact: true })).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Command", exact: true }));
@@ -68,6 +68,21 @@ test("Viewer can save timezone and sees no administration controls", async () =>
     view.unmount();
     fetch.mockRestore();
   }
+});
+test("Viewer can save a fictional desk network with the view-only warning", async () => {
+  const writes: unknown[] = [];
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+    writes.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({ timezone: "UTC", deskNetwork: "LOW" }));
+  });
+  const view = mount("viewer");
+  try {
+    expect(view.getByText(/Demo view filter only/)).toBeTruthy();
+    fireEvent.change(view.getByLabelText("Desk network"), { target: { value: "LOW" } });
+    fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+    await waitFor(() => expect(writes).toEqual([{ timezone: "UTC", deskNetwork: "LOW" }]));
+    await waitFor(() => expect(view.getByText("Saved")).toBeTruthy());
+  } finally { view.unmount(); fetch.mockRestore(); }
 });
 test("Admin settings save uses revision and a conflict keeps edits unsaved", async () => {
   let saved: Record<string, unknown> = {};

@@ -293,6 +293,7 @@ pub struct Request {
     pub settings: Option<Settings>,
     pub revision: Option<String>,
     pub timezone: Option<String>,
+    pub desk_network: Option<crate::xnet::model::DeskNetwork>,
     pub user: Option<String>,
     pub action: Option<String>,
     pub after: Option<String>,
@@ -420,7 +421,7 @@ pub async fn execute(
                 .get("user", &identity.owner)
                 .await?
                 .ok_or_else(Error::unavailable)?;
-            Ok(json!({"timezone":user.record.payload["timezone"].as_str().unwrap_or("UTC")}))
+            Ok(json!({"timezone":user.record.payload["timezone"].as_str().unwrap_or("UTC"),"deskNetwork":crate::xnet::desk(store, &identity.owner).await?}))
         }
         "save-preferences" => {
             let zone = request
@@ -434,10 +435,11 @@ pub async fn execute(
                         .cloned()
                         .ok_or(parse_command_state::Error("state_record"))?;
                     row.payload["timezone"] = json!(zone);
+                    if let Some(network) = request.desk_network { row.payload["deskNetwork"] = json!(network); }
                     Ok(row)
                 })
                 .await?;
-            Ok(json!({"timezone":zone}))
+            Ok(json!({"timezone":zone,"deskNetwork":crate::xnet::desk(store, &identity.owner).await?}))
         }
         "users" => {
             admin(identity)?;

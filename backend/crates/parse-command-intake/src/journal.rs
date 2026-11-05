@@ -63,7 +63,9 @@ impl Journal {
     pub fn open(c: &Config) -> Result<Self> {
         let store = BlockingStore::new(&c.opensearch_url, &c.custody_index)?;
         store.provision()?;
-        let wanted = json!({"host":c.host,"port":c.port,"username":c.username,"mailbox":c.mailbox,"revision":c.revision});
+        let mut wanted = json!({"host":c.host,"port":c.port,"username":c.username,"mailbox":c.mailbox,"revision":c.revision});
+        if let Some(network) = c.arrival_network { wanted["arrival_network"] = json!(network); }
+        if !c.demo_command_ids.is_empty() { wanted["demo_command_ids"] = json!(c.demo_command_ids); }
         store.update("mailbox_identity", &c.account_id, |old| {
             if let Some(old) = old {
                 if old.payload != wanted {
@@ -176,6 +178,7 @@ impl Journal {
                 &key,
                 json!({"validity":r.validity,"uid":r.uid,"size":r.size,"raw":r.raw.map(|b|STANDARD.encode(b)),"raw_hash":hash,"received_at":r.received_at,"server_received_at":r.server_received_at,"attempts":0,"code":r.code,"events":[],"audit":[],"audit_state":"pending"}),
             );
+            row.payload["arrival_network"] = json!(c.arrival_network);
             row.owner = c.account_id.clone();
             row.state = r.state.into();
             row.order = self.store.next("receipts")?;
@@ -365,9 +368,12 @@ impl Journal {
                 .map_err(|_| IntakeError("projection_json"))?
                 .len();
         self.capacity(c, extra as u64, 0)?;
+        let envelope = crate::network::envelope(&job.raw, c.mime, &c.demo_command_ids)?;
+        let arrival = json!({"received_at":job.server_received_at.as_deref().unwrap_or(&job.received_at),"precedence":envelope.precedence,"command_ids":envelope.command_ids});
         let projection=self.store.update("projection",&key,|old| {
             if let Some(old)=old {
                 let mut row=old.clone();
+                crate::network::record_arrival(&mut row, c.arrival_network, &arrival)?;
                 let previous_subject=row.payload["selected_subject"].as_str();
                 let conflict=row.payload["subject_conflict"]==true || previous_subject!=email.subject.as_deref();
                 let old_time=row.payload["selected_received_at"].as_str().map(str::to_owned);
@@ -375,11 +381,13 @@ impl Journal {
                 let mut selected:Message=serde_json::from_value(row.payload["core"].clone()).map_err(|_|parse_command_state::Error("state_record"))?;
                 if select {selected.subject=parse_command_parser_api::display_subject(email.subject.as_deref()).map(str::to_owned);row.order=job.sequence;row.payload["selected_received_at"]=json!(job.server_received_at);row.payload["selected_subject"]=json!(email.subject);}
                 for (flag,active) in [("subject_conflict",conflict),("subject_order_review",job.server_received_at.is_none() || old_time.is_none())] {if active && !selected.review_flags.iter().any(|f|f==flag) {selected.review_flags.push(flag.into());}}
+                for id in &core.command_ids { if !selected.command_ids.contains(id) { selected.command_ids.push(id.clone()); } }
                 let value=serde_json::to_value(selected).map_err(|_|parse_command_state::Error("state_record"))?;
                 if row.payload["core"]!=value {row.state="pending".into();row.payload["core"]=value;}
                 row.payload["subject_conflict"]=json!(conflict);row.bytes=row.payload.to_string().len() as u64;Ok(row)
             } else {
                 let mut row=Record::new("projection",&key,json!({"core":core,"audits":audit,"first_receipt":job.receipt_id,"selected_subject":email.subject,"selected_received_at":job.server_received_at,"subject_conflict":false}));
+                crate::network::record_arrival(&mut row, c.arrival_network, &arrival)?;
                 row.state="pending".into();row.source=key.clone();row.order=job.sequence;row.bytes=row.payload.to_string().len() as u64;Ok(row)
             }
         })?;
@@ -399,6 +407,7 @@ impl Journal {
         row.payload["code"] = Value::Null;
         row.payload["subject"] = json!(email.subject);
         row.payload["metadata"] = json!(email.metadata);
+        row.payload["source_envelope"] = json!(envelope);
         row.payload["audit"] = json!([receipt_audit]);
         row.payload["audit_state"] = json!("pending");
         row.flags.push("audit_pending".into());

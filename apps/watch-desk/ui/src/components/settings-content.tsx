@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { DeskNetwork } from "./xnet-data";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import moment from "moment-timezone";
 import { useIdentity } from "../hooks/useIdentity";
@@ -38,9 +39,10 @@ interface Users {
 }
 export function SettingsContent({ active = true }: { active?: boolean }) {
   const { role } = useIdentity();
-  const { shared, timezone } = useSettings();
+  const { shared, timezone, deskNetwork = "ALL" } = useSettings();
   const [tab, setTab] = useState("preferences");
   const [zone, setZone] = useState(timezone);
+  const [network, setNetwork] = useState<DeskNetwork>(deskNetwork);
   const [form, setForm] = useState<CommandSettings | undefined>(shared?.settings);
   const [revision, setRevision] = useState(shared?.revision);
   const [pending, setPending] = useState(false);
@@ -56,7 +58,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
     enabled: admin && active,
     retry: false,
   });
-  const dirty = zone !== timezone || JSON.stringify(form) !== JSON.stringify(shared?.settings);
+  const dirty = zone !== timezone || network !== deskNetwork || JSON.stringify(form) !== JSON.stringify(shared?.settings);
   useEffect(() => {
     if (!dirty) {
       return;
@@ -137,8 +139,9 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
-                await settingsRequest("save-preferences", { timezone: zone });
-                client.setQueryData(["settings", "preferences"], { timezone: zone });
+                await settingsRequest("save-preferences", { timezone: zone, deskNetwork: network });
+                client.setQueryData(["settings", "preferences"], { timezone: zone, deskNetwork: network });
+                await Promise.all(["parse-command-source", "notifications", "xnet"].map((key) => client.invalidateQueries({ queryKey: [key] })));
               }, "Saved");
             }}
           >
@@ -157,12 +160,28 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                 ))}
               </SelectInput>
             </label>
+            <label>
+              Desk network
+              <SelectInput
+                className="select-sm"
+                value={network}
+                onChange={(e) => {
+                  setNetwork(e.target.value as DeskNetwork);
+                  setNotice("");
+                }}
+              >
+                <option value="ALL">ALL networks (fictional)</option>
+                <option value="LOW">LOW (fictional)</option>
+                <option value="HIGH">HIGH (fictional)</option>
+              </SelectInput>
+            </label>
+            <p>Demo view filter only — not access control. Opening HIGH traffic on a HIGH or ALL desk records it as copied.</p>
             <div className="settings-actions">
               <AppButton
                 variant="primary"
                 size="sm"
                 type="submit"
-                disabled={pending || zone === timezone}
+                disabled={pending || (zone === timezone && network === deskNetwork)}
               >
                 Save
               </AppButton>

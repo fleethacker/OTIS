@@ -37,8 +37,8 @@ same-origin cookies. Mutations require an exact configured `Origin`.
 | Operation | Access | Request / result |
 |---|---|---|
 | `get` | Both | Shared settings + opaque `revision`; Viewer response omits AI configuration |
-| `preferences` | Both | Own `{timezone}` |
-| `save-preferences` | Both | `{timezone}` |
+| `preferences` | Both | Own `{timezone, deskNetwork}` (`deskNetwork` defaults to `ALL`) |
+| `save-preferences` | Both | `{timezone, deskNetwork?}`; omitted network preserves the current value |
 | `options` | Admin | Indexed command IDs, approved model endpoints and credential references |
 | `update` | Admin | `{settings, revision}`; stale saves return 409 |
 | `suggestions` | Both | Operation/exercise names found in published messages, with line citations; dismissed ones omitted |
@@ -53,6 +53,10 @@ of enclave-local OpenAI-compatible base URLs, normally ending `/v1`.
 `PARSE_COMMAND_AI_SECRET_REFS` lists allowed environment variable names beginning
 `PARSE_COMMAND_AI_SECRET_`. Resolve credentials on the server; never submit secret
 values through Settings. No public provider or default remote endpoint is configured.
+
+The optional [fictional cross-network notice demo](xnet-notices.md) adds the per-user
+`deskNetwork` preference (`LOW` / `HIGH` / `ALL`). It is a view filter, not access
+control; both roles can change their own selection. It does not change SSO grants.
 
 ## Keycloak / UDS client contract
 

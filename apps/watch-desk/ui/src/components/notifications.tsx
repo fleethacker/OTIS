@@ -1,5 +1,7 @@
 import { AppButton, Notice } from "./ui";
 import { useDisplayTime } from "./display-time";
+import { useDeskNetwork, useXnetNotices } from "./xnet-data";
+import { XnetNoticeList } from "./xnet-notices";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -26,11 +28,12 @@ import {
 
 export function Notifications() {
   const identity = useIdentity();
+  const network = useDeskNetwork();
   if (identity.isLoading || !identity.username) {
     return null;
   }
   const key = JSON.stringify([identity.username, identity.email]);
-  return <NotificationPanel key={key} identity={key} />;
+  return <NotificationPanel key={`${key}:${network}`} identity={key} />;
 }
 export function NotificationPanel({ identity }: { identity: string }) {
   const { zone } = useDisplayTime();
@@ -43,13 +46,17 @@ export function NotificationPanel({ identity }: { identity: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const feed = useNotifications(identity);
+  const network = useDeskNetwork();
+  const xnet = useXnetNotices();
+  const xnetItems = network === "HIGH" ? [] : (xnet.data?.items ?? []);
   const mark = useReadNotification(identity);
   const members = useNotificationMembers(
     identity,
     selected?.kind === "traffic" ? selected.id : undefined
   );
   const first = feed.data?.pages[0];
-  const unread = first?.unread ?? 0;
+  const ordinaryUnread = first?.unread ?? 0;
+  const unread = ordinaryUnread + xnetItems.filter((notice) => notice.unread).length;
   const items = notificationItems(feed.data?.pages);
   const detail = items.find((item) => item.id === selected?.id) ?? selected;
   const returnTo =
@@ -176,7 +183,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
                 className="notification-icon-button"
                 aria-label="Mark all as read"
                 title="Mark all as read"
-                disabled={unread === 0 || mark.isPending || feed.isError || !first}
+                disabled={ordinaryUnread === 0 || mark.isPending || feed.isError || !first}
                 onClick={() => first && mark.mutate({ through: first.watermark })}
               >
                 <TbChecks aria-hidden="true" />
@@ -207,6 +214,8 @@ export function NotificationPanel({ identity }: { identity: string }) {
             </Notice>
           )}
           <div className="notification-scroll">
+            {!detail && <XnetNoticeList items={xnetItems} />}
+            {network !== "HIGH" && xnet.isError && <Notice tone="error" role="alert">Cross-network notices unavailable. <AppButton size="sm" onClick={() => void xnet.refetch()}>Retry notices</AppButton></Notice>}
             {feed.isError ? (
               <Notice role="alert" className="notification-empty" tone="error">
                 Unable to load notifications{" "}
@@ -298,7 +307,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
               </div>
             ) : items.length === 0 ? (
               <p className="notification-empty">
-                {first?.catchingUp === true ? "Updating…" : "You're up to date"}
+                {first?.catchingUp === true ? "Updating…" : xnetItems.length ? "No other notifications" : "You're up to date"}
               </p>
             ) : (
               <>

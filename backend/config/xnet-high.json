@@ -1,0 +1,52 @@
+{
+  "account_id": "demo-high-fictional",
+  "arrival_network": "HIGH",
+  "demo_command_ids": ["demo-meridian"],
+  "host": "mailserver",
+  "port": 143,
+  "username": "high@parse-command.test",
+  "mailbox": "INBOX",
+  "password_env": "PARSE_COMMAND_IMAP_PASSWORD_HIGH",
+  "transport": "plaintext_demo",
+  "revision": "demo-xnet-1",
+  "poll_seconds": 5,
+  "retry_max_seconds": 60,
+  "io_timeout_seconds": 10,
+  "uid_window": 128,
+  "jobs_per_cycle": 128,
+  "max_raw_bytes": 1048576,
+  "max_response_bytes": 1064960,
+  "max_wire_bytes_per_poll": 16777216,
+  "max_responses_per_command": 1024,
+  "max_receipts": 20000,
+  "max_retained_bytes": 268435456,
+  "max_parse_attempts": 5,
+  "parser_work_units": 4000000,
+  "subject_policy": "latest_received",
+  "mime": {
+    "max_depth": 8,
+    "max_parts": 64,
+    "max_header_bytes": 65536,
+    "max_headers": 256,
+    "max_decoded_bytes": 524288
+  },
+  "parser": {
+    "scan": {
+      "max_source_bytes": 524288,
+      "max_records": 4096,
+      "max_set_bytes": 262144,
+      "max_fields_per_record": 8192,
+      "max_total_fields": 65536
+    },
+    "output": {
+      "max_core_items": 4096,
+      "max_core_bytes": 1048576,
+      "max_audit_entries": 8192,
+      "max_audit_bytes": 8388608,
+      "max_audit_depth": 32,
+      "max_audit_nodes": 262144
+    },
+    "max_subject_bytes": 4096
+  },
+  "enabled_types": ["OPTASK COMMS"]
+}

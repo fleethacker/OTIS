@@ -1,5 +1,7 @@
 import { AppButton, Notice, TextInput } from "../components/ui";
 import { useDisplayTime } from "../components/display-time";
+import { DeskNetworkLabel, XnetMessageStatus } from "../components/xnet-notices";
+import { useDeskNetwork } from "../components/xnet-data";
 import { Link, useSearchParams } from "react-router-dom";
 import { useRef, useState } from "react";
 import { TbX } from "react-icons/tb";
@@ -15,11 +17,13 @@ export const route: RouteMeta = { path: "/messages", label: "Message records", o
 
 export default function Messages() {
   const { zone } = useDisplayTime();
+  const deskNetwork = useDeskNetwork();
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
   const criteria = JSON.stringify([
+    deskNetwork,
     zone,
     ...[
       "q",
@@ -109,6 +113,7 @@ export default function Messages() {
   }
   return (
     <>
+      <DeskNetworkLabel />
       <Link className="back-link" to={calendarReturn(params.get("returnTo"))}>
         <span aria-hidden="true">← </span>Return to Calendar
       </Link>
@@ -210,10 +215,13 @@ export default function Messages() {
                     </AppButton>
                   </Notice>
                 ) : selected ? (
-                  <MessageReader
-                    key={`${selected.sourceMessageId}:${params.get("tab") ?? ""}`}
-                    message={selected}
-                  />
+                  <>
+                    <XnetMessageStatus key={selected.sourceMessageId} messageKey={selected.sourceMessageId} networks={detail.data?.meta.arrivalNetworks?.[selected.sourceMessageId]} />
+                    <MessageReader
+                      key={`${selected.sourceMessageId}:${params.get("tab") ?? ""}`}
+                      message={selected}
+                    />
+                  </>
                 ) : record ? (
                   <section className="reader-empty">
                     <h2>Message record not found</h2>

@@ -186,7 +186,7 @@ test("calendar mounts controls and truthful loading", async () => {
   expect(view.queryByText(/Ship schedule/)).toBeNull();
   expect(view.queryByText(/Hybrid keyword/)).toBeNull();
   expect(view.container.querySelector(".view-label")).toBeNull();
-  expect(view.getByRole("status").textContent).toContain("Loading schedule");
+  expect(view.getByText("Loading schedule…").getAttribute("role")).toBe("status");
   });
 });
 test("week is an accessible URL-owned view with civil DST/year boundaries", async () => {

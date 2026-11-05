@@ -159,7 +159,7 @@ fn items_carry_bounded_added_events_and_the_callers_review_time() {
     ];
     activities.extend((0..30).map(|i| json!({"id":format!("x{i}"),"type":"filler","status":"scheduled"})));
     db.0[0].record.payload["core"]["activities"] = json!(activities);
-    db.0[0].record.payload["core"]["recurrences"] = json!([{"id":"r1","kind":"communications_check","activity_id":"a2","rule":"FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0","dtstart":"2026-11-05T00:00:00Z"}]);
+    db.0[0].record.payload["core"]["recurrences"] = json!([{"id":"r1","type":"communications_check","activity_id":"a2","rule":"FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0","dtstart":"2026-11-05T00:00:00Z"}]);
     let (events, limited) = added_events(&db.0[0].record.payload["core"]);
     assert_eq!(events.len(), 20);
     assert!(limited);

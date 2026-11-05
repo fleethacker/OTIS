@@ -60,7 +60,9 @@ test("canonical chips use all explicit command IDs, never unit or sender", () =>
     sourceItems={[{ key: `${key}#point`, messageKey: key, factId: "point", commandIds: [], kind: "point", at: "2026-11-05T08:00:00Z", title: "Fictional check", reviewRequired: true }]}
     from={Date.parse("2026-11-05T00:00:00Z")} to={Date.parse("2026-11-06T00:00:00Z")} interval={60} returnTo="/calendar"
   />);
-  expect(view.getByRole("link", { name: "Fictional check, source record" }).textContent).toContain("REVIEW");
+  const card = view.getByRole("link", { name: "Fictional check, source record" });
+  expect(card.textContent).toBe("Fictional check");
+  expect(card.closest(".calendar-event-copy")?.textContent).toContain("REVIEW");
   expect(view.queryByText("MERIDIAN")).toBeNull();
   expect(message.events[0].startAt).toBeUndefined(); // presentation must not mutate the cached message
 });

@@ -36,7 +36,7 @@ fails parsing; custody preserves the source for review.
 
 ## ICD and storage
 
-ICD 1.2.0 adds an optional `casualty` object to canonical messages, with scoped fact
+ICD 1.3.0 adds an optional `casualty` object to canonical messages, with scoped fact
 ID `q1`. Existing OPTASK wire documents omit it. It contains report identity and
 action, estimate, assistance, technical publications, parts, requisitions, receipts,
 correction statistics and narratives. Repeating parts and requisitions preserve

@@ -73,7 +73,7 @@ def generate():
                 c = "value" if optional else f"&{expr}"
                 if "$ref" in item:
                     checks.append(f"for item in {c} {{ item.validate()?; }}")
-                elif item.get("type") == "string":
+                elif item.get("type") == "string" and item.get("format") != "date-time":
                     checks.append(f'validate_strings({c}, {str(spec.get("uniqueItems", False)).lower()}, "{container}.{field}")?;')
                 elif item.get("type") == "number":
                     checks.append(f'if ({c}).is_empty() || ({c}).iter().any(|v| !v.is_finite()) {{ return Err(invalid("{container}.{field}", "finite_nonempty_vector")); }}')
@@ -89,8 +89,8 @@ def generate():
                 if fn:
                     checks.append(f'{fn}({current}, "{container}.{field}")?;')
                 else:
-                    prefix = {"period": "v", "frequency": "f", "activity": "a", "contact": "c", "location": "g", "casualty": "q"}.get(container)
-                    prefix_arg = f"Some(b'{prefix}')" if field == "id" and prefix else "None"
+                    prefix = {"period": "v", "frequency": "f", "activity": "a", "contact": "c", "location": "g", "recurrence": "r", "casualty": "q"}.get(container)
+                    prefix_arg = "Some(b'a')" if field == "activity_id" else f"Some(b'{prefix}')" if field == "id" and prefix else "None"
                     checks.append(f'validate_subject_id({current}, {prefix_arg}, "{container}.{field}")?;')
             if "minimum" in spec:
                 v = "*value" if optional else expr

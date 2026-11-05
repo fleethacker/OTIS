@@ -4,7 +4,10 @@ pub mod proto {
 }
 pub mod auth;
 pub mod casualties;
+pub mod changes;
+pub mod commands;
 pub mod config;
+pub mod context_metadata;
 pub mod error;
 pub mod http;
 pub mod lifecycle;
@@ -14,6 +17,7 @@ pub mod preparation;
 pub mod presentation;
 pub mod private;
 pub mod publisher;
+pub mod recurrence;
 pub mod search;
 pub mod settings;
 pub use error::{Error, Result};

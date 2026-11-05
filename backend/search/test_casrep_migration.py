@@ -15,7 +15,7 @@ class CasrepMappingUpgradeTests(unittest.TestCase):
         current['properties'].pop('casualty')
         upgrade = deploy.compatible_mapping_upgrade(current, self.expected)
         self.assertEqual(set(upgrade['properties']), {'casualty'})
-        self.assertEqual(upgrade['_meta']['icd_version'], '1.2.0')
+        self.assertEqual(upgrade['_meta']['icd_version'], '1.3.0')
         self.assertEqual(current['properties']['embedding'], self.expected['properties']['embedding'])
 
     def test_existing_runtime_mapping_can_be_pinned_without_reindexing(self):

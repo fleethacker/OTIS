@@ -1,0 +1,7 @@
+# Explicit opt-in for fictional Watch Desk roster, defaults and exact-hash assignments.
+# docker compose -f docker-compose.yml -f compose.watchdesk-demo.yml up ...
+# This does not reload fixtures, backfill assignments or reset any volumes.
+services:
+  server:
+    environment:
+      PARSE_COMMAND_WATCHDESK_DEMO: "true"

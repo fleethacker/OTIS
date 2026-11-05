@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { beginSessionAccess } from "./session-access";
 import { SessionVisibility } from "./session-visibility";
-import otisIcon from "../assets/otis/otis-icon.webp";
+import otisIcon from "../assets/otis/otis-logo.png";
 import { AppButton } from "./ui";
+import { BrowserPreferenceScope } from "./calendar-preferences";
 interface Session {
   scope: string;
   expiresAt: number | null;
@@ -151,7 +152,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
       {session && (state === "ready" || state === "checking") ? (
         <SessionVisibility.Provider value={state === "ready"}>
           <div style={{ display: state === "ready" ? "contents" : "none" }}>
-            <Fragment key={session.scope}>{children}</Fragment>
+            <BrowserPreferenceScope.Provider value={session.scope}>
+              <Fragment key={session.scope}>{children}</Fragment>
+            </BrowserPreferenceScope.Provider>
           </div>
         </SessionVisibility.Provider>
       ) : null}

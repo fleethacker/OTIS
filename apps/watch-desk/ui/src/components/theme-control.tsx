@@ -1,13 +1,22 @@
-import { LuMoon, LuSun, LuSunset } from "@defense-unicorns/ark-ui";
-import { darkThemeName, themeName, useAppTheme, viceThemeName } from "../theme";
+import { TbDeviceTvOld, TbMoon, TbSun } from "react-icons/tb";
+import { isLightTheme, useAppTheme, viceThemeName } from "../theme";
 import { AppButton } from "./ui";
 
 /** Single click toggles light/dark; double click or Shift+Enter reveals Vice. */
 export function ThemeControl() {
-  const { theme, selectTheme } = useAppTheme();
-  const isLight = theme === themeName;
-  const label = isLight ? "Haze Gray" : theme === viceThemeName ? "Vice" : "Maritime Dark";
-  const Icon = isLight ? LuSun : theme === viceThemeName ? LuSunset : LuMoon;
+  const { theme, style, selectTheme, toggleMode } = useAppTheme();
+  const isLight = isLightTheme(theme);
+  const label =
+    theme === viceThemeName
+      ? "Vice"
+      : style === "windows"
+        ? isLight
+          ? "Windows Light"
+          : "Windows Dark"
+        : isLight
+          ? "Navy and white"
+          : "Maritime Dark";
+  const Icon = isLight ? TbSun : theme === viceThemeName ? TbDeviceTvOld : TbMoon;
   const nextLabel = isLight ? "dark" : "light";
 
   return (
@@ -17,10 +26,15 @@ export function ThemeControl() {
         size="sm"
         className="theme-toggle"
         aria-label={`Appearance: ${label}. Switch to ${nextLabel} mode`}
-        title={`Switch to ${nextLabel} mode`}
-        onClick={() => selectTheme(isLight ? darkThemeName : themeName)}
-        // Native double-click dispatches two clicks first. Setting Vice here last
-        // makes the gesture deterministic without delaying ordinary activation.
+        title={`Appearance: ${label}. Switch to ${nextLabel} mode`}
+        // Handle the second click itself; some webviews omit the later dblclick.
+        onClick={(event) => {
+          if (event.detail >= 2) {
+            selectTheme(viceThemeName);
+          } else {
+            toggleMode();
+          }
+        }}
         onDoubleClick={() => selectTheme(viceThemeName)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && event.shiftKey) {
@@ -32,7 +46,6 @@ export function ThemeControl() {
         }}
       >
         <Icon aria-hidden="true" />
-        <span>{isLight ? "Light" : theme === viceThemeName ? "Vice" : "Dark"}</span>
       </AppButton>
       <span className="sr-only" role="status" aria-live="polite">
         {label} appearance

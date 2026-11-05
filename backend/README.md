@@ -101,4 +101,4 @@ Settings, native OIDC, hidden-state migration and verification are documented in
 The compiled `parse-command-casrep` crate adds exact CASREP dispatch independently
 of OPTASK and GENADMIN. Demo intake enables it explicitly. See the
 [CASREP integration guide](../docs/integration/casrep.md) for supported profiles,
-ICD 1.2.0, immutable reports, derived history, search and acceptance tests.
+ICD 1.3.0, immutable reports, derived history, search and acceptance tests.

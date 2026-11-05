@@ -3,12 +3,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import moment from "moment-timezone";
 import { useIdentity } from "../hooks/useIdentity";
 import { AppButton, Notice, SelectInput, TextInput } from "./ui";
+import { AppearancePreferences } from "./appearance-preferences";
 import {
   settingsRequest,
   useSettings,
   type CommandSettings,
   type SettingsReply,
 } from "./settings-data";
+import { commandName, useCommands } from "./command-roster";
+import { UNASSIGNED } from "./ship-calendars";
+import { WatchSuggestions } from "./watch-suggestions";
+/** Comma- or space-separated Zulu times, normalized to the stored ascending list. */
+export function parseTurnovers(text: string): string[] {
+  const values = text.split(/[\s,]+/).map((v) => v.trim().toUpperCase()).filter(Boolean);
+  return [...new Set(values)].sort();
+}
 interface Options {
   commands: string[];
   aiEndpoints: string[];
@@ -37,7 +46,9 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState("");
   const [failure, setFailure] = useState("");
+  const [turnovers, setTurnovers] = useState((shared?.settings.turnoverUtc ?? []).join(", "));
   const client = useQueryClient();
+  const roster = useCommands();
   const admin = role === "admin";
   const options = useQuery({
     queryKey: ["settings", "options"],
@@ -75,11 +86,16 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
     }
     setNotice("");
   }
-  async function saveCommand() {
-    const result = await settingsRequest<SettingsReply>("update", { settings: form, revision });
+  function load(result: SettingsReply) {
     client.setQueryData(["settings", "shared"], result);
     setForm(result.settings);
     setRevision(result.revision);
+    setTurnovers(result.settings.turnoverUtc.join(", "));
+    // Own ship marks come from the shared settings.
+    void client.invalidateQueries({ queryKey: ["watchdesk-commands"] });
+  }
+  async function saveCommand() {
+    load(await settingsRequest<SettingsReply>("update", { settings: form, revision }));
   }
   if (!form) {
     return <p role="status">Loading…</p>;
@@ -115,41 +131,44 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
         </Notice>
       )}
       {tab === "preferences" && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(async () => {
-              await settingsRequest("save-preferences", { timezone: zone });
-              client.setQueryData(["settings", "preferences"], { timezone: zone });
-            }, "Saved");
-          }}
-        >
-          <label>
-            Timezone
-            <SelectInput
-              className="select-sm"
-              value={zone}
-              onChange={(e) => {
-                setZone(e.target.value);
-                setNotice("");
-              }}
-            >
-              {["UTC", ...moment.tz.names().filter((v) => v !== "UTC")].map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </SelectInput>
-          </label>
-          <div className="settings-actions">
-            <AppButton
-              variant="primary"
-              size="sm"
-              type="submit"
-              disabled={pending || zone === timezone}
-            >
-              Save
-            </AppButton>
-          </div>
-        </form>
+        <>
+          <AppearancePreferences />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                await settingsRequest("save-preferences", { timezone: zone });
+                client.setQueryData(["settings", "preferences"], { timezone: zone });
+              }, "Saved");
+            }}
+          >
+            <label>
+              Timezone
+              <SelectInput
+                className="select-sm"
+                value={zone}
+                onChange={(e) => {
+                  setZone(e.target.value);
+                  setNotice("");
+                }}
+              >
+                {["UTC", ...moment.tz.names().filter((v) => v !== "UTC")].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </SelectInput>
+            </label>
+            <div className="settings-actions">
+              <AppButton
+                variant="primary"
+                size="sm"
+                type="submit"
+                disabled={pending || zone === timezone}
+              >
+                Save
+              </AppButton>
+            </div>
+          </form>
+        </>
       )}
       {tab === "command" && (
         <form
@@ -213,6 +232,90 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                 ))}
               </SelectInput>
             </label>
+            <label>
+              Own ship
+              <SelectInput
+                className="select-sm"
+                value={form.commandIds[0] ?? ""}
+                onChange={(e) =>
+                  update(
+                    "commandIds",
+                    e.target.value
+                      ? [e.target.value, ...form.commandIds.filter((v) => v !== e.target.value)]
+                      : form.commandIds
+                  )
+                }
+              >
+                {form.commandIds.length === 0 && <option value="">Not set</option>}
+                {[...new Set([...form.commandIds, ...(options.data?.commands ?? [])])].map((v) => (
+                  <option key={v} value={v}>
+                    {commandName(`unit:${v}`, roster.data?.commands ?? [])}
+                  </option>
+                ))}
+              </SelectInput>
+            </label>
+            <label>
+              Operation / exercise
+              <TextInput
+                className="input-sm"
+                maxLength={128}
+                placeholder="Not set"
+                value={form.operationName}
+                onChange={(e) => update("operationName", e.target.value)}
+              />
+            </label>
+            <label>
+              Group / command
+              <TextInput
+                className="input-sm"
+                maxLength={128}
+                placeholder="Not set"
+                value={form.groupCommand}
+                onChange={(e) => update("groupCommand", e.target.value)}
+              />
+            </label>
+            <label>
+              UTC watch turnovers
+              <TextInput
+                className="input-sm"
+                maxLength={192}
+                aria-label="UTC watch turnovers"
+                placeholder="Not set"
+                value={turnovers}
+                onChange={(e) => {
+                  setTurnovers(e.target.value);
+                  update("turnoverUtc", parseTurnovers(e.target.value));
+                }}
+              />
+              <small>Zulu times separated by commas, e.g. 0000Z, 0400Z.</small>
+            </label>
+            <div className="settings-default-ships" role="group" aria-label="Default visible ships">
+              <span>Default visible ships</span>
+              <div className="context-ship-options">
+                {[...(roster.data?.commands ?? []).map((c) => `unit:${c.id}`), UNASSIGNED].map((key) => (
+                  <label key={key}>
+                    <input
+                      type="checkbox"
+                      checked={form.defaultShips.includes(key)}
+                      onChange={(e) =>
+                        update(
+                          "defaultShips",
+                          (e.target.checked
+                            ? [...form.defaultShips, key]
+                            : form.defaultShips.filter((v) => v !== key)
+                          ).sort()
+                        )
+                      }
+                    />
+                    {commandName(key, roster.data?.commands ?? [])}
+                  </label>
+                ))}
+              </div>
+              <small>
+                {form.defaultShips.length === 0 ? "Not set: every ship is shown. " : ""}
+                Choose “Use app defaults” in Ships to apply this list.
+              </small>
+            </div>
           </fieldset>
           {options.isError && (
             <Notice tone="error" role="alert">
@@ -230,10 +333,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                 disabled={pending}
                 onClick={() =>
                   void run(async () => {
-                    const value = await settingsRequest<SettingsReply>("get");
-                    client.setQueryData(["settings", "shared"], value);
-                    setForm(value.settings);
-                    setRevision(value.revision);
+                    load(await settingsRequest<SettingsReply>("get"));
                   }, "Reloaded")
                 }
               >
@@ -242,6 +342,15 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             </div>
           )}
         </form>
+      )}
+      {tab === "command" && admin && (
+        <WatchSuggestions
+          active={active}
+          current={form.operationName}
+          revision={revision}
+          dirty={dirty}
+          onSaved={load}
+        />
       )}
       {tab === "ai" && admin && (
         <form

@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "icd_version": "1.2.0",
+      "icd_version": "1.3.0",
       "profile": "ui_fixture_lexical_no_retention"
     },
     "properties": {
@@ -325,6 +325,22 @@
       "subject": {
         "type": "text",
         "analyzer": "standard"
+      },
+      "recurrences": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {"type": "keyword"},
+          "type": {"type": "keyword"},
+          "activity_id": {"type": "keyword"},
+          "rule": {"type": "keyword", "index": false},
+          "dtstart": {"type": "date", "format": "strict_date_optional_time_nanos"},
+          "until": {"type": "date", "format": "strict_date_optional_time_nanos"},
+          "count": {"type": "long"},
+          "exdates": {"type": "date", "format": "strict_date_optional_time_nanos"},
+          "scope": {"type": "keyword"},
+          "status": {"type": "keyword"}
+        }
       },
       "locations": {
         "type": "nested",

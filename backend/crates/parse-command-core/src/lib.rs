@@ -234,6 +234,7 @@ impl ParserHost {
             (!facts.contacts.is_empty(), FactCategory::Contact),
             (!facts.locations.is_empty(), FactCategory::Location),
             (facts.casualty.is_some(), FactCategory::Casualty),
+            (!facts.recurrences.is_empty(), FactCategory::Recurrence),
         ] {
             if present && !selected.descriptor.fact_categories.contains(&category) {
                 return Err(failure(
@@ -281,6 +282,7 @@ impl ParserHost {
             contacts: facts.contacts,
             locations: facts.locations,
             casualty: facts.casualty,
+            recurrences: facts.recurrences,
             review_flags: facts.review_flags,
         };
         encoded_len(&core, self.limits.output.max_core_bytes)?;
@@ -300,6 +302,7 @@ impl ParserHost {
             .chain(core.get().contacts.iter().map(|f| &f.id))
             .chain(core.get().locations.iter().map(|f| &f.id))
             .chain(core.get().casualty.iter().map(|f| &f.id))
+            .chain(core.get().recurrences.iter().map(|f| &f.id))
         {
             if !covered.contains(id.as_str()) {
                 return Err(failure(ErrorKind::InvalidValue, "missing_fact_audit"));
@@ -339,7 +342,8 @@ impl ParserHost {
                     || core.get().activities.iter().any(|f| &f.id == subject)
                     || core.get().contacts.iter().any(|f| &f.id == subject)
                     || core.get().locations.iter().any(|f| &f.id == subject)
-                    || core.get().casualty.iter().any(|f| &f.id == subject);
+                    || core.get().casualty.iter().any(|f| &f.id == subject)
+                    || core.get().recurrences.iter().any(|f| &f.id == subject);
                 if !found {
                     return Err(failure(ErrorKind::InvalidValue, "audit_subject_missing"));
                 }

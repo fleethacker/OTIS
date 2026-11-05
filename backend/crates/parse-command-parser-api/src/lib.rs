@@ -63,6 +63,7 @@ pub enum FactCategory {
     Contact,
     Location,
     Casualty,
+    Recurrence,
 }
 #[derive(Debug)]
 pub struct ParserDescriptor {

@@ -1,6 +1,7 @@
 use crate::{ErrorKind, ParseFailure};
 use parse_command_types::{
-    Activity, Casualty, Contact, Frequency, Location, Period, Security, UtcTimestamp, Validate,
+    Activity, Casualty, Contact, Frequency, Location, Period, Recurrence, Security, UtcTimestamp,
+    Validate,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
@@ -62,6 +63,12 @@ pub trait ParseSink {
             "casualty_sink",
         ))
     }
+    fn recurrence(&mut self, _value: Recurrence) -> Result<(), ParseFailure> {
+        Err(ParseFailure::new(
+            ErrorKind::UnsupportedProfile,
+            "recurrence_sink",
+        ))
+    }
     fn review_flag(&mut self, value: &str) -> Result<(), ParseFailure>;
     fn audit(&mut self, value: AuditEntry) -> Result<(), ParseFailure>;
 }
@@ -103,6 +110,7 @@ pub struct ParsedFacts {
     pub contacts: Vec<Contact>,
     pub locations: Vec<Location>,
     pub casualty: Option<Casualty>,
+    pub recurrences: Vec<Recurrence>,
     pub review_flags: Vec<String>,
     pub audit: Vec<AuditEntry>,
 }
@@ -117,6 +125,7 @@ pub struct BoundedOutput {
     contacts: Vec<Contact>,
     locations: Vec<Location>,
     casualty: Option<Casualty>,
+    recurrences: Vec<Recurrence>,
     flags: Vec<String>,
     audit: Vec<AuditEntry>,
     ids: BTreeSet<String>,
@@ -137,6 +146,7 @@ impl BoundedOutput {
             contacts: Vec::new(),
             locations: Vec::new(),
             casualty: None,
+            recurrences: Vec::new(),
             flags: Vec::new(),
             audit: Vec::new(),
             ids: BTreeSet::new(),
@@ -199,6 +209,7 @@ impl BoundedOutput {
             contacts: self.contacts,
             locations: self.locations,
             casualty: self.casualty,
+            recurrences: self.recurrences,
             review_flags: self.flags,
             audit: self.audit,
         })
@@ -250,6 +261,11 @@ impl ParseSink for BoundedOutput {
         }
         self.core(&value, Some(&value.id))?;
         self.casualty = Some(value);
+        Ok(())
+    }
+    fn recurrence(&mut self, value: Recurrence) -> Result<(), ParseFailure> {
+        self.core(&value, Some(&value.id))?;
+        self.recurrences.push(value);
         Ok(())
     }
     fn review_flag(&mut self, value: &str) -> Result<(), ParseFailure> {

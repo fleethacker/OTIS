@@ -108,6 +108,31 @@ fn timestamp_comparisons_and_timeline_preserve_points_and_intervals() {
     assert!(items.iter().all(|i| i["reviewRequired"] == true));
 }
 #[test]
+fn review_time_details_preserve_status_labels_and_normalized_clocks_across_views() {
+    let source = json!({"id":"fictional","revision":"r1","activities":[
+        {"id":"a1","type":"communications_plan_window","start_time":"12:00Z","end_time":"18:00Z","start_status":"missing_date","end_status":"missing_date"},
+        {"id":"a2","type":"check","time_label":"051200Z","time_status":"missing_month_and_year"},
+        {"id":"a3","type":"window","start_at":"2026-11-05T08:00:00Z","end_at":"2026-11-05T08:00:00Z"}
+    ]});
+    for (from, to) in [
+        ("2026-11-05T00:00:00Z", "2026-11-06T00:00:00Z"),
+        ("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z"),
+        ("2026-11-01T00:00:00Z", "2026-12-01T00:00:00Z"),
+    ] {
+        let (items, review) =
+            presentation::timeline(&source, &timestamp(from).unwrap(), &timestamp(to).unwrap())
+                .unwrap();
+        assert!(items.is_empty());
+        assert_eq!(review.len(), 3);
+        assert_eq!(review[0]["timeDetails"][0]["status"], "missing_date");
+        assert_eq!(review[0]["timeDetails"][0]["clock"], "12:00Z");
+        assert!(review[0]["timeDetails"][0].get("label").is_none());
+        assert_eq!(review[1]["timeDetails"][0]["label"], "051200Z");
+        assert_eq!(review[2]["reasonCode"], "non_positive_interval");
+        assert!(review[0].get("start").is_none());
+    }
+}
+#[test]
 fn filter_contract_rejects_unknown_fields_and_bad_intervals() {
     assert!(serde_json::from_value::<Filters>(json!({"script":"arbitrary"})).is_err());
     let f: Filters = serde_json::from_value(

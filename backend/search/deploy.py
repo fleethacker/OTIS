@@ -136,7 +136,7 @@ def compatible_mapping_upgrade(current, expected):
               and meta.get('chunker') == target['chunker'])
     runtime = (meta.get('profile') == 'ui_fixture_lexical_no_retention'
                and not any(key in meta for key in ('model_sha256', 'model_id', 'chunker')))
-    if (meta.get('icd_version') not in ('1.1.0', '1.2.0') or not (pinned or runtime)
+    if (meta.get('icd_version') not in ('1.1.0', '1.2.0', '1.3.0') or not (pinned or runtime)
             or current.get('properties', {}).get('embedding') != expected['properties']['embedding']):
         raise RuntimeError('index_model_or_chunker_conflict_new_generation_required')
     return {'_meta': {**meta, **target},

@@ -139,6 +139,10 @@ export default function Messages() {
           />
         </div>
       </div>
+      {query.trim() && !waiting && !result.isFetching && !result.isError && result.data && <p className="calendar-search-status">
+        Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
+        {result.data.meta.executedMode === "hybrid" ? " Related ranked results may have no exact word match; this is not an exhaustive keyword result set." : " Searches indexed narrative passages, not all event titles."}
+      </p>}
       {search.error !== undefined ? (
         <Notice role="alert" tone="error">
           {search.error}

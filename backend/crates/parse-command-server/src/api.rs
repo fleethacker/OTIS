@@ -589,6 +589,7 @@ impl App {
         }
         let mut filters = filters;
         let mut search_limited = false;
+        let mut executed_mode = json!("browse");
         if !request.query.trim().is_empty() {
             let search_request = ReadRequest {
                 query: request.query.clone(),
@@ -599,6 +600,8 @@ impl App {
             let results = self
                 .search_messages(search_request, filters.clone(), owner)
                 .await?;
+            // Forward execution metadata only; preserve the existing ranking/filter path.
+            executed_mode = results["meta"]["executedMode"].clone();
             search_limited = results["meta"]["windowLimited"] == true
                 || results["messages"]
                     .as_array()
@@ -626,7 +629,7 @@ impl App {
             .search
             .template(
                 MESSAGE_ALIAS,
-                "parse-command-timeline-v1",
+                TIMELINE_TEMPLATE,
                 json!({"filters":filters,"from":from,"to":to}),
                 false,
             )
@@ -641,7 +644,12 @@ impl App {
             let store = self.store()?;
             for hit in hits.iter().take(100) {
                 let core = &hit["_source"];
-                let (mut dated, mut unresolved) = presentation::timeline(core, &from, &to)?;
+                let (mut dated, mut unresolved) = presentation::timeline_with_limit(
+                    core,
+                    &from,
+                    &to,
+                    2048usize.saturating_sub(items.len() + review.len()),
+                )?;
                 items.append(&mut dated);
                 review.append(&mut unresolved);
                 messages.push(presentation::message(core, store, false, None, None).await?);
@@ -656,7 +664,7 @@ impl App {
         Ok(envelope(
             messages,
             "Resolved source times are displayed as extracted facts requiring review, not operational confirmation",
-            json!({"dataset":"canonical","timelineItems":items,"reviewItems":review,"from":from,"to":to,"windowLimited":hits.len()>100||search_limited,"messageLimit":100}),
+            json!({"dataset":"canonical","executedMode":executed_mode,"timelineItems":items,"reviewItems":review,"from":from,"to":to,"windowLimited":hits.len()>100||search_limited,"messageLimit":100}),
         ))
     }
     pub async fn source_status(&self) -> Result<Value> {

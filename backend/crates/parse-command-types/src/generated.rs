@@ -627,6 +627,8 @@ pub struct Message {
         skip_serializing_if = "Option::is_none"
     )]
     pub casualty: Option<Casualty>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recurrences: Vec<Recurrence>,
 }
 impl Validate for Message {
     fn validate(&self) -> Result<(), ValidationError> {
@@ -660,6 +662,9 @@ impl Validate for Message {
         }
         if let Some(value) = &self.casualty {
             value.validate()?;
+        }
+        for item in &self.recurrences {
+            item.validate()?;
         }
         self.validate_semantics()
     }
@@ -1240,6 +1245,70 @@ impl Validate for CasualtySearch {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Recurrence {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub activity_id: Option<String>,
+    pub rule: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub dtstart: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub until: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exdates: Vec<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scope: Option<String>,
+    pub status: RecurrenceStatus,
+}
+impl Validate for Recurrence {
+    fn validate(&self) -> Result<(), ValidationError> {
+        validate_subject_id(&self.id, Some(b'r'), "recurrence.id")?;
+        nonempty(&self.kind, "recurrence.type")?;
+        if let Some(value) = &self.activity_id {
+            validate_subject_id(value, Some(b'a'), "recurrence.activity_id")?;
+        }
+        nonempty(&self.rule, "recurrence.rule")?;
+        if let Some(value) = &self.count {
+            if *value < 1 {
+                return Err(invalid("recurrence.count", "minimum"));
+            }
+            if *value > 1000000 {
+                return Err(invalid("recurrence.count", "maximum"));
+            }
+        }
+        if let Some(value) = &self.scope {
+            nonempty(value, "recurrence.scope")?;
+        }
+        self.validate_semantics()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecurityClassification {
     #[serde(rename = "UNCLASSIFIED")]
@@ -1374,4 +1443,14 @@ pub enum CasualtySearchReportType {
     Correct,
     #[serde(rename = "CANCEL")]
     Cancel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecurrenceStatus {
+    #[serde(rename = "inferred")]
+    Inferred,
+    #[serde(rename = "validated")]
+    Validated,
+    #[serde(rename = "unresolved")]
+    Unresolved,
 }

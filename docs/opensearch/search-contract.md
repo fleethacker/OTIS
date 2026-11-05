@@ -104,7 +104,7 @@ candidate window, plus list/detail/timeline/evidence/status templates. See the
 remain a diagnostic compatibility contract. Continuous publication is active;
 validation indices intentionally retain historical messages without expiry.
 
-## CASREP metadata (ICD 1.2.0)
+## CASREP metadata (ICD 1.3.0)
 
 CASREP source sets join narrative passages. Compact casualty metadata provides
 identical serial/UIC/category/action/EIC/identifier filters in keyword and semantic

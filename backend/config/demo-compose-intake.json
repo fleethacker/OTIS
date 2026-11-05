@@ -21,6 +21,7 @@
   "max_parse_attempts": 5,
   "parser_work_units": 4000000,
   "subject_policy": "latest_received",
+  "demo_fixture_assignments": false,
   "mime": {
     "max_depth": 8,
     "max_parts": 64,

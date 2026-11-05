@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { withEphemeralStack } from "../../../ark/pipeline/journey-stack";
 import { calendarEvent, expectCalendarSections } from "./calendar-assertions";
 
-test("shared search, upcoming chronology and source review round trip", async ({ page }) => {
+test("shared search, upcoming chronology and source round trip", async ({ page }) => {
   const stack = await withEphemeralStack({ fixture: "fixtures/find-upcoming-events-and-review-gaps.json", storyId: "find-upcoming-events-and-review-gaps" });
   try {
     await page.clock.setFixedTime(new Date("2026-11-04T07:00:00Z"));
@@ -32,12 +32,9 @@ test("shared search, upcoming chronology and source review round trip", async ({
     await page.getByRole("link", { name: "Return to Calendar", exact: true }).click();
     await expect(page).toHaveURL(context);
     await search.fill("pending coordination");
-    await expect(page.getByRole("region", { name: "Needs review" })).toContainText("FICTIONAL-003");
+    await expect(page.getByRole("region", { name: "Needs review" })).toHaveCount(0);
     await expect(upcoming).toContainText("No upcoming timed events");
     await expect(calendarEvent(page, "Fictional inspection")).toHaveCount(0);
-    await page.getByRole("region", { name: "Needs review" }).getByRole("link").click();
-    await expect(page).toHaveURL(/record=FICTIONAL-003/);
-    await page.getByRole("link", { name: "Return to Calendar", exact: true }).click();
     await search.fill("not-present-anywhere");
     await expect(page.getByRole("heading", { name: "No matching schedules" })).toBeVisible();
     await search.fill("");
@@ -81,7 +78,8 @@ test("pending snapshot uses latest query and failed retry never implies success"
     await search.fill("pending coordination");
     await expect(page.getByRole("status").filter({ hasText: "Loading schedule" })).toBeVisible();
     release();
-    await expect(page.getByRole("region", { name: "Needs review" })).toContainText("FICTIONAL-003");
+    await expect(page.getByRole("status").filter({ hasText: "Loading schedule" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Needs review" })).toHaveCount(0);
     await expect(calendarEvent(page, "Fictional briefing")).toHaveCount(0);
     await search.fill("");
     await expect(page.getByRole("region", { name: "Next upcoming events" })).toContainText("No upcoming timed events available");

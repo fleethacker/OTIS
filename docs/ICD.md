@@ -1,6 +1,6 @@
 # Parse Command Interface Control Document
 
-**Contract:** PC-ICD-001 · **Version:** 1.2.0 · **Date:** 2026-11-05
+**Contract:** PC-ICD-001 · **Version:** 1.3.0 · **Date:** 2026-11-05
 
 **Status:** compact data contract and compiled contributor interface. The Rust host
 implements parsing, durable IMAP custody in OpenSearch, continuous publication and
@@ -56,7 +56,7 @@ The supplied fixtures are bare USMTF text, not full emails. Their `subject` valu
 | --- | --- |
 | Message `id` | `sha256:` plus 64 lowercase hexadecimal digits of the exact UTF-8 decoded USMTF source bytes preserved in audit. Whitespace is not silently rewritten before hashing. Email receipt identity is separate. |
 | `revision` | Nonempty opaque revision token, 1-64 ASCII letters/digits/dot/underscore/hyphen, starting with a letter/digit. Stable for one immutable interpretation. |
-| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN`, `gN` or `qN` for activities, frequencies, contacts, periods, locations and casualty reports; N starts at 1. No duplicates within the revision. |
+| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN`, `gN`, `rN` or `qN` for activities, frequencies, contacts, periods, locations, recurrences and casualty reports; N starts at 1. No duplicates within the revision. |
 | Passage `id` | Content-derived `sha256:` identifier assigned by the host, stable for the same source revision and chunking inputs. |
 | Audit `id` | Host-assigned deterministic 64-digit lowercase hexadecimal event identifier for one immutable event. Persist its identity/timestamp/content before retries. |
 
@@ -85,6 +85,7 @@ Required fields are exactly the message schema's `required` list; unknown core p
 | `activities` | Displayable tasking, points, windows and reporting requirements |
 | `contacts` | Source contact/coordination information |
 | `locations` | Optional geographic points/shapes with datum and interpretation state |
+| `recurrences` | Optional source-anchored recurring schedule companions; existing activities remain unchanged |
 | `review_flags` | Optional unique short warning codes needed by the user; full explanations live in audit |
 
 ### 4.1 Security
@@ -122,7 +123,7 @@ Common fields are `participants`, `scope`, `at`, `time`, `time_label`, `time_sta
 | `communications_check` | Point/check: `at` or unresolved time; participants, coordination and circuits |
 | `communications_plan_window` | Plan/variant and start/end representations; no automatic daily recurrence |
 | `communications_guard_window` | Start/end representations, participants, line/mode/material reference |
-| `crypto_changeover` | Point/time-only representation, equipment/material/scope when known; no invented duration or recurrence |
+| `crypto_changeover` | Point/time-only representation, equipment/material/scope when known; no invented duration. An additive source-period companion may supply recurrence under §4.6 |
 | `replenishment_rendezvous` | Point/partial time plus source position/course/policy |
 | `reporting_requirement` | Required `report` and `responsible_party`; as-of/deadline representations and delivery guidance |
 | `tasking` | Required `task_type` and `description`; timing/applicability only when supported |
@@ -138,6 +139,53 @@ Contacts require `id`, `name`, `position`, `unit`, and `channels`; optional fiel
 `position` can be rank or source staff position. `role` is the explicit source coordinating role; neither field alone assigns the receiving ship's CO/XO/OPS/CHENG. Local routing requires the approved command roster/policy and a future deliberately defined projection if not already represented. Do not overload `role` with an inferred local assignment.
 
 `scope` is a compact display context, not a provenance array or authorization boundary. Full segment/record associations and inference basis live in audit. Ambiguous context MUST remain unresolved and MUST NOT be promoted to certain applicability.
+
+### 4.6 Source-anchored recurrence companions (1.2.0)
+
+`recurrences` is an optional collection; its absence leaves 1.1 documents valid.
+Each `rN` fact carries `type`, semantic `rule` (RRULE value), `status`, optional
+`activity_id`, explicit-source `dtstart`, optional `until`/`count`, `exdates`, and
+optional display `scope`. A linked activity must exist in the same message/revision
+and have the same type. Do not rewrite that activity's fields or ID. `rule` is a
+schedule pattern, **not** parser-rule provenance: byte spans, source locators,
+interpretation rule IDs, and period/clock evidence belong in linked `fact_interpreted`
+audit entries. Every recurrence requires audit coverage just like any other fact.
+
+The first implementation supports Zulu-only `FREQ=HOURLY|DAILY|WEEKLY`, `INTERVAL`,
+`BYHOUR`, `BYMINUTE`, unnumbered `BYDAY` for weekly rules, `COUNT`, and `UNTIL`.
+Intervals/counts are positive and at most 1,000,000; rules are at most 512 bytes;
+at most 4,096 exclusion instants. Unknown parts, invalid combinations, missing
+anchors and unsupported clock/calendar precision remain visible review, never a
+silent default schedule. `COUNT` and `UNTIL` cannot be combined. `UNTIL` is inclusive;
+timeline windows are `[from,to)`. `COUNT` counts scheduled positions before `EXDATE`
+removal, so exclusions never manufacture replacement occurrences. Weeks start Monday.
+
+**Bounded-rule convention, not a full iCalendar component:** `dtstart` is the explicit
+source lower bound/phase anchor (e.g. a message PERIOD start). Only matching clock/day
+positions at or after it are emitted; an unmatched midnight bound is not an extra
+occurrence. This deliberately defines the case left undefined by RFC 5545 when
+component DTSTART does not match its pattern. No RDATE, TZID/DST, BYSECOND, ordinal
+weekdays, monthly/yearly rules, or duration synthesis is supported. See RFC 5545
+§3.3.10 and §3.8.5 for the underlying rule/exception semantics.
+
+Baseline crypto daily-shift evidence may produce a companion only with one
+unambiguous message-wide period whose anchor is explicit in source, including its
+year. A receipt-year-defaulted period is not an explicit recurrence anchor. A declared
+UFN may produce an open-ended companion. No period, incomplete source date/zone,
+or multiple message-wide periods leave the original time-only activity unchanged.
+The static rule is `optask.crypto.recurrence.v1`, with crypto-record and PERIOD
+source evidence linked in audit. Real recurring COMCHECK/other sets remain future
+mapping work; the separate exact-hash fictional radio-check path is not general
+OPTASK grammar or operational assignment/security policy.
+
+Expansion occurs only in the requested window and consumes the existing timeline
+fact bound. Open-ended rules are marked `ongoing`, not completed or cancelled.
+Occurrences are points unless an independently supported duration contract is added.
+Presentation identity is `ruleFactId@occurrenceInstant` (canonical UTC seconds), scoped
+by message/revision. The audited source fact remains `rN`, exposed as `sourceFactId`;
+occurrence IDs are not new core/audit subject IDs. This creates a stable target for
+future occurrence amendments/cancellation/acknowledgement, not those producers or
+permissions themselves. Source exclusions do not create a dated cancellation feed.
 
 ## 5. Search-passage document
 
@@ -214,7 +262,7 @@ pub trait MessageParser: Send + Sync {
 | `MessageView<'a>` | Borrowed immutable USMTF body `&'a str`, optional decoded email subject metadata, representation identity, exact message-type evidence, ordered record views and field views, source spans |
 | `ParseContext<'a>` | Host identity/revision, immutable explicit roster/rule context, optional provenance-bearing reference time, work/output budget and cancellation access |
 | `MatchOutcome` | Unsupported, applicable with identified profile/evidence, or ambiguous with reason; not an arbitrary floating confidence score |
-| `ParseSink` | Separate bounded methods to emit header interpretations, periods, frequencies, activities, contacts, locations, review flags and audit entries; returns a limit/error result on exhaustion |
+| `ParseSink` | Separate bounded methods to emit header interpretations, periods, frequencies, activities, contacts, locations, recurrence companions, review flags and audit entries; returns a limit/error result on exhaustion |
 | `ParseSummary` | Declared coverage/completeness and parser/profile version; success does not mean complete semantics |
 | `ParseFailure` | Unsupported profile, ambiguous profile, malformed input, invalid value, resource limit, cancellation or internal defect, with a bounded safe reason code |
 
@@ -263,7 +311,7 @@ An array of ordinary objects can produce cross-fact matches, so use `nested` onl
 
 ## 10. Compatibility and validation
 
-The schemas and index metadata identify ICD 1.1.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
+The current schemas and new index definitions identify ICD 1.3.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
 
 Use [the validation tool](tools/validate_samples.py) with an external fixture directory. It validates local JSON Schema resources, all three document sets, data linkage, source hashes, source spans, frequency/time invariants, Bulk framing and audit evidence preservation. `jsonschema` is a build/test dependency, not a Rust runtime dependency; local/offline installations may supply it from prepared tooling.
 
@@ -285,7 +333,7 @@ The messages mapping uses nested `locations` with `point: geo_point` and `shape:
 
 Named locations are valid source locations even when no coordinates are available. `locations.status=unresolved` describes unresolved map geometry, not an invalid name or failed message parse. Preserve the supplied name as the location label, omit unavailable geometry, and do not add a geospatial-review flag solely because the name cannot be plotted. Invalid coordinate/checksum/datum/topology cases remain separate. Parse completion and interpretation uncertainty are distinct presentation states.
 
-## 12. CASREP addition (1.2.0)
+## 12. CASREP addition (1.3.0)
 
 Messages MAY carry a typed `casualty` object only when `type` is exactly `CASREP`.
 Its fact ID uses the `q` prefix and participates in the same uniqueness, evidence

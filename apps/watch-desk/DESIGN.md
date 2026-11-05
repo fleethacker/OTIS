@@ -1,251 +1,224 @@
 # Watch Desk presentation
 
-## Guided acknowledgement preparation
+This document describes the current React presentation on the Rust application
+stack. Historical handoff documents describe earlier designs, not current behavior.
+The multi-ship roster and fixtures are explicitly fictional and opt-in. Production
+assignment, operational approval and transmission are not implied by display context.
 
-The existing reader action column now pairs a guided Prepare acknowledgement surface with the
-unchanged legacy free-text editor. No legacy text is parsed or replaced. All operational fields
-start blank, including response and family; a single reference letter links the selected response.
-Generated output is server-validated, plain text and unsent. Any edit invalidates the preview and
-Copy action until regeneration. Save preparation accepts incomplete work; failed writes retain
-edits. Copy success requires clipboard success; failures leave a selectable preview for manual email
-paste.
+## Shell and visual conventions
 
-Lifecycle keeps upstream history read-only and adds a separately labeled private activity section.
-User-reported external acknowledgement requires deliberate confirmation; reset appends history and
-cannot remove upstream evidence. Recorder, server recording time and separately supplied occurrence
-time remain distinct; unknown occurrence time stays unavailable. Draft/save/generate/copy never
-mean acknowledgement or command approval. Composer and tracking share the same verified disposable
-private session, not the global source cache. Navigation and unload guard unsaved preparation.
+Calendar is the main schedule surface; Message records is a separate source reader;
+Settings holds shared watch context. The navy header contains navigation, confirmed
+context/provenance, a live display-zone clock, notification bell and account menu.
+At <=640px the clock occupies a separate row, not the bell/account space.
 
-The bounded 2003-reference profile supports one REF, one ACTAGCY or ICVALID, optional single-field
-EXER or OPER and complete calendar-valid DDHHMMZMONYYYY only. Repeated references/authorities,
-other date alternatives, DECL/classified-release composition and complete character/profile
-certification are unsupported. No routing, email launch, sending or release authorization is added.
-Native labeled controls, wrapping action rows and selectable monospaced output inherit both themes
-and stack in the existing narrow reader. Use `ark run job test-ui` and `ark run stage checks`.
+System fonts and bundled icons/assets require no runtime CDN. Neutral theme surfaces,
+teal controls and stable ship colours work in light/dark themes. Named ships do not
+use amber: amber denotes review/unassigned applicability or revised information.
+Colour is paired with ship labels or status words, never used as the only identity.
+Port-specific CSS lives in `ui/src/watchdesk-port.css`; the base stylesheet imports it.
+Focus remains visible on native links/buttons, disclosures and scroll regions.
 
-## Structured Message records
+## Ships sidebar and applicability
 
-The reader inherits the bordered work surface and tab order. Optional structured source JSON
-uses one shared card with registered section/field labels in `structured-message.tsx`, not a
-bespoke OPTASK layout. Extend `sections`, `knownFields`, or `labels` to add a known grouping;
-unregistered keys at every depth appear once under Additional fields. Arrays preserve order.
-Null, absent, empty list, empty object, false and zero remain distinct. Frequency values retain
-exact Hz; only complete offset-bearing instants enter the shared display-time formatter.
-Fragments and status qualifiers stay literal. No period/activity creates calendar events.
+The roster is an authenticated configuration read, independent of filtered source
+pages. It does not fall back to example ships on failure. Own ship is pinned first;
+other commands are grouped. Each has a checkbox, swatch and Only action. Groups can
+be toggled together; Select all, Clear all and explicit Use app defaults are available.
+Ship search appears above six commands. The native Ships disclosure starts closed
+only when both positive viewport width and a narrow media query establish <=900px;
+no-layout environments default open. User toggles remain deliberate.
 
-Attachment references carry their filename attribution and are not fictional ship data,
-operational imports, raw USMTF, validated security markings or lifecycle evidence. The fourteen
-references appear only in isolated test fixtures; persisted adapters may supply the optional
-payload via the existing read contract. Legacy readers, raw evidence and private drafts remain.
-Nested fields stack on narrow screens; long tokens wrap rather than hiding behind hover.
+`ships` in the URL is a JSON array of stable `unit:<command-id>` keys and optional
+`unassigned:`. Absent means all; `[]` means none. Malformed/stale selection never
+broadens to all and is retained until changed. No valid selected ships produces
+“No ships selected” in all calendar layouts; review is “not queried”, not all-clear.
+Selection is a view preference, never a server authorization rule.
 
-## Ship calendars
+Canonical `commandIds` alone determine applicability. Sender, addressees, event
+unit and text mentions are not assignment authority. Empty IDs are Unassigned /
+needs applicability review. Shared facts retain all explicit IDs. Roster identity,
+display-name override and acknowledgement authority are distinct concepts.
 
-The compact Ships disclosure uses native checkboxes, Select all and Clear all. Options come only
-from the complete successful snapshot, not the current view or search. `unit:` plus the edge-trimmed
-event unit is the current replaceable identity boundary; case and internal spelling remain distinct,
-and aliases are never merged. `unassigned:` is separately namespaced for blank/missing units and
-eventless review records. A future verified registry can replace this helper, not infer ownership
-from message text. No production data or integration is added.
+The fictional roster requires `compose.watchdesk-demo.yml`, which sets server-only
+`PARSE_COMMAND_WATCHDESK_DEMO=true`. Default-off mode returns no fictional own ship.
+Exact fixture body hashes provide demo message-level assignments; changing text
+creates new identities, not amendments. Enabling the demo does not load, reparse,
+backfill or delete anything.
 
-URL `ships` holds a JSON array of stable keys encoded by URLSearchParams. Absence defaults to all;
-an explicit empty array means none. Invalid or stale keys never broaden selection and remain until
-deliberate recovery. Source return links already retain this parameter. Selection filters events
-before text discovery; record review follows selected associations without leaking deselected
-unresolved events. Identity-hashed marker colors remain stable in all views, next to textual ship
-names; amber Revised styling remains independent. Native controls need no new library.
+## Calendar views, collision lanes and source navigation
 
-## Weekly schedule
+Day/Week/Month, civil date, interval, Week `layout=expanded` and Day
+`shipLayout=combined|side` are URL-owned. Source links retain the complete Calendar
+return URL. Canonical resolved points and positive intervals are plotted as extracted
+facts requiring review, not operationally confirmed orders. Unresolved times stay
+outside the grid; no date, duration or recurrence is invented by the UI.
 
-Week now defaults to compact viewport fit, measuring the calendar's actual page offset after
-controls and notices wrap. Seven columns and the full chosen clock window remain intact.
-URL `layout=expanded` deliberately restores a larger scrollable reading surface; narrow
-screens use a controlled horizontal overflow fallback rather than shrinking type. Compact
-buttons truncate within their own geometry; native modal details retain exact dates, ship,
-revision/continuation evidence and source return links. Events in window provides a complete
-keyboard-accessible index for very short/dense bars, not a duplicate details list below.
-Day/Month retain their sole source links; Week uses one details button per event instead.
+Day Combined shows each fact once. Side Day creates presentation copies in each
+explicitly assigned selected ship column; it never mutates source objects. Header
+chips and subtle event fills identify columns, including explicitly labelled
+Unassigned. Week and Month ignore Side and remain deduplicated. Resource comparison
+is Day-only.
 
-Day/Week/Month is explicit URL-owned view state. Week uses the installed React Big Calendar
-time grid and Moment locale week start (currently Sunday). Civil seven-day navigation and
-period bounds respect the display zone and DST; daily min/max clocks are separate from
-whole-week inclusion bounds. Each column retains elapsed-minute placement, including 23/25-hour
-days; exact offset-bearing event labels disambiguate repeated hours. The seven-column surface
-has a wider minimum width for readable labels and keyboard-accessible horizontal scrolling.
-No new dependency, backend, editable schedule or deployment is introduced.
+Visual collision lanes account for short/point label footprints without changing
+source timestamps. A lane reserves 128px; dense Side columns scroll horizontally.
+Week Fit widens only busy days, leaving sparse days at the minimum. Expanded uses
+equal lane-proportional columns. This intentionally trades dense all-columns-at-once
+fit for legibility. Horizontal overflow is contained in the named, keyboard-focusable
+calendar region and has a visible notice plus left/right controls. Titles ellipsize;
+full titles, exact times and applicability remain in tooltips. Week also offers a
+native details dialog and Events in window index, usable without hover. Day/Month
+retain a single native source link per event; ship chips are noninteractive siblings
+so title controls keep title-only text.
 
-## Display time (supersedes UTC-only presentation notes below)
+Opening scroll uses the earlier of the first visible source time and now minus one
+hour, clamped to the current day's midnight. Pinned historical views use source time.
+It waits for source readiness and runs once per view/query, not on every poll; manual
+wheel/pointer/keyboard movement cancels pending opening scroll. The wheel scrolls the
+grid; Ctrl/⌘+wheel or trackpad pinch zooms the time scale, never source instants. Header/day-column alignment and dense
+geometry require browser validation, not just unit tests.
 
-The compact header toggle defaults to Zulu / UTC and retains Local in guarded browser storage;
-storage denial keeps the preference in memory. Local is the browser's IANA zone, never an arbitrary
-zone picker. Calendar URL dates and hours remain civil values on a mode change. Period boundaries,
-Today, navigation and month drilling use the selected zone. Day slots use elapsed minutes so DST
-days have 23/25 hours; both repeated hours have separate positions and numeric offsets. Local
-generated labels include full dates and UTC offsets, including fractional offsets. Source/API
-instants and raw source text are never changed. Upcoming ordering remains absolute. Notifications
-keep their explicitly UTC operational day and existing read policy. No dependency or backend change.
+Month uses the standard seven-column grid, native date-heading buttons and show-more
+popup. Real event rows and RBC's dummy capacity measurement share a 24px height;
+chips/titles stay on one line. A 620px month floor preserves usable headings and
+show-more; narrow screens scroll within the calendar surface. Date drilling preserves
+search/selection and changes the URL to the exact civil Day. Month navigation anchors
+to the first to avoid short-month rollover. The accessibility adapter removes RBC
+roles that cannot accurately describe overlapping layout; it does not replace native
+controls with a synthetic keyboard grid.
 
-## Schedule discovery
+Desktop uses the available viewport. At <=900px the page itself may scroll and the
+calendar has an approximately 420px usable floor; expanded Ships/review must not
+compress it to a few pixels or overlap the footer. Only the calendar scrolls
+horizontally, not the document.
 
-Search shares the compact calendar control row, with matching small input heights and bottom-aligned
-edges. A flexible search field keeps a usable minimum and wraps with the native controls as space
-shrinks. Its associated scope hint occupies a separate line inside the same control region, so it
-does not displace the control baseline. URL state and display-zone behavior are unchanged.
+## Search and source freshness
 
-Calendar search filters the complete SourceDataService snapshot locally across event titles, unit,
-location, source message IDs and raw message text. No additional request or query language is used.
-URL `q` drives both projections and global upcoming results; no asynchronous query can race it.
-Upcoming means confirmed current start at or after the browser's UTC instant, capped at five.
-Review notices link affected records even when no timed match exists. Refresh hides older results
-until success; failure never presents the cached snapshot as current. An available-date action
-opens a matching event's date and full-day hours without redefining Today. No dependency is needed
-for native search and a short chronological list. The source currently returns all records without
-pagination; any future paginated integration must retain complete matching/ordering semantics.
+Calendar and Message records keep a single hybrid search box; there is no user mode
+selector or URL mode override. Executed search mode is shown as **plain text from
+response metadata**, not inferred from the requested mode. Timeline forwards the
+existing message-search execution metadata; absent metadata says not reported.
+Hybrid results may include related messages without literal word matches. This
+polish does not change server ranking, candidate limits, templates or filtering.
 
-## Draft acknowledgements
+Calendar input state updates synchronously while Router commits URL transitions;
+subsequent changes compose against the latest parameters. Back/Forward restores URL
+state. Debounced search does not expose stale results while typing; refresh/error
+states do not present cached source data as a fresh confirmation. Loading keeps one
+status region; mode/overflow explanations are non-live text.
 
-The reader action column now contains an editable draft referencing the selected message.
-Save draft stores exact text privately by authenticated subject and message in the application
-database. Reload or reopen to restore it; an empty saved text clears the response. Editing marks
-unsaved changes. Navigation asks whether to discard or cancel and preserve; reload/close uses
-the browser's unsaved-change warning. Failed saves keep text for retry. Draft read failures do not
-offer a blank editor that could overwrite unseen saved text. Nothing is sent, no schedule status
-changes, and Summarize remains disabled. There is no sharing or collaborative conflict resolution;
-concurrent saves for the same owner/message use the last completed write. Use the existing startup
-instructions below; no external integration or credentials are added.
+Search operates on indexed narrative passages rather than an exhaustive event-title
+index. A title match can be absent from the ranked message page; semantic top-k can
+make unrelated-looking queries return similar result sets. This remains an open
+server-side search question in `PORT_NOTES.md`, not a client-side ranking workaround.
+Result-limit warnings apply to returned records, not the whole watch.
 
-Private draft queries live in a disposable, app-owned QueryClient rather than the shared schedule
-cache. An opaque mounted-session generation isolates reads and mutations, including inactive message
-drafts. Auth-change messages, storage changes, focus and visibility return discard that cache and
-unsaved editor state, then verify identity with a fresh RPC before reading private text. This
-conservative reset applies even if the account is unchanged; the editor explains it. Failed identity
-verification or draft reads expose no editor or Save action. No bundled auth framework is modified.
+## Needs review panel
+
+A bounded, scrollable disclosure follows Calendar. It consumes separate unresolved
+`reviewItems`, not the plotted event list. Each row keeps the exact message revision,
+fact ID, ship chips and source return link. Missing identity creates no invented link.
+Missing review data, filtered empty, unqueried selection and empty returned records
+are different states. Hidden-review counts are unavailable; Show all ships and clear
+search is an explicit action, not an automatic preference rewrite.
+
+Copy uses additive presentation `reasonCode` and
+`timeDetails[{endpoint,status,clock,label,at}]`. Missing date, zone, month/year,
+endpoint, conditional/open end and non-positive interval have specific explanations.
+Source labels are preserved where supplied; normalized clock values are explicitly
+labelled rather than presented as verbatim raw text. For the demo window:
+“No date in source: 1200Z–1800Z (day not given; normalized clocks) · not plotted”.
+No raw-message fan-out is needed to populate this panel.
+
+“Undated items appear in every calendar view because they cannot be placed on a date.”
+The timeline query includes activities without a start timestamp regardless of view
+bounds. This does not make the returned list a complete review queue or imply that
+all unresolved dated facts belong to every day. Placement of review on Calendar
+remains a product decision.
+
+## Settings and watch context
+
+Settings is available through navigation and header/sidebar provenance links. It
+shows app-wide own ship, display-name override, operation/exercise, group/command,
+default visible ships and UTC turnovers, with server actor/time and citations.
+These are display context, not tasking, access grants or acknowledgement authority.
+Read-only users see disabled editors; the server independently enforces admin writes.
+
+One form has **Save settings**, **Cancel changes** and explicit dirty status. Save
+is disabled when unchanged/pending; only changed fields are sent in one bounded
+atomic update (1–6 unique fields). Cancel resets to the latest loaded values. Failed
+writes and refresh retain unsaved field overrides. Identity changes remount the form,
+so an admin draft is not carried to another login. Removing Unassigned defaults
+requires checked confirmation in the actual update. Use app defaults in the sidebar
+is explicit; absent URL selection remains all.
+
+Use/Dismiss suggestions are separate actions and disabled until manual edits are
+saved/cancelled. Only operation/exercise is suggestible. EXER/OPER metadata groups
+carry verified source spans, exact revision links and bounded availability; sender
+and participants never imply own ship/group. Suggestions do not silently overwrite
+confirmed values. Unavailable suggestions do not block manual edits. The current
+server is last-write-wins for changed fields, with no expectedRevision, edit audit
+history or full multi-user conflict UI. Unchanged source confirmations are preserved.
+
+## Message reader and private acknowledgement preparation
+
+Message records list bounded source headers; full raw/structured/audit detail loads
+on demand for the exact selected key. Unknown IDs do not choose another record.
+Parsed Message, Raw message and Lifecycle tabs retain native keyboard navigation.
+Source-set cards preserve repeated sets and raw values; lifecycle is source evidence,
+not a substitute calendar. Source instants and incomplete source values stay distinct.
+The same-origin Calendar return helper rejects arbitrary external destinations.
+
+The control labelled Send Acknowledgement opens a preparation modal. It generates
+and saves an owner-scoped **unsent draft**, then offers Copy draft; it does not
+transmit mail. Authenticated `user` is allowed by the Rust SavePreparation path,
+which resolves session/same-origin/source scope and uses the server username as owner.
+It is intentionally not subject to the admin-only shared Settings permission.
+A clearer action label remains a follow-up question.
+
+Private preparation uses the verified disposable session/cache, separate from source
+cache. Source reference defaults are not release authority. Edits invalidate generated
+output; failures retain input, and clipboard success is required before showing Copied.
+The separate external-acknowledgement recorder requires deliberate confirmation of
+an event outside the application and keeps private history; generation/copy do not
+mean acknowledgement or command approval. No email launch, release authorization,
+AI summary or new transmission integration is added.
 
 ## In-app notifications
 
-The bell immediately precedes Account on both routes. Its compact, scrollable disclosure uses
-ordinary links and buttons, explicit unread/type text and the existing theme. It does not overlay
-a reader on Calendar. Escape returns focus; outside interaction and Tab-out dismiss it.
-One current UTC-date reminder is derived on app use; a foreground clock and focus/visibility
-checks update it across midnight. No server worker, email, push or background delivery exists.
-Action items group source issues per message, including revised events and unresolved schedules.
-Read means seen, not resolved; successful refresh removes resolved issues. Stable source/content
-keys allow new revision content to be unread again, without retrieval-time or ordering churn.
-Read keys are localStorage-only, namespaced by signed-in username and email. No cross-device
-sharing exists. Malformed or unavailable storage falls back to in-memory read state with a notice.
-Refresh failures hide unconfirmed action items and explicitly report an unavailable count.
+The bell opens a compact scrollable inbox with ordinary links/buttons. Escape returns
+focus; outside interaction and Tab-out dismiss. Current Rust notifications derive
+from recorded custody/publication events: new traffic, ingestion/publication failure
+and recovery. Read state is owner-scoped in private SQLite and version-aware.
+**Unresolved schedules and current review flags are not inbox action-item producers.**
+They remain separate Calendar review facts; reading a notification is not resolving
+source uncertainty. No browser-local daily reminder, email/push or background delivery
+is claimed by the current implementation.
 
-## Usage and direction
+## Display time and dependencies
 
-Watchstanders compare exact UTC times and inspect their source. Calendar is the dominant full-width
-surface; Message records is a separate destination. React Big Calendar's standard vertical Day
-and conventional Month grid replace the earlier horizontal watch-sheet layout by confirmed choice.
+Display time defaults to Zulu / UTC, with browser-local IANA presentation supported by
+the shared formatter and guarded preference storage. Civil dates, navigation and
+period bounds respect the display zone/DST; raw values/API instants never change.
+Settings turnover values are always UTC and do not select the display zone. The live
+header clock reads the actual current instant, not an accumulated timer count.
 
-## Shared conventions
+Calendar uses bundled `react-big-calendar@1.20.0` and `moment-timezone@0.6.5`, with
+`@types/react-big-calendar@1.16.3`. The localizer adapter supplies explicit zone/DST
+behavior and wrappers keep native source/detail controls as the sole event targets.
+No new library, runtime asset download or generated-contract hand edit is required.
 
-- Navy wordmark/header, neutral working surfaces, teal schedule bars and active destinations; amber
-  plus the word Revised marks changed information. Borders separate time and records, not decorative
-  cards.
-- System sans typography deliberately keeps controls familiar and avoids network font requirements.
-  Headings 24/18px; ordinary content 16px; metadata 14px. Tabular numerals for times. Spacing
-  follows a 4px base with 8/12/16/24/32px grouping.
-- Light and dark daisyUI tokens follow browser preference live. Focus uses a visible teal outline.
-  Main navigation uses aria-current via NavLink. Account uses the existing identity hook and
-  /logout.
-- Narrow screens wrap chrome and controls; only the labeled, keyboard-focusable timeline scrolls
-  horizontally. Event content includes inline UTC times; full evidence remains in source records.
+## Verification
 
-## Routes and data handoff
+Use the canonical app jobs: `ark run job build`, `ark run job test-go`,
+`ark run job test-ui`, relevant checks and journeys with an isolated database. Use
+`GOWORK=off` for the standalone Go reference module. Rust changes follow
+`backend/README.md`; stack operation follows `docs/integration/combined-stack.md`
+at the repository root. No service-health result proves source-adapter correctness.
 
-Calendar: `/calendar` (first ordered destination; root redirects here). Message records:
-`/messages?record=<stable-message-id>&returnTo=<encoded-calendar-path-and-query>`. `calendarReturn`
-permits only same-origin `/calendar` paths, preventing external redirects. Query state is URL-owned
-and survives source inspection/reload; future schedule features should encode date, view, interval,
-hours and query here.
-
-SourceDataService supplies the shared read-only message/event snapshot. Fictional USS Meridian
-content is illustrative, not operational information or validated USMTF. Search, source navigation,
-review notices, chronological upcoming events and draft-only saving are functional. No live upstream
-integration, parsing, transmission or AI summary is claimed.
-
-## Running and verification
-
-## Daily schedule extension
-
-Native date/select controls own URL parameters `date`, `view`, `interval` (30/60 minutes), `hours`
-(`start-end`, UTC hours) and `q`. Source links carry the complete calendar URL through reader
-reload. React Big Calendar renders a vertical, read-only Day grid, with selectable overlaps and
-window clipping. Inline event content retains source timestamps and continuation/revision cues;
-source records retain full revision evidence. Upcoming events immediately follows Calendar, then
-Needs review. Available-date navigation sits in the calendar toolbar. No duplicate details list,
-drag/drop or editing.
-
-## Monthly schedule extension
-
-The read-only calendar exposes ordinary date buttons and source links within its named scroll
-region, not a keyboard grid/table. `CalendarAccessibility` scopes an adapter to RBC's layered
-layout, removing table/row/cell/header roles that cannot describe overlapping event spans or empty
-all-day rows. It also normalizes remeasurement and popup descendants without changing controls.
-
-`SourceEventWrapper` uses RBC's public event-wrapper hook to retain layout while removing the
-outer button role, tab stop and selection handlers. Each event's native source link remains its
-only interactive target, including Day/Week timed events and Month/popup events. Exact labels,
-revision cues and URL-owned return context remain unchanged.
-
-Month uses the standard seven-column calendar grid, multi-day spans and show-more popup. Native
-date-heading buttons open the exact UTC Day without clearing hours, interval or query. Month
-navigation anchors to the first to avoid short-month rollover. Show-more opens additional events.
-Only confirmed, finite, positive intervals intersecting the selected
-period/window enter the calendar; unresolved schedules retain their separate source review links.
-
-### Calendar dependencies and UTC integration
-
-- `react-big-calendar@1.20.0`, MIT, published 2026-06-01T02:34:56.687Z; supports React 19.
-- `moment-timezone@0.6.5`, MIT, published 2026-10-02T10:09:16.300Z. The newer 0.6.6 was less
-  than seven days old at selection and is intentionally not selected.
-- `@types/react-big-calendar@1.16.3`, MIT, published 2025-09-12T18:02:36.365Z; development types.
-
-Registry timestamps, peer ranges and exact-version license files were checked before installation.
-No runtime network or new backend is needed. Required calendar CSS is imported before app styles.
-`calendar-localizer.ts` configures Moment's single app scheduling zone as UTC; source Dates remain
-their real instants, never browser-wall-clock substitutes. The Moment localizer handles start/end,
-merge, range, comparison, slot creation and navigation in UTC. Its browser-local DST/offset hooks
-are explicitly overridden to zero, minutes-from-midnight uses UTC, and segmentOffset is zero:
-UTC calendar-day differences need no browser-zone subtraction. Date-only checks also use UTC.
-This avoids the stock 1.20.0 `.local()` DST helper and browser-offset month-span correction.
-Today/current-time use the real current instant interpreted through the same localizer.
-
-Run `ark run job journey --spec ui/tests/journey/replace-calendar-with-react-big-calendar.spec.ts`
-for actual Day positions in UTC and America/New_York, including spring/fall DST, overlaps,
-midnight clipping, interval/window changes, both layouts and source round trips. Daily/monthly
-regressions additionally cover month lengths, year boundaries and failure/retry states.
-
-## Message reader extension
-
-Reader views are ordered Parsed fields, Raw message, Lifecycle, with Parsed fields reset on
-record selection. Arrow keys, Home and End move tab selection and focus together. Lifecycle is
-a source-owned vertical history, never a list of ship activities or private draft actions.
-Dated entries precede explicitly undated evidence; missing milestones are not inferred.
-
-Inactive message-view tabs use the theme's muted foreground at full opacity rather than
-translucent text. The selected tab retains its active underline; both themes must keep
-normal-size labels above 4.5:1 contrast on the reader surface.
-
-Message records now reads the shared SourceDataService snapshot. A bordered list/reader work surface
-keeps selection explicit; narrow screens stack the two. Raw text wraps without clipping, with
-numbered lines and textual Time/Location evidence labels. Revised and Needs review cues use words
-and amber rules. Missing fields remain Unavailable, including partial prior schedules. Actions sit
-to the reader's right on wide screens and below on narrow screens. Summarize stays disabled; draft
-editing belongs to the later draft story. Native controls and CSS suffice; no new dependencies.
-
-Selection is authoritative in `record`; unknown IDs never choose a substitute. `returnTo` is
-retained unchanged and validated only by calendarReturn. Search is immediate local input and is
-recorded in the URL when a record is selected. The service remains read-only; this slice adds no
-extraction, transmission or upstream access. Run its browser proof with
-`ark run job journey --spec ui/tests/journey/inspect-message-records.spec.ts`.
-
-From root: `ark run job build && ./bin/app` (see `docs/ark-handoff.md` for identity and isolated DB
-setup). Tests: `ark run job test-ui` and
-`ark run job journey --spec ui/tests/journey/app-shell.spec.ts`. Journey artifacts cover desktop and
-narrow light/dark rendering. No deployment or upstream integration is included.
+Polish validation is delegated to containers. `PORT_NOTES.md` records supplied
+reports, pending reruns, questions and the screenshot matrix. Required visual checks
+include Month popup hit testing, dense Week/Side alignment and overflow, full title
+access, 400px header/calendar/footer flow, light/dark contrast and source URL returns.
+Older journey expectations may predate the Rust API; preserve assertions or reconcile
+the relevant contract explicitly, never bypass the protected pipeline.

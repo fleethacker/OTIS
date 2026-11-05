@@ -34,7 +34,7 @@ test("ship overlays combine discovery and preserve explicit source-return state"
     await expect(page.getByRole("heading", { name: "No ships selected" })).toBeVisible();
     await unassigned.click();
     await expect(unassigned).toBeChecked();
-    await expect(page.getByRole("link", { name: /FICTIONAL-EVENTLESS ·/ })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Needs review", exact: true })).toHaveCount(0);
     await unassigned.click();
     await expect(unassigned).not.toBeChecked();
     await a.click();

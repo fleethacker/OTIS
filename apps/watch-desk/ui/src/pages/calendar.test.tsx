@@ -1,5 +1,7 @@
 import "../route-registry";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import { act, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { renderWithProviders } from "../test-utils/render";
@@ -14,6 +16,7 @@ import {
   weekBounds,
 } from "../components/calendar-time";
 import Calendar from "./calendar";
+import type { TimelineItem } from "../components/source-data";
 import { discover } from "../components/schedule-discovery";
 import {
   readShips,
@@ -115,10 +118,65 @@ test("actual UTC month lengths, exact fractions and keyboard day controls", () =
   expect(moveMonth("2026-12-31", 1)).toBe("2027-01-01");
   expect(moveMonth("2026-03-31", -1)).toBe("2026-02-01");
 });
-test("calendar mounts controls and truthful loading", () => {
-  const view = renderWithProviders(<Calendar />, {
-    route: "/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch",
+async function withCalendar(route: string, assertions: (view: ReturnType<typeof renderWithProviders>) => void) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
+    String(url).endsWith("/commands/list")
+      ? { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false }
+      : { messages: [], meta: { reviewItems: [], timelineItems: [] } }
+  ));
+  const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, { route });
+  try {
+    assertions(view);
+    await waitFor(() => {
+      const timeline = client.getQueryCache().find({ queryKey: ["parse-command-source", "timeline"], exact: false });
+      expect(timeline?.state.status).toBe("success");
+      expect(timeline?.state.fetchStatus).toBe("idle");
+      // Compare a scalar: serializing Happy DOM nodes on each retry blocks its task queue.
+      expect(view.queryByText("Loading schedule…") === null).toBe(true);
+    });
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+  } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
+}
+test("calendar omits review disclosure while retaining timed events and failure handling", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = `sha256:${"a".repeat(64)}@fictional-r1`;
+  const review: TimelineItem = {
+    key: `${key}#unresolved`, messageKey: key, factId: "unresolved", kind: "unresolved",
+    title: "Fictional undated inspection", reason: "No source date", reviewRequired: true,
+  };
+  const request = {
+    dataset: "canonical", query: "", mode: "hybrid",
+    from: "2026-11-05T00:00:00.000Z", to: "2026-11-06T00:00:00.000Z", filters: {},
+  };
+  client.setQueryData(["parse-command-source", "timeline", request], {
+    messages: [create(MessageRecordSchema, { sourceMessageId: key })],
+    meta: {
+      reviewItems: [review], windowLimited: true,
+      timelineItems: [{ ...review, key: `${key}#point`, factId: "point", title: "Fictional point", kind: "point", at: "2026-11-05T08:00:00Z" }],
+    },
   });
+  client.setQueryData(["watchdesk-commands"], { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false });
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json({ message: "Fictional source unavailable" }, { status: 503 })
+  );
+  const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, {
+    route: "/calendar?date=2026-11-05",
+  });
+  try {
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+    expect(view.queryByText(review.title)).toBeNull();
+    expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
+    expect(view.getByText(/Partial source results/)).toBeTruthy();
+    await act(async () => { await client.invalidateQueries({ queryKey: ["parse-command-source"] }); });
+    await waitFor(() => expect(view.getByText(/Calendar could not be loaded/).textContent).toContain("Fictional source unavailable"));
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+    expect(view.queryByRole("link", { name: "Fictional point, source record" })).toBeNull();
+  } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
+});
+
+test("calendar mounts controls and truthful loading", async () => {
+  await withCalendar("/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch", (view) => {
   expect(view.getByLabelText("UTC date")).toHaveValue("2026-11-04");
   expect(view.queryByLabelText("Grid interval")).toBeNull();
   expect(view.getByRole("searchbox", { name: "Search schedule" })).toHaveValue("watch");
@@ -129,11 +187,10 @@ test("calendar mounts controls and truthful loading", () => {
   expect(view.queryByText(/Hybrid keyword/)).toBeNull();
   expect(view.container.querySelector(".view-label")).toBeNull();
   expect(view.getByRole("status").textContent).toContain("Loading schedule");
-});
-test("week is an accessible URL-owned view with civil DST/year boundaries", () => {
-  const view = renderWithProviders(<Calendar />, {
-    route: "/calendar?view=week&date=2026-11-04&interval=30&hours=6-12&q=watch",
   });
+});
+test("week is an accessible URL-owned view with civil DST/year boundaries", async () => {
+  await withCalendar("/calendar?view=week&date=2026-11-04&interval=30&hours=6-12&q=watch", (view) => {
   expect(view.getByRole("button", { name: "Week", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true"
@@ -152,6 +209,7 @@ test("week is an accessible URL-owned view with civil DST/year boundaries", () =
       HOUR
   ).toBe(167);
   expect(new Date(weekBounds("2027-01-01").from).toISOString()).toBe("2026-12-27T00:00:00.000Z");
+  });
 });
 test("weekly daily windows include the last day and exclude unresolved events", () => {
   const bounds = weekBounds("2026-11-04");

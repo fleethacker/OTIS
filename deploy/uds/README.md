@@ -1,9 +1,9 @@
-# Parse Command UDS packaging (issue #9)
+# OTIS UDS packaging (issue #9)
 
-This is an ARM64 implementation in development. Three real Zarf packages and a
-UDS bundle can be built; cluster admission, SSO/browser, disconnected install
-and recovery acceptance still require the validation gates below. Do not treat
-a successful build or HTTP health check as deployment acceptance.
+This ARM64 bundle follows current main: OTIS, native Rust OIDC and hidden
+OpenSearch state/custody indices. Prior SQLite/Authservice validation is historical.
+A fresh isolated native identity/migration/workflow/recovery rehearsal remains
+required before merge. See VALIDATION.md for tested revisions and limits.
 
 The deployed application is React/nginx → Rust application server → OpenSearch
 3.9.0 with local CPU MiniLM inference. The original Go code is reference source.
@@ -18,7 +18,7 @@ installs a demo mailbox, or connects to a public model service.
 | Architecture | Linux ARM64 only |
 | UDS CLI | 0.38.0 |
 | Zarf | 0.86.0, embedded in `uds zarf` (standalone 0.82.0 is not used) |
-| UDS Core | 1.14.3, base + identity layers with Keycloak/Authservice |
+| UDS Core | 1.14.3, base + identity layers with Keycloak |
 | Local platform | Official `k3d-core-slim-dev:1.14.3`, UDS K3d 0.21.0-airgap |
 | Kubernetes in that profile | `v1.36.4-k3s1` |
 | OpenSearch | 3.9.0, base digest in its existing Dockerfile |
@@ -26,16 +26,18 @@ installs a demo mailbox, or connects to a public model service.
 
 [`profiles/local-arm64.json`](profiles/local-arm64.json) records the proposed local
 profile. Start local validation with 8 CPUs, 16 GiB Docker memory and 50 GiB
-free disk. This is an unmeasured validation target, not a minimum capacity claim.
+free disk. The earlier instance used about 5 GiB with one synthetic message; this is not
+a load-capacity claim.
 Record peak startup and workload consumption with `docker stats` before choosing
-team capacity. A slim-dev cluster installation has not been validated yet.
+team capacity. The integrated native profile needs a new validation target.
 
 The official slim-dev bundle contains `core-base` and
 `core-identity-authorization`: Istio, Pepr/UDS Operator, Keycloak and Authservice,
 plus the K3d development support services such as local storage, ingress and
 Minio. It omits the full demo's monitoring/logging, runtime-security and backup
 layers. Keep the application's SSO, verified IMAP TLS, local semantic/hybrid
-search and three retained PVCs. Required backup/recovery tests still apply.
+search and retained storage. Runtime state now shares the search PVC; old
+SQLite custody/private claims remain migration sources. Required backup/recovery tests still apply.
 Preflight also supports the standard `core` package at the same pinned release;
 partial identity/base installs and mismatched Core package versions are rejected.
 Use the pinned tag rather than `latest` so the validation target remains stable.
@@ -55,7 +57,7 @@ and never redeploy it over retained application volumes. It uses the usual
 ## Connected preparation and build
 
 Required: Docker/BuildKit with Linux ARM64 support, the pinned UDS CLI, Python
-3.11+, Helm and Git. Image/model/native downloads occur only during preparation
+3.14+, Helm and Git. Image/model/native downloads occur only during preparation
 and image builds. No Python packages are installed in the bootstrap image.
 
 From the repository root:
@@ -104,238 +106,144 @@ The application bundle includes its images, charts, model and native libraries;
 it does not need the build registry or the source tree to install. Recheck
 `SHA256SUMS` after transfer. Keep secrets outside the release directory.
 
-## Deployment inputs and identity
+## Native deployment inputs and identity
 
-Copy `uds-config.example.yaml` to ignored `uds-config.yaml`, then replace the
-example values. The example is JSON, which is valid YAML. `shared.NAMESPACE`
-must match the namespace embedded by `build.py --namespace` across all three
-packages. Namespace is a bundle-build input because the pinned Zarf CLI does
-not substitute runtime variables in chart metadata; preflight rejects mismatches.
-The other `shared` inputs remain configurable at deployment time; `shared.COMMON`
-sets domain, UI subdomain, SSO client ID, storage class and mailbox egress.
-`SEARCH`, `SERVER` and `UI` override each chart's `config` object, including
-resource requests/limits, PVC sizes/existing claims and secret references. Read
-`charts/*/values.yaml` for the complete defaults. Use a separate namespace/client
-ID for a separate instance. The internal Services remain `web`, `server` and
-`opensearch`; external search endpoints are deliberately unsupported by this
-profile.
+Copy `uds-config.example.yaml` to ignored `uds-config.yaml` and replace example
+values. `shared.NAMESPACE` must match `build.py --namespace`; the pinned Zarf
+CLI does not substitute runtime variables in chart namespace metadata. The
+other shared inputs remain configurable at deployment. `COMMON` controls domain,
+host, confidential client ID, role groups, storage, mail and private issuer
+connectivity. `SERVER`, `SEARCH` and `UI` override chart configuration/resources.
+Read `charts/*/values.yaml` for the complete defaults.
 
-Create a dedicated application namespace and two existing Secrets before installation.
-The helper refuses platform namespaces or a namespace with unrelated pods:
+The current UI uses native Rust OIDC sessions, not Authservice. UDS registers
+`https://<host>.<domain>/auth/callback` and the exact web origin. Do not enable
+`enableAuthserviceSelector`. Rust handles PKCE, nonce/state, provider verification,
+opaque cookies, encrypted tokens, renewal and local logout. Nginx proxies `/auth/`
+alongside API/RPC routes using internal Host routing and HTTP/1.1. The native
+[identity contract](../../docs/integration/settings-oidc.md) defines the details.
 
-- `parse-command-imap`: `password` and `ca.crt`, containing the mailbox login
-  password and its PEM CA chain. The password is read from the Secret-backed
-  environment variable each poll; rotate by updating the Secret and restarting
-  the server. The CA is mounted read-only. The configured host must match its
-  certificate; implicit IMAP TLS (normally port 993) is required. STARTTLS,
-  plaintext remote IMAP and OAuth/XOAUTH2 are not implemented. Validate that the
-  selected real mail service permits password-based IMAP over TLS.
-- `parse-command-oidc-verification`: `public.pem`, the active Keycloak realm
-  **RS256 RSA public verification key**, obtained over trusted TLS from the
-  selected cluster's realm. Do not place a signing private key here. For example,
-  get `public_key` from `https://sso.<domain>/realms/uds`, wrap its base64 body as
-  `-----BEGIN PUBLIC KEY-----` / `-----END PUBLIC KEY-----`, and verify the
-  fingerprint with the platform owner before creating the Secret.
+Access requires `/Parse Command/Admin` or `/Parse Command/Viewer` (configurable
+role groups). The earlier `/Parse Command/Users` group alone is insufficient.
+Align the UDS client group restriction with the Rust role groups. Bearer tokens
+and forwarded user/group headers do not substitute for native session cookies.
+Write requests require the configured HTTPS Origin.
 
-Use `kubectl --context <target> -n <namespace> create secret generic <name>
---from-file=...` with protected local files. Avoid passwords on command lines,
-checked-in Secret manifests and command-output transcripts. Give files mode
-0600. Never include these Secrets in a Zarf package at create time.
+Provision a dedicated namespace and required server Secrets from protected files:
 
-UDS registers the client and protects UI pods with Authservice. Grant users the
-`/Parse Command/Users` or `/Parse Command/Admin` group, or configure approved
-`common.allowedGroups`. A group mapper includes memberships in the ID token.
-Rust independently checks RS256 signature, issuer, audience, expiry, optional
-not-before and membership in the configured allowed groups. It derives private ownership from issuer + subject, and derives the
-administrator role from `SERVER.adminGroup`. Spoofed forwarded-user headers and
-local-demo cookies are insufficient. Mock role-picker/login/logout endpoints
-are disabled in UDS mode. Platform SSO logout UX remains a validation/follow-up
-item; do not present the local mock logout as a Keycloak session logout.
+- Mail Secret: `password` and `ca.crt`, for hostname/CA-verified implicit TLS IMAP.
+  Rotate the Secret and restart the server. No remote plaintext, STARTTLS or
+  OAuth/XOAUTH2 adapter is provided.
+- Session/IdP Secret: exact **32-byte binary** `session-key` and trusted issuer
+  CA chain `ca.pem`. Retain and back up this encryption key across upgrades;
+  replacing it invalidates encrypted sessions.
+- UDS generates the confidential-client Secret (key `secret`) during the config
+  package, before starting Rust. The old static `public.pem` Secret is obsolete.
 
-Key rotation is explicit: replace `public.pem`, restart the server and re-run
-SSO checks. One active verification key is supported; a rolling multi-key JWKS
-rotation policy is follow-up work. No public JWKS or cloud identity endpoint is
-queried at runtime. See [ADR 0002](../../docs/decisions/0002-uds-arm64-deployment.md)
-for the search TLS/identity boundary and team decisions.
+Use Secret names configured in the chart and `kubectl --context <target> -n
+<namespace> create secret generic <name> --from-file=...`. Keep source files
+mode 0600, outside Git and release archives. Avoid passwords on command lines
+or in transcripts. Preflight validates required keys without printing values.
 
-## Install on the selected compatible cluster
+Native OIDC needs private HTTPS access to the configured issuer for discovery,
+JWKS and token exchange. Supply working in-cluster DNS/private gateway routing,
+trusted CA and narrowly scoped egress. Check the chart's issuer ingress namespace,
+selector and port inputs against the target platform. Rust restricts requests to
+the issuer origin, rejects redirects and never disables TLS validation.
 
-The platform owner must first install/configure UDS Core, gateway certificates,
-DNS and storage. Create the namespace and Secrets using that target context.
-Supply an explicit mailbox CIDR; no unrestricted egress rule is provided. Keep
-`COMMON.imapHost/imapPort` identical to `SERVER.intake.host/port`. The complete
-bounded intake configuration is required; it is never synthesized from a demo
-mailbox at deployment time.
+`PARSE_COMMAND_DEPLOYMENT_PROFILE=uds` requires native `oidc`, verified IMAP TLS
+and the explicit `uds_mesh_mtls` search boundary. Compose keeps its separate
+local-demo profile. Realm-wide logout remains follow-up work. The retained old
+local validation client has optional MFA at the user's request; shared Keycloak
+policy and chart defaults were not weakened.
 
-From an offline copy of this repository's deployment tooling:
+## Install and verify a separate target
+
+Configure pinned Core, certificates, storage, DNS, mailbox and identity first.
+Never rerun the upstream K3d platform bundle over existing data: its cluster
+creation action removes a same-named cluster. The application installer uses an
+explicit context and dedicated namespace, without changing current-context.
 
 ```sh
 python3 deploy/uds/tools/validate.py --config deploy/uds/uds-config.yaml
-python3 deploy/uds/tools/deploy.py \
-  --context <target-context> \
+python3 deploy/uds/tools/verify_artifacts.py --release deploy/uds/.artifacts/<version>
+python3 deploy/uds/tools/deploy.py --context <target> \
   --config deploy/uds/uds-config.yaml \
   --bundle deploy/uds/.artifacts/<version>/uds-bundle-parse-command-arm64-<version>.tar.zst
 ```
 
-The helper checks the transferred bundle hash, ARM64 nodes, Core, namespace and
-Secret-key presence. It uses a private temporary kubeconfig and does not switch
-the user's global context. It installs UDS identity/network configuration first, waits for namespace
-sidecar injection, then installs OpenSearch/bootstrap, server and UI. Without this helper the equivalent operation is `UDS_CONFIG=/absolute/path/
-uds-config.yaml uds deploy <bundle> --confirm --architecture arm64`; retain the
-same preflight checks when doing so.
+Transfer artifacts and verify checksums first. Disable public egress while
+retaining DNS, private registry, Keycloak and configured mail connectivity. The
+config package establishes strict mesh/network/SSO policy before creating app
+pods. Search bootstrap verifies local model assets and real finite 384-vector
+inference. Explicit HTTP 429 rejections use bounded same-request retries;
+circuit breakers remain enabled. Rust provisions canonical indices/templates.
 
-The search bootstrap verifies the model archive, reuses exactly one matching
-model registration, resumes chunk upload, deploys locally, checks mapping/model
-metadata, installs templates/pipelines and runs real inference with a finite
-384-vector check. Hook failures fail installation. It reruns on package upgrade;
-it never resets indices or downloads a model URL. It probes actual inference
-and requests a bounded redeploy/warmup when persisted deployed metadata outlives
-the process-local model cache. The Rust readiness check also uses real inference. The Rust publisher owns the
-canonical messages/audit indices and v2 query templates. Neither package relies
-on issue #6's optional indices or a manually run old Python loader. Current
-index names and the local no-retention profile are preserved; retention/HA and
-index-generation migrations are not implemented by this change.
+Required native acceptance gates:
 
-## Verify the real workflow
+1. Real browser Keycloak login for allowed Admin/Viewer users; rejected anonymous,
+   wrong-group and forged identities; same-origin writes, renewal, logout and
+   user revocation. `tools/smoke.py --help` describes native session inputs.
+2. A uniquely titled constructed OPTASK email through a dedicated TLS SMTP test
+   mailbox, then verified IMAP custody/publication and UI raw/detail/audit views.
+   Exercise keyword, semantic and hybrid search; health alone is insufficient.
+3. Save/reopen private drafts, preferences and notifications; verify a second
+   subject cannot read them. Repeat model bootstrap and restart workloads,
+   comparing model/source/audit IDs, counts and private ownership.
+4. Verify Package readiness, mesh injection and denied direct search access from
+   an unrelated workload. Test wrong mail password/CA/hostname, missing secrets
+   or model, unavailable issuer/search, and HTTP 503 readiness during failure.
+5. Rehearse migration, encrypted backup, restoration to new claims, coordinated
+   upgrade and compatible rollback while preserving every original volume.
 
-Use a dedicated synthetic test mailbox and operator-approved test identity.
-`tools/smoke.py --help` documents explicit SMTP/TLS sender, token-file and CA
-inputs. The installer never sends mail. Supply a small synthetic OPTASK body
-with a GENTEXT narrative. The tool sends one uniquely titled email through SMTP,
-waits for IMAP intake/publication and a real authenticated application read,
-and checks model/publication status. It does not inject directly into SQLite
-or OpenSearch.
+## State adoption and recovery
 
-Browser gate: open `https://<host>.<domain>`, follow the Keycloak sign-in, locate
-the printed synthetic subject, inspect its source/evidence, exercise
-keyword/semantic/hybrid search for its narrative, then save/reopen a private
-draft/preparation. Confirm another subject cannot read that state. Health and
-smoke-script success do not replace this browser gate.
+Main now persists all runtime data in OpenSearch. Hidden `.parse-command-state-v1`
+holds sessions/users/settings/drafts/history/preferences/notifications; hidden
+`.parse-command-custody-v1` holds receipts/cursors/durable work. These and public
+search indices share the search PVC. Hidden indices are logical separation,
+not independent backups or an authorization boundary. STRICT sidecar mTLS,
+NetworkPolicies and receiver service-account policy protect search; it has no
+public ingress and explicitly disables the native security plugin under that
+mesh boundary.
 
-Required cluster acceptance:
+The retained search claim has `helm.sh/resource-policy: keep`. Old SQLite
+`parse-command-custody` and `parse-command-private` claims remain migration and
+rollback sources. No install action copies, deletes or remaps them. Optional
+legacy claim declarations do not mount them into the new runtime.
 
-1. Transfer to a clean compatible cluster and disable public egress before
-   application install. Keep cluster DNS, private registry, platform identity and
-   the configured mailbox reachable. Install solely from transferred archives;
-   verify no external image/model fetch and no fixture data in the application.
-2. Repeat the search package deployment twice, then restart search and the
-   server. Confirm one matching model, stable document IDs/counts, restored
-   inference and no duplicate publication. Check `/api/ready` returns 503 when
-   model/publication are unavailable; `/api/health` is process liveness only.
-3. Verify ingress TLS, Keycloak callback and audience, denied anonymous/forged
-   identities, allowed groups and private-user isolation. Verify direct search
-   access from an unrelated namespace/service account is denied. Inspect UDS
-   Package readiness, NetworkPolicies, PeerAuthentication and AuthorizationPolicy.
-4. Try a wrong mailbox password, untrusted CA, wrong hostname, unavailable search,
-   absent/incorrect model and absent Secret. Confirm visible deployment failure
-   or bounded retry diagnostics, without credentials/source text in routine logs.
-5. Save receipts, audit/publication counts, source IDs, a draft and preparation;
-   restart workloads and upgrade with the same PVCs, then compare. Execute the
-   backup/restore and rollback rehearsal below before accepting team deployment.
+Stop old writers and take consistent SQLite snapshots including WAL state.
+Run `backend/tools/migrate_state.py` without `--apply` first and rehearse against
+isolated hidden indices. Trusted prior UDS owners require
+`--preserve-oidc-owners`; first verify issuer/subject provenance. Without opt-in,
+OIDC-looking owners fail closed; malformed owners always fail. Demo owners retain
+`demo:` prefixes. Names/emails never authorize reassignment; migration does not
+grant OIDC Admin access.
 
-## Upgrade, recovery and removal
+Import and compare both indices, then require completion markers using
+`SERVER.requireStateMigration` before starting adopted workers. Keep old images,
+claims, snapshots, configurations and key fingerprints. Recreate upgrades and a
+single-worker lease prevent overlap. Returning to SQLite after new native writes
+requires reconciliation and coordinated restoration, not just binary rollback.
 
-Three independent PVCs are retained with `helm.sh/resource-policy: keep`:
-`parse-command-custody`, `parse-command-private`, `parse-command-search`. Override
-`existingClaim` to adopt an existing claim. Use different claims for each store;
-never run two writers against either SQLite journal. New claims keep databases
-under `data/custody.sqlite` and `data/ui.sqlite` so the nonroot process owns its
-private 0700 directory beneath the group-writable PVC mount. An adopted claim
-must have that layout and correct ownership before use; Compose root-level
-database files require a controlled offline migration. The server uses Recreate
-upgrades and one replica. Search is a single-node StatefulSet. Storage sizes may
-only expand when the StorageClass supports it; changing class/claim requires a
-planned migration, not a release override on a live dataset.
+Back up all OpenSearch state, the session encryption key, configuration and
+artifact lock. Use a configured snapshot repository or stop server/search and
+copy the full data directory. Encrypt backups and rehearse restoration to new
+claims in a separate namespace/client. Schema/index changes can prevent binary
+rollback; automatic downgrade is not implemented.
 
-Before upgrading, stop new mail delivery to the test account, drain/record
-publication, scale the server to zero and take consistent custody/private-volume
-snapshots or offline copies including any WAL files. Capture OpenSearch using a
-configured snapshot repository, or stop search and snapshot its entire volume.
-Encrypt backups and retain the deployment config, key fingerprints and artifact
-lock with them. Do not copy live SQLite database files without their WAL, or
-live OpenSearch data directories. Rehearse restoration to **new** claims and a
-separate namespace/client ID before relying on the backup.
+Removal must retain current search and legacy claims. Do not delete namespaces,
+clusters, PVCs or storage directories as an uninstall/recovery shortcut.
 
-Deploy the next version with the same namespace/config/PVCs. Re-run all adapter
-and private-state gates. For compatible application-only rollbacks, redeploy
-the prior transferred bundle using the same config. Database/index migrations
-may prevent binary rollback; if compatibility is unknown, stop writers and
-restore the pre-upgrade snapshots into new claims with the matching prior
-bundle. Do not downgrade OpenSearch against an upgraded data directory. This
-change adds no automatic downgrade or destructive index migration.
+## Diagnostics and verification
 
-Legacy Go state is never automatically mounted, copied, seeded or overwritten.
-Keep the original volume read-only and backed up. Use the existing
-`parse-command-server migrate-private <read-only-source>/app.db
-<private-target>/ui.sqlite` command in a controlled one-shot workload, with the
-server stopped. Review its migration counts and refuse conflicting targets.
-Legacy demo owners do not automatically become SSO subjects: the team must
-approve any ownership reassignment before adopting shared private state.
+Run `tools/validate.py`, archive-content checks, Python tests/compilation and the
+required backend workspace/Clippy/format/type-generation checks. Real OpenSearch
+integration tests use isolated test indices, never operational state. The model
+check remains available with `tools/verify_bootstrap.py --release <directory>`.
 
-Removal stops/removes application Helm/Zarf resources while retaining the three
-PVCs. Record exact claim/PV identities first. Do not delete the namespace, PVCs,
-PV storage or local K3d cluster as an uninstall shortcut. Reinstall with explicit
-`existingClaim` values to reuse retained data. Deleting retained data is a
-separate operator action outside this runbook.
-
-An additional isolated model check is available after building:
-
-```sh
-python3 deploy/uds/tools/verify_bootstrap.py --release deploy/uds/.artifacts/<version>
-```
-
-It creates a new internal Docker network with no published ports, runs the
-packaged bootstrap twice and after a search restart, and checks stable model ID
-and real inference. It removes only its own test containers/network and retains
-its newly created test volume. This checks offline bootstrap behavior, not UDS
-mesh/admission or mail/UI behavior.
-
-## Diagnostics and development verification
-
-Inspect `kubectl --context <target> -n <namespace> get pods,pvc,package`, then
-`describe pod` for scheduling, Secret mounts, storage and admission errors.
-Inspect bootstrap Job events/logs for model hash/mapping conflicts and inference
-failures; successful hook Jobs are removed. Server logs emit static intake
-categories (including TLS handshake failure) and retry notices. Authenticated
-`GET /api/v1/source/status` reports publication and embedding status. `/api/ready`
-is model + publication readiness, not proof that an IMAP credential is valid.
-Check receipts via the existing intake CLI for mailbox/parser diagnoses. Avoid
-printing stored messages or Kubernetes Secret data into shared logs.
-
-Run `tools/validate.py`, Python compilation, package creation, bundle inspection,
-and the required backend workspace tests/Clippy/format/type-generation checks.
-`tools/check.Dockerfile` prepares the pinned temporary Rust test toolchain when
-there is no host Rust installation. TLS tests create ephemeral test certificates
-with OpenSSL; no signing key is committed. The OIDC fixture contains only a
-public key and pre-signed synthetic tokens. See `VALIDATION.md` for actual evidence
-and remaining gates.
-
-The connected artifact builder requires Python 3.14 for standard-library Zstandard
-archive inspection. It checks the completed packages for concrete image digests
-and the requested chart namespace before assembling the bundle. Recheck a
-transferred release with `python3 deploy/uds/tools/verify_artifacts.py --release
-deploy/uds/.artifacts/<version>`. The bundled runtime uses its pinned Python image.
-
-## Local validation findings
-
-The tested slim-dev instance and measured limits are recorded in `VALIDATION.md`.
-The UDS search default uses a 1 GiB JVM heap inside its 3 GiB container limit.
-Bootstrap retries explicit HTTP 429 rejections with finite backoff on the same
-request; it does not restart the whole model upload for transient heap pressure.
-Do not disable circuit breakers to make provisioning pass.
-
-For an isolated local test, MFA can be made optional for one Keycloak client by
-copying the UDS browser authentication flow, changing the copied Conditional OTP
-subflow from Required to Conditional, and binding that copy only to the local
-client. Keep the password form, UDS group restriction and session limiter.
-The local validation used this user-requested exception; it is not part of the
-application chart or the shared platform's default policy. Provision the initial
-local platform administrator on first installation using the upstream documented
-admin-password-generation input if needed; do not redeploy the complete platform
-bundle over retained cluster data to change identity settings.
-
-The server receives `COMMON.allowedGroups` as
-`PARSE_COMMAND_ALLOWED_GROUPS_JSON` and requires membership in at least one
-configured path for every REST/RPC request. A valid signature and audience
-alone do not grant application access. UDS mode refuses a missing or empty
-allowed-group configuration.
+Inspect pod events and bootstrap logs; server diagnostics use bounded categories,
+not passwords or source bodies. `/api/health` is liveness and `/api/ready` reflects
+publication/model readiness; authenticated source status adds data readiness.
+`VALIDATION.md` separates historical live validation from current rebase checks.
+Archives, credentials, caches, source traffic and runtime data remain outside Git.

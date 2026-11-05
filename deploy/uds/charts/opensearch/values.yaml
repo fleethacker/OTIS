@@ -2,7 +2,7 @@ common:
   domain: uds.dev
   host: parse-command
   clientId: parse-command
-  allowedGroups: [/Parse Command/Users, /Parse Command/Admin]
+  allowedGroups: [/Parse Command/Admin, /Parse Command/Viewer]
   storageClass: ""
   imapHost: ""
   imapPort: 993

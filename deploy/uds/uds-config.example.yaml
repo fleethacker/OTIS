@@ -5,11 +5,21 @@
       "domain": "uds.dev",
       "host": "parse-command",
       "clientId": "parse-command",
-      "allowedGroups": ["/Parse Command/Users", "/Parse Command/Admin"],
+      "allowedGroups": [
+        "/Parse Command/Admin",
+        "/Parse Command/Viewer"
+      ],
       "imapHost": "mail.example.invalid",
       "imapPort": 993,
       "imapCidr": "192.0.2.25/32",
-      "storageClass": ""
+      "storageClass": "",
+      "clientSecretName": "parse-command-oidc-client",
+      "idpGatewayIp": "",
+      "idpNamespace": "istio-tenant-gateway",
+      "idpSelector": {
+        "app": "tenant-ingressgateway"
+      },
+      "idpPort": 8443
     },
     "SERVER": {
       "intake": {
@@ -20,7 +30,6 @@
         "mailbox": "INBOX",
         "password_env": "PARSE_COMMAND_IMAP_PASSWORD",
         "transport": "tls",
-        "journal": "/var/lib/parse-command/data/custody.sqlite",
         "revision": "intake-optask-geo-1",
         "poll_seconds": 5,
         "retry_max_seconds": 60,
@@ -33,7 +42,6 @@
         "max_responses_per_command": 1024,
         "max_receipts": 20000,
         "max_retained_bytes": 268435456,
-        "max_database_bytes": 536870912,
         "max_parse_attempts": 5,
         "parser_work_units": 4000000,
         "subject_policy": "latest_received",
@@ -78,8 +86,16 @@
           "OPTASK NUC",
           "OPTASK RAS"
         ],
-        "tls_ca": "/etc/parse-command/mail/ca.crt"
-      }
+        "tls_ca": "/etc/parse-command/mail/ca.crt",
+        "opensearch_url": "http://opensearch:9200",
+        "custody_index": ".parse-command-custody-v1"
+      },
+      "ssoSecret": "parse-command-sso",
+      "stateIndex": ".parse-command-state-v1",
+      "requireStateMigration": false,
+      "legacyStorage": false,
+      "adminGroup": "/Parse Command/Admin",
+      "viewerGroup": "/Parse Command/Viewer"
     }
   }
 }

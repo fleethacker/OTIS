@@ -3,6 +3,7 @@
 import argparse
 import ipaddress
 import json
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -22,7 +23,8 @@ def load_config(path):
 def inputs(config):
     shared = config['shared']
     common = shared['COMMON']
-    intake = shared['SERVER']['intake']
+    server = shared['SERVER']
+    intake = server['intake']
     network = ipaddress.ip_network(common['imapCidr'], strict=True)
     if network.prefixlen == 0 or network.is_multicast or network.is_unspecified:
         raise ValueError('mailbox egress must use a specific unicast network')
@@ -32,6 +34,46 @@ def inputs(config):
         raise ValueError('verified implicit IMAP TLS and mounted CA are required')
     if intake['password_env'] != 'PARSE_COMMAND_IMAP_PASSWORD' or 'password' in intake:
         raise ValueError('credentials must reference the existing Kubernetes Secret')
+    if any(k in intake for k in ('journal', 'max_database_bytes')):
+        raise ValueError('SQLite intake settings require snapshot migration before native-state deployment')
+    if intake.get('opensearch_url') != 'http://opensearch:9200':
+        raise ValueError('intake must use the protected same-namespace OpenSearch endpoint')
+    state = server.get('stateIndex', '.parse-command-state-v1')
+    custody = intake.get('custody_index', '.parse-command-custody-v1')
+    if any(not isinstance(v, str) or not re.fullmatch(r'\.[a-z0-9][a-z0-9._-]{0,252}', v) for v in (state, custody)) or state == custody:
+        raise ValueError('state and custody indices must be distinct hidden index names')
+    admin = server.get('adminGroup', '/Parse Command/Admin')
+    viewer = server.get('viewerGroup', '/Parse Command/Viewer')
+    groups = common.get('allowedGroups', ['/Parse Command/Admin', '/Parse Command/Viewer'])
+    if not isinstance(groups, list) or len(groups) != 2 or any(not isinstance(g, str) or not g.startswith('/') or len(g) > 256 for g in groups) or not isinstance(admin, str) or not isinstance(viewer, str) or set(groups) != {admin, viewer} or admin == viewer:
+        raise ValueError('allowedGroups must match the distinct native Admin and Viewer group paths')
+    gateway = common.get('idpGatewayIp', '')
+    if not isinstance(gateway, str):
+        raise ValueError('IdP gateway override must be an IP address string')
+    if gateway:
+        address = ipaddress.ip_address(gateway)
+        permitted = [ipaddress.ip_network(n) for n in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7')]
+        if not any(address.version == n.version and address in n for n in permitted):
+            raise ValueError('IdP gateway override must be a private unicast address')
+    selector = common.get('idpSelector', {'app': 'tenant-ingressgateway'})
+    if not isinstance(selector, dict) or not selector or any(not isinstance(k, str) or not isinstance(v, str) or not k or not v or '*' in k or '*' in v or len(k) > 253 or len(v) > 63 for k, v in selector.items()):
+        raise ValueError('IdP egress requires a nonempty exact pod selector')
+    namespace = common.get('idpNamespace', 'istio-tenant-gateway')
+    if not isinstance(namespace, str) or not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', namespace):
+        raise ValueError('IdP egress requires one namespace')
+    port = common.get('idpPort', 8443)
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError('IdP egress port must be 1..65535')
+    for field in ('legacyStorage', 'requireStateMigration'):
+        if type(server.get(field, False)) is not bool:
+            raise ValueError(field + ' must be a boolean')
+    for name in (common.get('clientSecretName', 'parse-command-oidc-client'), server.get('ssoSecret', 'parse-command-sso')):
+        if not isinstance(name, str) or not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?', name):
+            raise ValueError('native OIDC requires valid Secret names')
+    if common.get('clientSecretName', 'parse-command-oidc-client') in {
+        server.get('ssoSecret', 'parse-command-sso'), server.get('imapSecret', 'parse-command-imap')
+    }:
+        raise ValueError('generated client Secret must not overwrite existing session or mailbox Secrets')
     return shared
 
 
@@ -55,7 +97,10 @@ def main():
             subprocess.run(['uds', 'zarf', 'dev', 'lint', str(HERE / 'packages' / name), '--architecture', 'arm64', '--set', 'VERSION=0.1.0-validation', '--set', 'NAMESPACE=' + shared['NAMESPACE'], '--set', key + '_IMAGE=' + fake, '--set', 'BOOTSTRAP_IMAGE=' + fake], check=True)
     documents = [d for d in documents if d]
     pvcs = [d for d in documents if d['kind'] == 'PersistentVolumeClaim']
-    assert {p['metadata']['name'] for p in pvcs} == {'parse-command-search', 'parse-command-custody', 'parse-command-private'}
+    expected_pvcs = set() if shared.get('SEARCH', {}).get('storage', {}).get('existingClaim') else {'parse-command-search'}
+    if shared['SERVER'].get('legacyStorage', False):
+        expected_pvcs |= {'parse-command-' + name for name in ('custody', 'private') if not shared['SERVER'].get(name, {}).get('existingClaim')}
+    assert {p['metadata']['name'] for p in pvcs} == expected_pvcs
     assert all(p['metadata']['annotations']['helm.sh/resource-policy'] == 'keep' for p in pvcs)
     workloads = [d for d in documents if d['kind'] in ('Deployment', 'StatefulSet', 'Job')]
     for workload in workloads:
@@ -67,17 +112,25 @@ def main():
             security = container['securityContext']
             assert security['allowPrivilegeEscalation'] is False and security['capabilities']['drop'] == ['ALL']
     package = next(d for d in documents if d['kind'] == 'Package')
-    assert package['spec']['sso'][0]['enableAuthserviceSelector'] == {'app': 'parse-command-ui'}
+    sso = package['spec']['sso'][0]
+    assert 'enableAuthserviceSelector' not in sso
+    assert sso['redirectUris'] == ['https://' + shared['COMMON']['host'] + '.' + shared['COMMON']['domain'] + '/auth/callback']
+    assert sso['secretConfig']['name'] == shared['COMMON'].get('clientSecretName', 'parse-command-oidc-client')
     server = next(w for w in workloads if w['metadata']['name'] == 'parse-command-server')
     environment = {v['name']: v.get('value') for v in server['spec']['template']['spec']['containers'][0]['env']}
-    groups = json.loads(environment['PARSE_COMMAND_ALLOWED_GROUPS_JSON'])
-    assert isinstance(groups, list) and 1 <= len(groups) <= 32
-    assert groups == package['spec']['sso'][0]['groups']['anyOf']
+    assert environment['PARSE_COMMAND_AUTH_MODE'] == 'oidc'
+    assert environment['PARSE_COMMAND_DEPLOYMENT_PROFILE'] == 'uds'
+    assert set((environment['PARSE_COMMAND_ADMIN_GROUP'], environment['PARSE_COMMAND_VIEWER_GROUP'])) == set(sso['groups']['anyOf'])
+    assert 'PARSE_COMMAND_PRIVATE_DB' not in environment
+    pod = server['spec']['template']['spec']
+    assert not any('persistentVolumeClaim' in volume for volume in pod['volumes'])
+    assert any(v.get('secret', {}).get('secretName') == shared['SERVER'].get('ssoSecret', 'parse-command-sso') for v in pod['volumes'])
+    assert any(r.get('remoteNamespace') == shared['COMMON'].get('idpNamespace', 'istio-tenant-gateway') and r.get('port') == shared['COMMON'].get('idpPort', 8443) for r in package['spec']['network']['allow'])
     assert len(package['spec']['network']['expose']) == 1
     assert package['spec']['network']['expose'][0]['service'] == 'web'
     assert not any(r.get('remoteGenerated') == 'Anywhere' for r in package['spec']['network']['allow'])
     assert any(d['kind'] == 'PeerAuthentication' and d['spec']['mtls']['mode'] == 'STRICT' for d in documents)
-    print(f'Validated {len(documents)} rendered objects, three independent retained PVCs, four workload images, SSO, strict mesh policy, bounded mailbox inputs and three package definitions.')
+    print(f'Validated {len(documents)} rendered objects, retained search storage (optional legacy claims), four workload images, native OIDC, strict mesh policy, bounded mailbox inputs and three package definitions.')
 
 
 if __name__ == '__main__':

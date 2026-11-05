@@ -2,7 +2,7 @@
 """Explicit synthetic SMTP -> IMAP intake -> publication -> authenticated application read.
 
 Never called by install. The operator supplies a test mailbox, synthetic message,
-HTTPS origin, trusted CA and a short-lived Keycloak token file.
+HTTPS origin, trusted CA and a protected native-session Cookie header file.
 """
 import argparse
 from email.message import EmailMessage
@@ -21,11 +21,18 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise RuntimeError('expected authenticated JSON; received an identity redirect')
 
 
+def read_session_cookie(path):
+    cookie = path.read_text().strip()
+    if not cookie.startswith('parse_command_session=') or not cookie.partition('=')[2] or len(cookie) > 16384 or any(ord(c) < 33 or c == ';' for c in cookie):
+        raise ValueError('one bounded native session cookie is required')
+    return cookie
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--origin', required=True)
     p.add_argument('--ca', required=True)
-    p.add_argument('--token-file', type=Path, required=True)
+    p.add_argument('--cookie-file', type=Path, required=True, help='Protected file containing parse_command_session=<opaque session>, obtained by real browser OIDC login')
     p.add_argument('--smtp-host', required=True)
     p.add_argument('--smtp-port', type=int, default=465)
     p.add_argument('--smtp-user', required=True)
@@ -37,12 +44,15 @@ def main():
     a = p.parse_args()
     if not a.origin.startswith('https://') or not 1 <= a.deadline <= 900:
         p.error('verified HTTPS and a 1..900 second deadline are required')
-    token = a.token_file.read_text().strip()
-    if not token or len(token) > 16384 or a.body.stat().st_size > 65536:
-        p.error('bounded token and synthetic body required')
+    try:
+        cookie = read_session_cookie(a.cookie_file)
+    except ValueError as error:
+        p.error(str(error))
+    if a.body.stat().st_size > 65536:
+        p.error('bounded synthetic body required')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=a.ca)), NoRedirect())
     def api(path, body):
-        req = urllib.request.Request(a.origin.rstrip('/') + path, data=None if body is None else json.dumps(body).encode(), headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+        req = urllib.request.Request(a.origin.rstrip('/') + path, data=None if body is None else json.dumps(body).encode(), headers={'Cookie': cookie, 'Origin': a.origin.rstrip('/'), 'Content-Type': 'application/json'})
         with opener.open(req, timeout=15) as response:
             payload = response.read(4_194_305)
             if len(payload) > 4_194_304:

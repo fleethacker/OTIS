@@ -2,7 +2,12 @@ common:
   domain: uds.dev
   host: parse-command
   clientId: parse-command
-  allowedGroups: [/Parse Command/Users, /Parse Command/Admin]
+  clientSecretName: parse-command-oidc-client
+  idpGatewayIp: ""
+  idpNamespace: istio-tenant-gateway
+  idpSelector: {app: tenant-ingressgateway}
+  idpPort: 8443
+  allowedGroups: [/Parse Command/Admin, /Parse Command/Viewer]
   storageClass: ""
   imapHost: ""
   imapPort: 993

@@ -1,70 +1,77 @@
-# ADR 0002: First UDS deployment profile
+# ADR 0002: ARM64 UDS deployment profile
 
-Date: 2026-11-04. Status: accepted target and identity direction; implementation
-and platform acceptance are in progress under issue #9.
+Date: 2026-11-04; updated 2026-11-05 after main PR #15 and OTIS PR #18.
+Status: accepted target and native identity/state architecture; integrated
+platform acceptance remains in progress under issue #9.
 
-The user approved Linux ARM64 with a pinned local UDS profile, UDS Core Keycloak
-SSO, and deployment-time hostnames, storage and mailbox inputs. The first target
-is UDS Core 1.14.3, UDS CLI 0.38.0 / embedded Zarf 0.86.0 and the matching official
-local ARM64 K3d slim-dev profile. The embedded Zarf version supersedes the
-initially suggested standalone 0.82.0 after checking the installed CLI and release bundle.
-Only ARM64 has a validated native inference dependency lock.
+The user approved Linux ARM64, UDS Core Keycloak SSO, configurable deployment
+inputs, and the pinned local slim-dev profile. Pins are Core 1.14.3, UDS CLI
+0.38.0 / embedded Zarf 0.86.0, UDS K3d 0.21.0-airgap / Kubernetes v1.36.4-k3s1.
+Only ARM64 currently has a verified native inference library lock. Namespace
+is pinned during bundle build; hostnames, storage, resources, mailbox and
+identity inputs remain deployment configuration.
 
-Three application packages contain OpenSearch/bootstrap, the Rust server, and
-the React/static proxy UI. The Go source retained in ADR 0001 is reference code
-after the team's approved Rust application integration on main. Compose remains
-a separate local-demo workflow. No demo mail system is an implicit prerequisite
-of the UDS application bundle.
+Three application packages contain the Rust server, OTIS React/nginx UI and
+OpenSearch 3.9.0 with offline model/bootstrap assets. The retained Go import is
+reference source. Compose remains a separate local-demo workflow. The application
+bundle never creates a cluster or implicitly installs a demo mailbox.
 
-UDS Authservice handles interactive SSO; Rust independently verifies the ID
-token using an explicitly provisioned active RS256 public key, exact issuer and
-client audience and configured allowed-group membership on every REST/RPC
-request. The server group check is required even when the gateway accepts a
-valid JWT without an interactive login. No mock-role session fallback exists
-in this mode. Private
-ownership uses an issuer-scoped subject, preventing mutable names/email from
-reassigning drafts. A later decision must address multi-key/JWKS rotation, SSO
-logout behavior and any approved migration of legacy demo-owned private data.
+## Native OIDC replaces the first Authservice design
 
-The **proposed search security policy for this first profile** is UDS sidecar
-mutual TLS, STRICT PeerAuthentication, least-privilege NetworkPolicies and
-receiver AuthorizationPolicies allowing only server/bootstrap service accounts.
-OpenSearch's native security plugin is explicitly disabled under that boundary;
-search has no ingress or public/node port. The Rust UDS mode requires the named
-`uds_mesh_mtls` policy input. This depends on verified mesh injection and policy
-admission: it is not suitable for an unmeshed cluster. Runtime acceptance must
-prove denial from unrelated workloads before this profile is approved for shared
-use. Native OpenSearch TLS/authentication is a future alternative if the team
-requires independent in-process protection, broader clients or another topology.
+Main PR #15 introduced native Rust authorization-code OIDC with PKCE, provider
+JWT verification, opaque cookies, encrypted provider tokens, renewal and local
+logout. UDS registers the confidential client at `/auth/callback` and provides
+its client Secret; Authservice is not enabled for the UI. The server receives
+the trusted local issuer CA and a persistent exact 32-byte encryption key.
+Admin/Viewer IdP groups determine access. Private ownership retains the stable
+issuer/subject hash. See the native authentication contract for session,
+revocation, role and origin rules. Realm-wide logout remains follow-up work.
 
-IMAP uses certificate/hostname-verified implicit TLS and a referenced password
-Secret; the unchanged plaintext transport is limited to explicit Compose demo
-hosts. Password-based IMAP is a capability limit, not a claim of compatibility
-with every Exchange deployment. OAuth-only mail systems need a separate adapter.
+`PARSE_COMMAND_DEPLOYMENT_PROFILE=uds` requires native `oidc` authentication,
+verified implicit IMAP TLS and the explicit `uds_mesh_mtls` search policy.
+Local Compose remains on its own declared authentication profile. The server's
+OIDC HTTP client reaches only the configured local issuer origin with trusted
+TLS, no redirects, and bounded requests; no public identity service is required.
 
-Custody, private state and search each retain independent PVCs. SQLite uses one
-writer and Recreate upgrades; OpenSearch starts as one node. HA, production
-resource sizing, retention, artifact registry/signing identity, backup repository,
-SSO key rotation/logout, and a future AMD64 native lock remain team decisions.
-The implementation runbook lists upgrade, recovery and acceptance gates; none is
-established merely by successful package creation.
+## State, migration and rollback
 
-On 2026-11-05 the user selected `k3d-core-slim-dev` for local validation. Pin
-version 1.14.3, whose published ARM64 bundle includes both `core-base` and
-`core-identity-authorization`. The earlier full demo/24 GiB planning budget is
-replaced by an unmeasured slim-dev target of 16 GiB. A cluster deployment and
-resource measurements remain required before any capacity claim. Preflight
-accepts both pinned layers or a pinned standard Core install, and rejects
-missing identity or mismatched Core versions. SSO, TLS, search and data retention
-remain part of the application profile.
+Main moved runtime custody and private state into separate hidden OpenSearch
+indices. Search documents and these hidden indices share the retained search
+PVC in this single-node profile. This supersedes the first profile's physically
+separate SQLite custody/private PVCs. Hidden indices are logical separation,
+not independent volume backups or authorization boundaries. Old claims and
+snapshots are retained as migration/rollback sources and never mounted into
+the new runtime or automatically deleted.
 
-Primary references: [UDS Authservice integration](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/docs/how-to-guides/identity-and-authorization/protect-apps-with-authservice.mdx),
-[matching platform bundle](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/bundles/k3d-slim-dev/uds-bundle.yaml),
-[package requirements](https://docs.defenseunicorns.com/core/v1-16/concepts/configuration--packaging/package-requirements/).
+Migration reads consistent offline SQLite snapshots. Trusted prior UDS owners
+require explicit `--preserve-oidc-owners`; malformed or unapproved OIDC owner
+imports fail closed. Demo owners retain the `demo:` namespace. There is no
+name/email-based reassignment or automatic live migration. A coordinated
+cutover must stop writers, import and verify state, require completion markers,
+and rehearse restoration. Returning to SQLite after new writes requires a
+reconciliation plan; binary redeployment alone is not a safe state rollback.
 
-Local ARM64 slim-dev admission and synthetic workflow validation completed on
-2026-11-05; see `deploy/uds/VALIDATION.md` for measured resource use, recovery
-results and remaining production limits. The local client uses optional MFA at
-the user's request; the shared platform default flow is unchanged. Namespace
-is pinned at bundle build time because chart namespace metadata did not honor
-Zarf runtime-variable substitution in the tested toolchain.
+## Search and platform boundary
+
+Search uses STRICT sidecar mTLS, least-privilege NetworkPolicies and receiver
+AuthorizationPolicies restricted to server/bootstrap service accounts. Its
+native security plugin is explicitly disabled under that verified mesh boundary.
+Search has no ingress/node port; the hidden state index makes this boundary
+especially important. Independent in-process TLS/authentication and HA remain
+team decisions. IMAP uses hostname/CA-verified implicit TLS and a referenced
+password Secret; OAuth-only mail systems require a separate adapter.
+
+The pre-rebase SQLite/Authservice profile passed local slim-dev workflow and
+recovery validation using about 5 GiB of memory with one synthetic message.
+Those results do not establish native OIDC/state migration acceptance or load
+capacity. The running validated instance is retained while integration proceeds.
+At the user's request only its isolated local client has optional MFA; shared
+Keycloak defaults are unchanged. See `deploy/uds/VALIDATION.md` for evidence
+and the remaining native-profile deployment gate.
+
+Production capacity, storage snapshots/backup repository, retention/HA,
+operational artifact signing, realm logout and AMD64 remain team decisions.
+
+References: [native OIDC and hidden-state contract](../integration/settings-oidc.md),
+[UDS runbook](../../deploy/uds/README.md),
+[pinned slim-dev bundle](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/bundles/k3d-slim-dev/uds-bundle.yaml).

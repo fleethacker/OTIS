@@ -40,12 +40,20 @@ spec:
         selector: {app: parse-command-server}
         remoteCidr: {{ required "common.imapCidr is required (mailbox-only egress)" .Values.common.imapCidr | quote }}
         port: {{ .Values.common.imapPort }}
+      - direction: Egress
+        selector: {app: parse-command-server}
+        remoteNamespace: {{ required "common.idpNamespace is required" .Values.common.idpNamespace | quote }}
+        remoteSelector: {{ required "common.idpSelector is required" .Values.common.idpSelector | toJson }}
+        port: {{ .Values.common.idpPort }}
   sso:
-    - name: Parse Command
+    - name: OTIS
       clientId: {{ .Values.common.clientId | quote }}
       redirectUris:
-        - {{ printf "https://%s.%s/oidc/callback" .Values.common.host .Values.common.domain | quote }}
-      enableAuthserviceSelector: {app: parse-command-ui}
+        - {{ printf "https://%s.%s/auth/callback" .Values.common.host .Values.common.domain | quote }}
+      webOrigins:
+        - {{ printf "https://%s.%s" .Values.common.host .Values.common.domain | quote }}
+      secretConfig:
+        name: {{ required "common.clientSecretName is required" .Values.common.clientSecretName | quote }}
       groups:
         anyOf: {{ .Values.common.allowedGroups | toJson }}
       protocolMappers:

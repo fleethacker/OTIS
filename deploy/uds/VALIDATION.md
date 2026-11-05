@@ -1,5 +1,35 @@
 # Issue #9 validation evidence
 
+## Rebase onto current main and OTIS (2026-11-05)
+
+The signed, validated SQLite/Authservice checkpoint is commit `f551c8d`, pushed
+before rebasing and retained on `codex/issue-9-validated-before-rebase-20261105`.
+The branch integrates main `f1a91be`, including OTIS PR #18, README refresh
+PR #19 and maritime UI theme PR #21. Main PR #15
+replaced runtime SQLite with hidden OpenSearch state/custody indices and adopted
+native Rust OIDC sessions. Current charts follow that contract: `/auth/callback`,
+Admin/Viewer roles, generated confidential-client Secret and a retained session
+encryption key. Authservice and static-public-key verification are superseded.
+
+The running validated cluster and its volumes have not been upgraded or migrated
+by this rebase. The complete live results below are **historical evidence for
+the pre-rebase architecture**, not acceptance of the integrated native OIDC
+release. A fresh isolated native OIDC, migration, intake/search and recovery
+validation remains required before merging the updated deployment profile.
+Current rebase checks passed: 58 Rust tests (including four new native-router/UDS
+policy regressions), Clippy, rustfmt and generated-type validation; 104 UI tests,
+TypeScript/lint/format diagnostics and an actual OTIS runtime image smoke test
+with no network/ports and a read-only root. Fifteen deployment tests and three
+migration-owner tests passed. Default/legacy/adopted chart variants render
+18/20/17 objects and all three Zarf definitions lint. Both Compose configurations
+and the native OIDC overlay render correctly. Canonical Ark jobs remain blocked
+by the installed CLI rejecting the existing protected export pipeline assets;
+protected framework/pipeline files were unchanged. The final UI image and checks were rerun after PR #21; backend/deployment
+content was verified unchanged across that UI-only rebase. Go diagnostics were
+not rerun because no Go source changed. OpenSearch-dependent tests remain separately
+reported rather than counted among the default unignored suite.
+
+
 ## Local UDS validation — 2026-11-05
 
 The isolated `parse-command-issue9` K3d cluster was created from the official

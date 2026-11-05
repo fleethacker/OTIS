@@ -3,7 +3,9 @@
 {{- if or (ne $intake.host .Values.common.imapHost) (ne (int $intake.port) (int .Values.common.imapPort)) }}{{ fail "intake host/port must match common IMAP network inputs" }}{{ end -}}
 {{- if ne $intake.tls_ca "/etc/parse-command/mail/ca.crt" }}{{ fail "intake.tls_ca must use the mounted mail CA" }}{{ end -}}
 {{- if ne $intake.password_env "PARSE_COMMAND_IMAP_PASSWORD" }}{{ fail "intake.password_env must be PARSE_COMMAND_IMAP_PASSWORD" }}{{ end -}}
-{{- if ne $intake.journal "/var/lib/parse-command/data/custody.sqlite" }}{{ fail "intake.journal must use the custody volume" }}{{ end -}}
+{{- if or (hasKey $intake "journal") (hasKey $intake "max_database_bytes") }}{{ fail "SQLite intake settings require migration before native-state deployment" }}{{ end -}}
+{{- if ne $intake.opensearch_url "http://opensearch:9200" }}{{ fail "intake.opensearch_url must use the protected same-namespace search service" }}{{ end -}}
+{{- if not (hasPrefix "." $intake.custody_index) }}{{ fail "intake.custody_index must be hidden" }}{{ end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata: {name: parse-command-server}
@@ -22,6 +24,7 @@ spec:
   selector: {app: parse-command-server}
   ports: [{name: http-api, port: 8081, targetPort: 8081}]
 ---
+{{- if .Values.config.legacyStorage }}
 {{- range $name := list "custody" "private" }}
 {{- $volume := index $.Values.config $name }}
 {{- if not $volume.existingClaim }}
@@ -40,12 +43,13 @@ spec:
 ---
 {{- end }}
 {{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: parse-command-server}
 spec:
   replicas: 1
-  # SQLite custody and private state have one writer across upgrades.
+  # A single worker lease protects OpenSearch-backed custody across upgrades.
   strategy: {type: Recreate}
   selector:
     matchLabels: {app: parse-command-server}
@@ -55,6 +59,11 @@ spec:
       annotations:
         checksum/config: {{ $intake | toJson | sha256sum }}
     spec:
+      {{- if .Values.common.idpGatewayIp }}
+      hostAliases:
+        - ip: {{ .Values.common.idpGatewayIp | quote }}
+          hostnames: [{{ printf "sso.%s" .Values.common.domain | quote }}]
+      {{- end }}
       serviceAccountName: parse-command-server
       automountServiceAccountToken: false
       nodeSelector: {kubernetes.io/arch: arm64, kubernetes.io/os: linux}
@@ -75,14 +84,20 @@ spec:
             capabilities: {drop: [ALL]}
           ports: [{containerPort: 8081}]
           env:
-            - {name: PARSE_COMMAND_AUTH_MODE, value: uds_sso}
-            - {name: PARSE_COMMAND_PRIVATE_DB, value: /var/lib/parse-command-private/data/ui.sqlite}
+            - {name: PARSE_COMMAND_AUTH_MODE, value: oidc}
+            - {name: PARSE_COMMAND_DEPLOYMENT_PROFILE, value: uds}
+            - {name: PARSE_COMMAND_DEMO_AUTO_ROLE, value: ""}
             - {name: PARSE_COMMAND_SEARCH_SECURITY_POLICY, value: uds_mesh_mtls}
             - {name: PARSE_COMMAND_OIDC_ISSUER, value: {{ printf "https://sso.%s/realms/uds" .Values.common.domain | quote }}}
-            - {name: PARSE_COMMAND_OIDC_AUDIENCE, value: {{ .Values.common.clientId | quote }}}
-            - {name: PARSE_COMMAND_PUBLIC_ORIGIN, value: {{ printf "https://%s.%s" .Values.common.host .Values.common.domain | quote }}}
+            - {name: PARSE_COMMAND_OIDC_CLIENT_ID, value: {{ .Values.common.clientId | quote }}}
+            - {name: PARSE_COMMAND_PUBLIC_URL, value: {{ printf "https://%s.%s" .Values.common.host .Values.common.domain | quote }}}
             - {name: PARSE_COMMAND_ADMIN_GROUP, value: {{ .Values.config.adminGroup | quote }}}
-            - {name: PARSE_COMMAND_ALLOWED_GROUPS_JSON, value: {{ .Values.common.allowedGroups | toJson | quote }}}
+            - {name: PARSE_COMMAND_VIEWER_GROUP, value: {{ .Values.config.viewerGroup | quote }}}
+            - {name: PARSE_COMMAND_STATE_INDEX, value: {{ .Values.config.stateIndex | quote }}}
+            - {name: PARSE_COMMAND_REQUIRE_STATE_MIGRATION, value: {{ .Values.config.requireStateMigration | toString | quote }}}
+            - {name: PARSE_COMMAND_OIDC_CLIENT_SECRET_FILE, value: /etc/parse-command/client/secret}
+            - {name: PARSE_COMMAND_SESSION_KEY_FILE, value: /etc/parse-command/sso/session-key}
+            - {name: PARSE_COMMAND_IDP_CA_FILE, value: /etc/parse-command/sso/ca.pem}
             - {name: PARSE_COMMAND_OPENSEARCH_URL, value: "http://opensearch:9200"}
             - {name: TOKENIZERS_PARALLELISM, value: "false"}
             - {name: RAYON_NUM_THREADS, value: "1"}
@@ -102,19 +117,16 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - {name: config, mountPath: /etc/parse-command/config.json, subPath: config.json, readOnly: true}
-            - {name: identity, mountPath: /etc/parse-command/identity, readOnly: true}
+            - {name: client, mountPath: /etc/parse-command/client, readOnly: true}
+            - {name: sso, mountPath: /etc/parse-command/sso, readOnly: true}
             - {name: mail-ca, mountPath: /etc/parse-command/mail, readOnly: true}
-            - {name: custody, mountPath: /var/lib/parse-command}
-            - {name: private, mountPath: /var/lib/parse-command-private}
             - {name: tmp, mountPath: /tmp}
       volumes:
         - {name: config, configMap: {name: parse-command-server}}
-        - name: identity
-          secret: {secretName: {{ .Values.config.oidcKeySecret }}}
+        - name: client
+          secret: {secretName: {{ .Values.common.clientSecretName }}, items: [{key: secret, path: secret}]}
+        - name: sso
+          secret: {secretName: {{ .Values.config.ssoSecret }}, items: [{key: session-key, path: session-key}, {key: ca.pem, path: ca.pem}]}
         - name: mail-ca
           secret: {secretName: {{ .Values.config.imapSecret }}, items: [{key: ca.crt, path: ca.crt}]}
-        - name: custody
-          persistentVolumeClaim: {claimName: {{ default "parse-command-custody" .Values.config.custody.existingClaim }}}
-        - name: private
-          persistentVolumeClaim: {claimName: {{ default "parse-command-private" .Values.config.private.existingClaim }}}
         - {name: tmp, emptyDir: {sizeLimit: 32Mi}}

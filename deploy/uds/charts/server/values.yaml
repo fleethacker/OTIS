@@ -2,15 +2,24 @@ common:
   domain: uds.dev
   host: parse-command
   clientId: parse-command
-  allowedGroups: [/Parse Command/Users, /Parse Command/Admin]
+  clientSecretName: parse-command-oidc-client
+  idpGatewayIp: ""
+  idpNamespace: istio-tenant-gateway
+  idpSelector: {app: tenant-ingressgateway}
+  idpPort: 8443
+  allowedGroups: [/Parse Command/Admin, /Parse Command/Viewer]
   storageClass: ""
   imapHost: ""
   imapPort: 993
 image: "invalid.example/prepare-first:unbuilt"
 config:
-  oidcKeySecret: parse-command-oidc-verification
+  ssoSecret: parse-command-sso
+  stateIndex: .parse-command-state-v1
+  requireStateMigration: false
+  legacyStorage: false
   imapSecret: parse-command-imap
   adminGroup: /Parse Command/Admin
+  viewerGroup: /Parse Command/Viewer
   custody: {size: 2Gi, existingClaim: ""}
   private: {size: 1Gi, existingClaim: ""}
   resources:

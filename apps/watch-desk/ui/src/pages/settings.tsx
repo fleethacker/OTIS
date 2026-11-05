@@ -76,7 +76,7 @@ export default function Settings() {
     {context.isError && <p role="alert">Context unavailable. <button className="btn btn-sm" onClick={() => { void context.refetch(); }}>Retry context</button></p>}
     {data && !context.isError && <div key={context.identityKey}>
       {!context.canEdit && <p>Read only. A platform administrator must change shared context.</p>}
-      <p>{data.updatedBy ? `Last update: ${data.updatedBy} · ${data.updatedAt}` : `Unconfirmed demo defaults · ${data.defaultsSource}`}</p>
+      <p>{data.updatedBy ? `Last update: ${data.updatedBy} · ${data.updatedAt}` : `Unconfirmed ${data.demoRoster === true ? "demo defaults" : "defaults"} · ${data.defaultsSource}`}</p>
       {roster.isError && <p role="alert">Roster unavailable; ship selection cannot be edited.</p>}
       {fields.map(([field, label]) => {
         const value = data.context[field];

@@ -89,7 +89,6 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
     `Applicability: ${commandKeys(row.commandIds).map((key) => commandName(key, row.commands)).join(", ")}`,
-    row.event.unit ? `Reported unit (not assignment): ${row.event.unit}` : undefined,
     (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
     row.reviewRequired === true ? "Requires review" : undefined,
     row.event.isRevised ? "Revised" : undefined,
@@ -318,7 +317,7 @@ export function DayTimeline({
           view === "month"
             ? undefined
             : ({
-                "--calendar-grid-min-width": `${calendarGridWidth(view, side, resources.length, columns)}px`,
+                "--calendar-grid-min-width": `${calendarGridWidth(view, side, resources.length, columns, expanded)}px`,
               } as CSSProperties)
         }
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}

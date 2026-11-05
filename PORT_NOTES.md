@@ -47,7 +47,8 @@ Context is not acknowledgement authority or authorization.
 ## P2 — Synthetic roster, explicit applicability and ship sidebar
 
 - **Files:** `backend/config/watchdesk-demo.json`, six newly constructed bodies in
-  `backend/config/watchdesk-fixtures/`, opt-in `demo-compose-intake.json`; intake
+  `backend/config/watchdesk-fixtures/`, intake config (now default-off; see the
+  P4 review follow-up and `compose.watchdesk-demo.yml`); intake
   `src/{demo,config,service,lib}.rs`, `tests/custody.rs`; server
   `src/{commands,access,error,main,lib}.rs`, `tests/commands_contract.rs`; UI
   `components/{command-roster,ships-sidebar,day-timeline,calendar-review,source-data}`,
@@ -55,8 +56,9 @@ Context is not acknowledgement authority or authorization.
 - **API:** `POST /api/v1/commands/list {}` returns `commands` with id/name/shortLabel/
   group/colorIndex/isOwnShip, config source/version/provenance and assignmentEnabled.
   Authenticated, strict unknown-field rejection, <=32 commands. No roster write API.
-- **Assignment:** `demo_fixture_assignments` defaults false; explicitly enabled in
-  the Compose demo config. Exact decoded-body SHA-256 allowlist (LF and CRLF variants)
+- **Assignment:** `demo_fixture_assignments` defaults false. The P4 review follow-up
+  moved the Compose opt-in to a separate Watch Desk override. Exact decoded-body
+  SHA-256 allowlist (LF and CRLF variants)
   supplies `ParseContext.command_ids`. Changed/unlisted bodies remain Unassigned;
   sender/participants/mentions/unit never supply IDs. Shared fixture assigns Tern
   and Halyard; the unassigned fixture names Meridian/Halyard but assigns neither.
@@ -226,3 +228,76 @@ E0277 errors because this rusqlite version does not implement `FromSql` for `u64
 use checked `u64::try_from`, returning a sanitized unavailable error for negatives.
 COUNT remains signed internally. Added zero/max/negative conversion coverage.
 Static diff check only here; the Rust container rerun remains outstanding.
+
+## P4 review follow-up — explicit demo scope and bounded suggestions
+
+- **H1 / L8:** `commands::catalog` gates the fictional roster on the effective
+  `intake.demo_fixture_assignments` flag. Off means an empty roster and empty own ship,
+  including when earlier demo context is stored. Out-of-scope IDs/confirmations are
+  suppressed in responses, not erased from SQLite by reads or unrelated updates.
+  Fresh off-mode defaults retain Unassigned and the built-in UTC turnover schedule.
+  Header: “Own ship not set”; non-demo defaults are not labelled demo defaults.
+  Manual writes validate against the active roster and still use `require_admin`.
+- Root/default `demo-compose-intake.json` now sets the flag **false**. The separate
+  `compose.watchdesk-demo.yml` opts in via server-only `PARSE_COMMAND_WATCHDESK_DEMO=true`;
+  this overrides the loaded intake flag for both ingestion and presentation. Invalid
+  environment values fail configuration; no duplicate copy of the intake config.
+  For the fictional demo use `docker compose -f docker-compose.yml -f
+  compose.watchdesk-demo.yml ...`. Neither option reloads fixtures, rewrites existing
+  canonical assignments, resets volumes, nor establishes production authority.
+- **M2 / Parker's call:** Week Fit retains all seven days at desktop width. Expanded
+  again uses `52 + 7 * collisionColumns * 128` and Parker's existing expanded CSS.
+  Fit/resource overrides are scoped to `.calendar-with-ships`; zoom still takes
+  precedence. Day resources keep their bounded width. Live screenshots must confirm
+  both modes and zoom; this is not a claim that the entire Week redesign is approved.
+- **M3:** only the read-only metadata job has a seven-second deadline. Timeouts/errors
+  degrade to `suggestionState: unavailable`; ordinary context reads/manual updates
+  still run. At most two metadata jobs retain worker permits until they really exit.
+  Context transactions are awaited outside that deadline, with admin authority
+  resolved again before writing. There is no timed-out background context writer.
+  This does not solve ordinary network-disconnect ambiguity, audit history or CAS.
+- **L5:** regenerated `route-registry.generated.ts` using the actual bundled
+  `ark/pipeline/generate-routes.ts` invoked by `build-ui.ts`. Bun is absent locally:
+  Node's TS stripping plus a narrow `Glob('*.tsx')` adapter ran that unchanged
+  generator; all four pages, including Settings, are present. No app build, installs,
+  framework edits or manually authored registry entries.
+- **L6:** removed the contradictory reported-unit tooltip line. Canonical test data
+  uses explicit IDs and a sole-ID unit only together; the separate pure-helper
+  adversarial/legacy test still proves unit is never used as assignment authority.
+- **L10:** port styles live in `ui/src/watchdesk-port.css`, imported once. Compared
+  with `60ac735`, Parker's `index.css` now differs only by that import.
+- **Tests added/extended:** demo on/off session/API and header cases, stored-context
+  suppression without destruction, opt-in configuration parsing, unavailable/slow
+  suggestions with readable/editable context, Fit versus Expanded width, canonical
+  applicability tooltip. Container tests/builds and new screenshots remain pending.
+- **Deferred:** L7 skipped as requested (demo links pin `?date=`). L9 is note-only;
+  its finding text has not yet been supplied, so no mechanism or fix is inferred.
+  P5 work remains uncommitted and outside this review-fix commit.
+
+## Next slice order
+
+Finish P5, then **P5b recurrence** under Addenda R/R2, then P6. No new crates or
+lockfile change. R2 permits additive baseline crypto recurrence with explicit source
+periods; preserve existing activity fields/IDs, retain unresolved behavior without
+an anchor, and never use issue/receipt time. Keep the synthetic radio-check path and
+add a baseline crypto fixture, schema/types/mapping updates and expansion tests.
+Parker must run the external OPTASK regression against his unavailable samples.
+
+## P6 queue from live review (not yet implemented)
+
+- Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live
+  Rust/OpenSearch stack. Screenshots: `specs/watchdesk/port/e4c7ddc/` in the handoff repo.
+- Per-ship collision labels still become “communi” around 1400Z. Prefer readable
+  stacking/minimum ~120px label width with ellipsis/full-title tooltip, without
+  moving source instants or reintroducing seven-day/five-column overflow.
+- Add ship-tinted fill/header chips so identity is more than a thin rule; keep amber
+  reserved for review/revised. Preserve title-only link/button textContent.
+- Needs-review copy should explain missing information, e.g. “No date in source:
+  1200Z–1800Z (day not given) · not plotted · open source”, using typed reason codes
+  and available source time text. Current `meta.reviewItems` has only a generic
+  reason; inspect canonical clock/status fields before adding small presentation
+  fields. Do not present normalized clock values as verbatim raw source text or
+  fan out raw-body reads. Document the exact server-field seam for Parker.
+- Undated review stays independent of Day/Week/Month. Explain: “Dates are unknown,
+  so these items are shown in every calendar view until resolved.” Verify the server
+  query as well as the component; calendar view bounds must not silently drop them.

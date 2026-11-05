@@ -15,7 +15,8 @@ export function WatchContextHeader() {
   if (!data) return <small>Watch context loading…</small>;
   const ship = data.context.ownShipId ? data.context.shipName ||
     roster.data?.commands.find((c) => c.id === data.context.ownShipId)?.name || data.context.ownShipId : "Own ship not set";
-  return <small><Link to={href} title={`App-wide context; provenance and citations in Settings. ${data.updatedBy ? `Last changed by ${data.updatedBy}` : `Demo defaults: ${data.defaultsSource}`}`}>
-    {ship} · {data.context.operationName || "Operation not set"} · {data.updatedBy ? "Context" : "Demo defaults"}
+  const defaults = data.demoRoster === true ? "Demo defaults" : "Defaults";
+  return <small><Link to={href} title={`App-wide context; provenance and citations in Settings. ${data.updatedBy ? `Last changed by ${data.updatedBy}` : `${defaults}: ${data.defaultsSource}`}`}>
+    {ship} · {data.context.operationName || "Operation not set"} · {data.updatedBy ? "Context" : defaults}
   </Link></small>;
 }

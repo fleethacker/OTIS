@@ -3,9 +3,9 @@ import moment from "moment-timezone";
 import { civilDate, civilHour } from "./display-time";
 import type { CalendarView } from "./calendar-time";
 
-/** Collision lanes divide a column; they must not multiply the number of days/ships. */
-export function calendarGridWidth(view: CalendarView, side: boolean, resources: number, lanes: number) {
-  if (view === "week") return 52 + 7 * 112;
+/** Fit keeps seven days visible; Expanded retains Parker's lane-proportional width. */
+export function calendarGridWidth(view: CalendarView, side: boolean, resources: number, lanes: number, expanded = false) {
+  if (view === "week") return expanded ? 52 + 7 * Math.max(1, lanes) * 128 : 52 + 7 * 112;
   if (side) return 52 + resources * 168;
   return 52 + Math.max(1, lanes) * 128;
 }

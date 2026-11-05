@@ -12,6 +12,12 @@ pub struct Config {
     pub auto_role: Option<String>,
     pub allow_fixtures: bool,
 }
+fn demo_flag(value: &str, configured: bool) -> Result<bool> {
+    match value {
+        "" => Ok(configured), "true" => Ok(true), "false" => Ok(false),
+        _ => Err(Error::config("PARSE_COMMAND_WATCHDESK_DEMO must be true or false")),
+    }
+}
 impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let get = |key: &str, default: &str| std::env::var(key).unwrap_or_else(|_| default.into());
@@ -41,9 +47,11 @@ impl Config {
         if !matches!(auto.as_str(), "" | "user" | "platform_admin") {
             return Err(Error::config("invalid demo role"));
         }
+        let mut intake = parse_command_intake::config::Config::load(path)
+            .map_err(|_| Error::config("invalid intake configuration"))?;
+        intake.demo_fixture_assignments = demo_flag(&get("PARSE_COMMAND_WATCHDESK_DEMO", ""), intake.demo_fixture_assignments)?;
         Ok(Self {
-            intake: parse_command_intake::config::Config::load(path)
-                .map_err(|_| Error::config("invalid intake configuration"))?,
+            intake,
             search: search.trim_end_matches('/').into(),
             private: get(
                 "PARSE_COMMAND_PRIVATE_DB",
@@ -66,5 +74,16 @@ impl Config {
             auto_role: (!auto.is_empty()).then_some(auto),
             allow_fixtures: get("PARSE_COMMAND_ALLOW_FIXTURES", "false") == "true",
         })
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn watchdesk_demo_requires_explicit_opt_in() {
+        assert!(!demo_flag("", false).unwrap());
+        assert!(demo_flag("true", false).unwrap());
+        assert!(!demo_flag("false", true).unwrap());
+        assert!(demo_flag("typo", false).is_err());
     }
 }

@@ -10,17 +10,18 @@ import { WatchContextHeader } from "../components/watch-context-header";
 import type { ContextResponse, ContextUpdate } from "../components/watch-context";
 import Settings from "./settings";
 
-function setup(role = "platform_admin", denyWrites = false, missingSources = false) {
+function setup(role = "platform_admin", denyWrites = false, missingSources = false, demo = true) {
   const source = { messageKey: `sha256:${"a".repeat(64)}@fictional-r1`, auditId: "fictional-audit", setId: "EXER", recordedAt: "2026-11-05T00:00:00Z", startByte: 10, endByte: 20, lineStart: 2, lineEnd: 2 };
   const data: ContextResponse = {
-    context: { ownShipId: "demo-meridian", shipName: "", operationName: "", groupCommand: "", defaultShips: ["unit:demo-meridian", "unassigned:"], turnoverUtc: ["0000Z", "0400Z"] },
+    context: { ownShipId: demo ? "demo-meridian" : "", shipName: "", operationName: "", groupCommand: "", defaultShips: demo ? ["unit:demo-meridian", "unassigned:"] : ["unassigned:"], turnoverUtc: ["0000Z", "0400Z"] },
+    demoRoster: demo,
     confirmations: {}, updatedBy: null, updatedAt: null, canEdit: role === "platform_admin",
     suggestions: [{ id: "context:fictional-copper", field: "operationName", values: ["FICTIONAL COPPER"], sources: missingSources ? undefined : [source, { ...source, messageKey: `sha256:${"b".repeat(64)}@fictional-r1`, auditId: "fictional-other" }] }],
     suggestionState: "available", suggestionsLimited: false, suggestionScope: "Bounded fictional metadata", defaultsSource: "fictional config",
   };
   const requests: ContextUpdate[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
-    if (String(url).endsWith("/commands/list")) return Response.json({ commands: [{ id: "demo-meridian", name: "USS Meridian", shortLabel: "MERIDIAN", group: "Fictional", colorIndex: 0, isOwnShip: true }], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: true, defaultShips: data.context.defaultShips });
+    if (String(url).endsWith("/commands/list")) return Response.json({ commands: demo ? [{ id: "demo-meridian", name: "USS Meridian", shortLabel: "MERIDIAN", group: "Fictional", colorIndex: 0, isOwnShip: true }] : [], source: "fictional test config", version: "test", provenance: "fictional test", assignmentEnabled: demo, defaultShips: data.context.defaultShips });
     if (String(url).endsWith("/watch-context/update")) {
       const request: ContextUpdate = JSON.parse(String(init?.body));
       requests.push(request);
@@ -42,8 +43,18 @@ function setup(role = "platform_admin", denyWrites = false, missingSources = fal
   const transport = createRouterTransport((router) => router.service(AppService, { getIdentity: () => ({ username: role === "platform_admin" ? "dev-admin" : "dev-user", role, email: "fictional@invalid" }) }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = renderWithProviders(<TransportProvider transport={transport}><QueryClientProvider client={client}><WatchContextHeader /><Settings /></QueryClientProvider></TransportProvider>, { route: "/settings?returnTo=%2Fcalendar%3Fdate%3D2026-11-05%26shipLayout%3Dside" });
-  return { view, requests, close: () => { view.unmount(); client.clear(); fetch.mockRestore(); } };
+  return { view, requests, client, close: () => { view.unmount(); client.clear(); fetch.mockRestore(); } };
 }
+
+test("demo-off header and Settings do not imply a fictional own ship", async () => {
+  const { view, client, close } = setup("user", false, false, false);
+  try {
+    await waitFor(() => expect(view.getByRole("link", { name: "Own ship not set · Operation not set · Defaults" })).toBeTruthy());
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(view.queryByRole("option", { name: "USS Meridian" })).toBeNull();
+    expect(view.queryByText(/Unconfirmed demo defaults/)).toBeNull();
+  } finally { close(); }
+});
 
 test("Use sends only a group ID and renders confirmed context/citations; Dismiss removes the group", async () => {
   const { view, requests, close } = setup();

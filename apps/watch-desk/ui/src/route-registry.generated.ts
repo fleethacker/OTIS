@@ -7,9 +7,11 @@ import type { PageModule } from "./route-registry";
 import * as Page_Underscore_placeholder from "./pages/_placeholder";
 import * as Page_calendar from "./pages/calendar";
 import * as Page_messages from "./pages/messages";
+import * as Page_settings from "./pages/settings";
 
 export const pageModules: Record<string, PageModule> = {
   "./pages/_placeholder.tsx": Page_Underscore_placeholder,
   "./pages/calendar.tsx": Page_calendar,
   "./pages/messages.tsx": Page_messages,
+  "./pages/settings.tsx": Page_settings,
 };

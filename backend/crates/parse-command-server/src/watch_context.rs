@@ -1,7 +1,6 @@
 //! App-wide demo context. Admin writes retain server actor; durable audit/CAS are deferred.
 use crate::{Error, Result, access::require_admin, api::App, context_metadata::{self, Citation, Metadata}, private::now};
 use axum::{Json, extract::{Path, State}, http::HeaderMap};
-use parse_command_intake::demo::Catalog;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -52,13 +51,13 @@ pub fn initialize(db: &Connection) -> Result<()> {
     db.execute_batch("CREATE TABLE IF NOT EXISTS watch_context(singleton INTEGER PRIMARY KEY CHECK(singleton=1), document TEXT NOT NULL)")?;
     Ok(())
 }
-pub fn read(db: &Connection) -> Result<Snapshot> {
+fn load(db: &Connection, demo: bool) -> Result<Snapshot> {
     let row: Option<String> = db.query_row("SELECT document FROM watch_context WHERE singleton=1", [], |r| r.get(0)).optional()?;
     if let Some(row) = row {
         if row.len() > 65536 { return Err(Error::config("Context exceeds storage bound")); }
         return serde_json::from_str(&row).map_err(|_| Error::config("Stored context is invalid"));
     }
-    let roster = Catalog::load().map_err(|_| Error::config("Roster unavailable"))?;
+    let roster = crate::commands::catalog(demo)?;
     Ok(Snapshot {
         context: Context {
             own_ship_id: roster.commands.iter().find(|c| c.is_own_ship).map(|c| c.id.clone()).unwrap_or_default(),
@@ -69,8 +68,24 @@ pub fn read(db: &Connection) -> Result<Snapshot> {
         confirmations: BTreeMap::new(), updated_by: None, updated_at: None, dismissed: Vec::new(),
     })
 }
-fn values(field: Field, values: &[String], confirm: bool) -> Result<()> {
-    let roster = Catalog::load().map_err(|_| Error::config("Roster unavailable"))?;
+/// Suppress stored IDs outside the active roster without rewriting user data.
+fn visible(mut snapshot: Snapshot, demo: bool) -> Result<Snapshot> {
+    let roster = crate::commands::catalog(demo)?;
+    let known = |id: &str| roster.commands.iter().any(|c| c.id == id);
+    if !known(&snapshot.context.own_ship_id) && !snapshot.context.own_ship_id.is_empty() {
+        snapshot.context.own_ship_id.clear();
+        snapshot.confirmations.remove(&Field::OwnShipId);
+    }
+    let old = snapshot.context.default_ships.len();
+    snapshot.context.default_ships.retain(|id| id == UNASSIGNED || id.strip_prefix("unit:").is_some_and(known));
+    if old != snapshot.context.default_ships.len() { snapshot.confirmations.remove(&Field::DefaultShips); }
+    Ok(snapshot)
+}
+pub fn read(db: &Connection, demo: bool) -> Result<Snapshot> {
+    visible(load(db, demo)?, demo)
+}
+fn values(field: Field, values: &[String], confirm: bool, demo: bool) -> Result<()> {
+    let roster = crate::commands::catalog(demo)?;
     let known = |id: &str| roster.commands.iter().any(|c| c.id == id);
     if values.len() > 32 || values.iter().any(|v| v.len() > 128 || v.trim() != v || v.chars().any(char::is_control)) {
         return Err(Error::invalid("Context values exceed bounds or contain control characters"));
@@ -104,10 +119,10 @@ fn values(field: Field, values: &[String], confirm: bool) -> Result<()> {
     Ok(())
 }
 /// Called only after require_admin; actor is server identity, never request JSON.
-pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Metadata) -> Result<Snapshot> {
+pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Metadata, demo: bool) -> Result<Snapshot> {
     if actor.is_empty() { return Err(Error::new("unauthenticated", "Missing actor")); }
     let tx = db.transaction()?;
-    let mut snapshot = read(&tx)?;
+    let mut snapshot = load(&tx, demo)?;
     let (field, mut selected, sources) = if let Some(id) = &request.suggestion_id {
         if request.field.is_some() || request.values.is_some() || request.confirm_hide_unassigned || id.len() > 128 {
             return Err(Error::invalid("Suggestions accept only suggestionId and optional dismiss"));
@@ -128,7 +143,7 @@ pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Met
         (request.field.ok_or_else(|| Error::invalid("Missing field"))?, request.values.clone().ok_or_else(|| Error::invalid("Missing values"))?, Vec::new())
     };
     if !request.dismiss {
-        values(field, &selected, request.confirm_hide_unassigned)?;
+        values(field, &selected, request.confirm_hide_unassigned, demo)?;
         if matches!(field, Field::DefaultShips | Field::TurnoverUtc) { selected.sort(); selected.dedup(); }
         match field {
             Field::OwnShipId => snapshot.context.own_ship_id = selected[0].clone(),
@@ -147,9 +162,22 @@ pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Met
     snapshot.updated_at = Some(now());
     let document = serde_json::to_string(&snapshot).map_err(|_| Error::unavailable())?;
     if document.len() > 65536 { return Err(Error::config("Context storage bound reached")); }
+    let response = visible(snapshot, demo)?;
     tx.execute("INSERT INTO watch_context VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET document=excluded.document", [document])?;
     tx.commit()?;
-    Ok(snapshot)
+    Ok(response)
+}
+static METADATA_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+async fn bounded_metadata<F>(read: F, duration: Duration) -> (Metadata, bool)
+where F: FnOnce() -> Result<Metadata> + Send + 'static {
+    let Ok(permit) = METADATA_READS.try_acquire() else { return (Metadata::default(), false); };
+    // Timed-out readers retain their permit until they actually exit; leave the
+    // remaining blocking workers free for context reads/writes.
+    let job = tokio::task::spawn_blocking(move || { let _permit = permit; read() });
+    match tokio::time::timeout(duration, job).await {
+        Ok(Ok(Ok(metadata))) => (metadata, true),
+        _ => (Metadata::default(), false),
+    }
 }
 pub async fn handle(State(app): State<Arc<App>>, Path(operation): Path<String>, headers: HeaderMap, Json(request): Json<Request>) -> Result<Json<Value>> {
     let identity = if operation == "update" { require_admin(&app, &headers)? } else { app.headers_identity(&headers)? };
@@ -158,12 +186,19 @@ pub async fn handle(State(app): State<Arc<App>>, Path(operation): Path<String>, 
         return Err(Error::invalid("Context get accepts only includeSuggestions"));
     }
     let needs_metadata = request.include_suggestions || request.suggestion_id.is_some();
-    let value = tokio::time::timeout(Duration::from_secs(7), tokio::task::spawn_blocking(move || {
-        let metadata = if needs_metadata { context_metadata::read(&app.config.intake.journal) } else { Ok(Metadata::default()) };
-        let available = metadata.is_ok();
-        let metadata = metadata.unwrap_or_default();
+    let (metadata, available) = if needs_metadata {
+        let path = app.config.intake.journal.clone();
+        bounded_metadata(move || context_metadata::read(&path), Duration::from_secs(7)).await
+    } else { (Metadata::default(), false) };
+    // Only the read-only suggestion job may outlive its deadline. Never time out a
+    // blocking context transaction and let it commit after reporting failure.
+    let value = tokio::task::spawn_blocking(move || {
+        let demo = app.config.intake.demo_fixture_assignments;
+        let identity = if operation == "update" { require_admin(&app, &headers)? } else { identity };
         let mut store = app.store()?;
-        let snapshot = if operation == "update" { update(&mut store.db, request, &identity.username, &metadata)? } else { read(&store.db)? };
+        let snapshot = if operation == "update" {
+            update(&mut store.db, request, &identity.username, &metadata, demo)?
+        } else { read(&store.db, demo)? };
         let suggestions: Vec<_> = metadata.suggestions.iter().filter(|s| !snapshot.dismissed.contains(&s.id)).collect();
         Ok::<_, Error>(json!({
             "context": snapshot.context, "confirmations": snapshot.confirmations,
@@ -172,9 +207,10 @@ pub async fn handle(State(app): State<Arc<App>>, Path(operation): Path<String>, 
             "suggestionState": if !needs_metadata { "not_requested" } else if available { "available" } else { "unavailable" },
             "suggestionsLimited": metadata.limited,
             "suggestionScope": "At most 200 published records, 400 metadata fields, 20 groups and 20 citations per group",
-            "defaultsSource": parse_command_intake::demo::CONFIG_SOURCE,
+            "demoRoster": demo,
+            "defaultsSource": if demo { parse_command_intake::demo::CONFIG_SOURCE } else { "Built-in UTC turnovers; no command roster configured" },
         }))
-    })).await.map_err(|_| Error::unavailable())?.map_err(|_| Error::unavailable())??;
+    }).await.map_err(|_| Error::unavailable())??;
     if value.to_string().len() > 2_097_152 { return Err(Error::new("resource_exhausted", "Context response exceeds bound")); }
     Ok(Json(value))
 }
@@ -182,6 +218,39 @@ pub async fn handle(State(app): State<Arc<App>>, Path(operation): Path<String>, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Existing context tests opt into the fictional roster explicitly.
+    fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Metadata) -> Result<Snapshot> {
+        super::update(db, request, actor, metadata, true)
+    }
+    fn read(db: &Connection) -> Result<Snapshot> { super::read(db, true) }
+    #[test]
+    fn demo_off_has_no_own_ship_and_does_not_destroy_saved_demo_context() {
+        let mut db = Connection::open_in_memory().unwrap(); initialize(&db).unwrap();
+        assert_eq!(super::read(&db, false).unwrap().context.own_ship_id, "");
+        assert_eq!(super::read(&db, false).unwrap().context.default_ships, [UNASSIGNED]);
+        let metadata = Metadata::default();
+        update(&mut db, manual(Field::OwnShipId, &["demo-meridian"], false), "server-admin", &metadata).unwrap();
+        let hidden = super::read(&db, false).unwrap();
+        assert_eq!(hidden.context.own_ship_id, "");
+        assert!(!hidden.confirmations.contains_key(&Field::OwnShipId));
+        assert!(super::update(&mut db, manual(Field::OwnShipId, &["demo-tern"], false), "server-admin", &metadata, false).is_err());
+        super::update(&mut db, manual(Field::OperationName, &["MANUAL CONTEXT"], false), "server-admin", &metadata, false).unwrap();
+        assert_eq!(read(&db).unwrap().context.own_ship_id, "demo-meridian");
+    }
+    #[tokio::test]
+    async fn suggestion_timeout_does_not_block_context_reads_or_manual_writes() {
+        let (release, blocked) = std::sync::mpsc::channel::<()>();
+        let (metadata, available) = bounded_metadata(move || {
+            blocked.recv().map_err(|_| Error::unavailable())?;
+            Ok(Metadata::default())
+        }, Duration::from_millis(1)).await;
+        assert!(!available);
+        let mut db = Connection::open_in_memory().unwrap(); initialize(&db).unwrap();
+        let saved = update(&mut db, manual(Field::OperationName, &["MANUAL CONTEXT"], false), "server-admin", &metadata).unwrap();
+        assert_eq!(saved.context.operation_name, "MANUAL CONTEXT");
+        assert_eq!(read(&db).unwrap().updated_by.as_deref(), Some("server-admin"));
+        release.send(()).unwrap();
+    }
     fn manual(field: Field, values: &[&str], confirm: bool) -> Request {
         Request { field: Some(field), values: Some(values.iter().map(|v| (*v).into()).collect()), confirm_hide_unassigned: confirm, ..Request::default() }
     }

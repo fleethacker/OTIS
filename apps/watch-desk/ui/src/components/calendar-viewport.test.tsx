@@ -15,6 +15,11 @@ test("seven days and five ships fit a 1280px workspace regardless of collision c
   expect(calendarGridWidth("day", true, 5, 20)).toBe(892);
   expect(calendarGridWidth("week", false, 0, 20)).toBe(836);
 });
+test("Expanded Week retains lane-proportional width while Fit and Day remain bounded", () => {
+  expect(calendarGridWidth("week", false, 0, 3, true)).toBe(52 + 7 * 3 * 128);
+  expect(calendarGridWidth("week", false, 0, 3, false)).toBe(836);
+  expect(calendarGridWidth("day", true, 5, 3, true)).toBe(892);
+});
 test("opening uses earlier of visible source time and now minus one hour; pinned dates use source time", () => {
   const first = from + 14.5 * 3_600_000;
   expect(openingScrollTime(from, to, [first], from + 17 * 3_600_000, "day", "UTC")).toBe(first);

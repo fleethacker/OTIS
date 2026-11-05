@@ -117,22 +117,22 @@ test inputs; startup does not load or send them automatically.
 
 The Rust implementation is in [`backend/`](backend/README.md). The following exact message identifiers have end-to-end regression coverage against the supplied examples and their approved parsed documents:
 
-| Message | Tested declared version |
-| --- | --- |
-| OPTASK AAW | B.1.01.13 |
-| OPTASK ASUW | B.1.01.12 |
-| OPTASK ASW | B.1.01.12 |
-| OPTASK COMMS | B.1.01.12 |
-| OPTASK COP-CTP | B.1.01.03 |
-| OPTASK EW | B.1.01.12 |
-| OPTASK GENERAL | B.1.01.12 |
-| OPTASK IM | B.1.01.12 |
-| OPTASK LINK | B.1.02.04 |
-| OPTASK LINK ID SUPP | B.1.01.12 |
-| OPTASK MCM | B.1.01.12 |
-| OPTASK MINING | B.1.01.12 |
-| OPTASK NUC | B.1.01.12 |
-| OPTASK RAS | B.1.01.12 |
+| Message | Tested declared version | Tabler calendar icon (`react-icons/tb`) |
+| --- | --- | --- |
+| OPTASK AAW | B.1.01.13 | `TbRadar` |
+| OPTASK ASUW | B.1.01.12 | `TbShip` |
+| OPTASK ASW | B.1.01.12 | `TbSubmarine` |
+| OPTASK COMMS | B.1.01.12 | `TbRadio` |
+| OPTASK COP-CTP | B.1.01.03 | `TbMap2` |
+| OPTASK EW | B.1.01.12 | `TbWaveSine` |
+| OPTASK GENERAL | B.1.01.12 | `TbClipboardList` |
+| OPTASK IM | B.1.01.12 | `TbDatabase` |
+| OPTASK LINK | B.1.02.04 | `TbLink` |
+| OPTASK LINK ID SUPP | B.1.01.12 | `TbIdBadge2` |
+| OPTASK MCM | B.1.01.12 | `TbShieldCheck` |
+| OPTASK MINING | B.1.01.12 | `TbBomb` |
+| OPTASK NUC | B.1.01.12 | `TbRadioactive` |
+| OPTASK RAS | B.1.01.12 | `TbGasStation` |
 
 This coverage reproduces all approved example facts: 13 periods, 27 frequencies, 25 activities and 8 contacts. Extraction includes frequency plans, crypto changeover points, communications windows/checks, replenishment rendezvous, explicit task records, reporting requirements and source POCs where present. Detailed evidence stays in separate audit documents.
 

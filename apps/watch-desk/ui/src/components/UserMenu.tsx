@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { LuLogOut } from "@defense-unicorns/ark-ui";
+import { TbLogout } from "react-icons/tb";
 import { useIdentity } from "../hooks/useIdentity";
 
 /**
@@ -137,7 +137,7 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
                   window.location.replace("/logout");
                 }}
               >
-                <LuLogOut />
+                <TbLogout />
                 Sign out
               </button>
             </li>

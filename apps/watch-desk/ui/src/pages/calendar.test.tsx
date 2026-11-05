@@ -222,7 +222,7 @@ test("continuous geometry clips without rounding and excludes invalid intervals"
   expect(geometry(event, midnight + 8.5 * HOUR, midnight + 9 * HOUR)).toBeNull();
   expect(utcDate("2026-02-30", "2026-11-04")).toBe("2026-11-04");
 });
-test("timeline keeps exact labels and authoritative source links", () => {
+test("compact cards keep exact times on hover and authoritative source links", () => {
   const message = create(MessageRecordSchema, { sourceMessageId: "SOURCE-1", events: [event] });
   const view = renderWithProviders(
     <DayTimeline
@@ -233,7 +233,9 @@ test("timeline keeps exact labels and authoritative source links", () => {
       returnTo="/calendar?date=2026-11-04&q=watch"
     />
   );
-  expect(view.getAllByText(/2026-11-04 08:15 UTC/).length).toBeGreaterThan(0);
+  const card = view.getByRole("link", { name: "Short event, source record" });
+  expect(card.textContent).toBe("Short event");
+  expect(card.getAttribute("title")).toContain("2026-11-04 08:15 UTC");
   expect(view.queryByRole("heading", { name: /Exact event details/ })).toBeNull();
   expect(view.container.querySelector(".calendar-details")).toBeNull();
   expect(
@@ -266,13 +268,14 @@ test("Day source links and Week detail buttons are the only interactive event ta
     const wrapper = target.closest(".rbc-event")!;
     expect(wrapper.hasAttribute("tabindex")).toBe(false);
     expect(wrapper.querySelectorAll('a, button, [tabindex="0"]').length).toBe(1);
-    expect(wrapper.textContent).toContain("Revised");
+    expect(target.getAttribute("title")).toContain("Revised");
+    expect(target.textContent).toBe("Short event");
     if (mode === "week") {
       expect(target.tagName).toBe("BUTTON");
       expect(wrapper.querySelector("a")).toBeNull();
     } else {
       expect(target.getAttribute("href")).toContain("record=SOURCE-1");
-      expect(wrapper.textContent).toContain("2026-11-04 08:15 UTC");
+      expect(target.getAttribute("title")).toContain("2026-11-04 08:15 UTC");
     }
     view.unmount();
   }

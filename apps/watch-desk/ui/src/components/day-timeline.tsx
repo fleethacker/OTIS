@@ -23,6 +23,8 @@ import { useDisplayTime, civilDate, civilHour } from "./display-time";
 import moment from "moment-timezone";
 import { shipColor, shipKey } from "./ship-calendars";
 import { ShipMarker } from "./ship-marker";
+import { OptaskIcon } from "./optask-icons";
+import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";
 
 interface ScheduleEntry {
@@ -36,6 +38,7 @@ interface ScheduleEntry {
   after: boolean;
   point?: boolean;
   reviewRequired?: boolean;
+  sourceType?: string;
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -57,40 +60,52 @@ function SourceEventWrapper({
     onKeyPress: undefined,
   });
 }
+function sourceType(message: MessageRecord) {
+  const value = structuredPayload(message)?.type;
+  return typeof value === "string" ? value : undefined;
+}
 function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const { format: utc } = useDisplayTime();
   const disclose = useContext(WeekDisclosure);
-  if (disclose) {
-    return (
-      <button
-        type="button"
-        className="week-event"
-        aria-label={`${row.title}, event details`}
-        onClick={() => disclose(row)}
-      >
-        <strong>
-          {row.event.isRevised ? "Revised · " : ""}
-          {row.title}
-        </strong>
-        {row.point === true && <span>Point</span>}
-        {row.reviewRequired === true && <span>Requires review</span>}
-        <ShipMarker unit={row.event.unit} />
-      </button>
-    );
-  }
-  return (
-    <Link to={row.href} aria-label={`${row.title}, source record`}>
-      <strong>{row.title}</strong>
-      <ShipMarker unit={row.event.unit} />
-      {row.event.isRevised && " · Revised"}
-      {row.reviewRequired === true && <span> · Requires review</span>}
-      <span className="calendar-event-time">
-        {row.point === true
-          ? `Point: ${utc(row.event.startAt)}`
-          : `${utc(row.event.startAt)} → ${utc(row.event.endAt)}`}
-      </span>
-      {row.before && <span className="calendar-continuation"> · Continues from earlier</span>}
-      {row.after && <span className="calendar-continuation"> · Continues later</span>}
+  const information = [
+    row.title,
+    row.sourceType,
+    row.point === true
+      ? `Point: ${utc(row.event.startAt)}`
+      : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
+    `Unit: ${row.event.unit ?? "Unassigned"}`,
+    (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
+    row.reviewRequired === true ? "Requires review" : undefined,
+    row.event.isRevised ? "Revised" : undefined,
+    row.before ? "Continues from earlier" : undefined,
+    row.after ? "Continues later" : undefined,
+  ]
+    .filter((value) => value !== undefined)
+    .join("\n");
+  const content = (
+    <>
+      <OptaskIcon type={row.sourceType} />
+      <span className="calendar-event-title">{row.title}</span>
+    </>
+  );
+  return disclose ? (
+    <button
+      type="button"
+      className="week-event calendar-event-card"
+      aria-label={`${row.title}, event details`}
+      title={information}
+      onClick={() => disclose(row)}
+    >
+      {content}
+    </button>
+  ) : (
+    <Link
+      className="calendar-event-card"
+      to={row.href}
+      aria-label={`${row.title}, source record`}
+      title={information}
+    >
+      {content}
     </Link>
   );
 }
@@ -161,6 +176,7 @@ export function DayTimeline({
                 href: messageHref(message.sourceMessageId, returnTo),
                 before: position.before || parts.some((part) => part?.before === true),
                 after: position.after || parts.some((part) => part?.after === true),
+                sourceType: sourceType(message),
               },
             ]
           : [];
@@ -206,6 +222,7 @@ export function DayTimeline({
                 after: !point && end > to,
                 point,
                 reviewRequired: item.reviewRequired,
+                sourceType: item.sourceType,
               },
             ];
           })

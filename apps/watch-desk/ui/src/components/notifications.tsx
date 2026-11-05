@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LuBell, useQuery } from "@defense-unicorns/ark-ui";
+import { useQuery } from "@defense-unicorns/ark-ui";
+import { TbBell } from "react-icons/tb";
 import { useIdentity } from "../hooks/useIdentity";
 import { readSchedules } from "../gen/app/v1/source_data-SourceDataService_connectquery";
 import { calendarReturn, messageHref } from "./calendar-links";
@@ -101,7 +102,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
         aria-controls="desk-notifications"
         onClick={() => setOpen(!open)}
       >
-        <LuBell aria-hidden="true" />{" "}
+        <TbBell aria-hidden="true" />{" "}
         <span className="notification-count" aria-hidden="true">
           {unread}
         </span>

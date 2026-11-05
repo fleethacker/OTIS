@@ -38,6 +38,7 @@ test("canonical point events render in the calendar without a fabricated duratio
           key: "source@r1#point",
           messageKey: "source@r1",
           factId: "point",
+          sourceType: "OPTASK COMMS",
           title: "Source check",
           kind: "point",
           at: "2026-11-04T10:00:00Z",
@@ -51,7 +52,11 @@ test("canonical point events render in the calendar without a fabricated duratio
     />
   );
   expect(result.getByRole("link", { name: "Source check, source record" })).toBeTruthy();
-  expect(result.getByText("Point: 2026-11-04 10:00 UTC")).toBeTruthy();
-  expect(result.getByText(/Requires review/)).toBeTruthy();
+  const card = result.getByRole("link", { name: "Source check, source record" });
+  expect(card.textContent).toBe("Source check");
+  expect(card.getAttribute("title")).toContain("Point: 2026-11-04 10:00 UTC");
+  expect(card.getAttribute("title")).toContain("Requires review");
+  expect(card.getAttribute("title")).not.toContain("End:");
+  expect(result.getByRole("img", { name: "OPTASK COMMS" })).toBeTruthy();
   expect(result.container.querySelectorAll(".calendar-point").length).toBe(1);
 });

@@ -19,6 +19,7 @@ export interface TimelineItem {
   key: string;
   messageKey: string;
   factId?: string;
+  sourceType?: string;
   title: string;
   kind: "point" | "interval" | "unresolved";
   at?: string;

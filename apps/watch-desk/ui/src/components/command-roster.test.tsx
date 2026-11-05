@@ -60,11 +60,13 @@ test("explicit none has the same unqueried empty state in every layout", async (
   });
   try {
     for (const suffix of ["view=day", "view=day&shipLayout=side", "view=week", "view=month"]) {
-      const view = renderWithProviders(<Calendar />, { route: `/calendar?date=2026-11-05&ships=%5B%5D&${suffix}` });
-      await waitFor(() => expect(view.getByRole("button", { name: "Only USS Meridian" })).toBeTruthy());
-      expect(view.getByText("No ships selected. Choose a ship or Unassigned.")).toBeTruthy();
-      expect(view.queryByText(/No unresolved times/)).toBeNull();
-      view.unmount();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, { route: `/calendar?date=2026-11-05&ships=%5B%5D&${suffix}` });
+      try {
+        await waitFor(() => expect(view.getByRole("button", { name: "Only USS Meridian" })).toBeTruthy());
+        expect(view.getByText("No ships selected. Choose a ship or Unassigned.")).toBeTruthy();
+        expect(view.queryByText(/No unresolved times/)).toBeNull();
+      } finally { view.unmount(); client.clear(); }
     }
   } finally { fetch.mockRestore(); }
 });

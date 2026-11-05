@@ -4,8 +4,7 @@ import type { RouteMeta } from "../route-registry";
 import { calendarReturn } from "../components/calendar-links";
 import { useSource, useDebounced } from "../components/source-data";
 import { MessageReader } from "../components/message-reader";
-import { recordStatus } from "../components/message-format";
-import { messageTitle, structuredIdentifiers } from "../components/structured-message-format";
+import { MessageSearchCard } from "../components/message-search-card";
 
 export const route: RouteMeta = { path: "/messages", label: "Message records", order: 1 };
 
@@ -110,25 +109,13 @@ export default function Messages() {
                 <p>No search matches. Clear search to restore all records.</p>
               )}
               {matches.map((m) => (
-                <button
-                  key={String(m.id)}
-                  className="record-entry"
-                  aria-pressed={record === m.sourceMessageId}
-                  onClick={() => update("record", m.sourceMessageId)}
-                >
-                  <span className="record-id">{m.sourceMessageId}</span>
-                  <strong>{messageTitle(m)}</strong>
-                  {m.structuredPayloadJson !== undefined && (
-                    <span className="review-cue">{structuredIdentifiers(m)}</span>
-                  )}
-                  <span>Open record for receipt details and extracted facts.</span>
-                  {result.data.meta.matchedExcerpts?.[m.sourceMessageId]?.map((excerpt) => (
-                    <span key={excerpt.passageId}>{excerpt.text}</span>
-                  ))}
-                  <span className={m.processingStatus === "parsed" ? "" : "review-cue"}>
-                    {recordStatus(m.processingStatus)}
-                  </span>
-                </button>
+                <MessageSearchCard
+                  key={m.sourceMessageId}
+                  message={m}
+                  header={result.data.meta.messageHeaders?.[m.sourceMessageId]}
+                  selected={record === m.sourceMessageId}
+                  onSelect={() => update("record", m.sourceMessageId)}
+                />
               ))}
             </section>
             {record && detail.isPending ? (

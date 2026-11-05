@@ -38,6 +38,11 @@ reads to seven seconds. Failed or partial OpenSearch reads fail the request.
 List/search/detail/timeline return the existing protobuf JSON
 `ReadSchedulesResponse` shape plus an application-owned `meta` object. The
 shared adapter removes `meta` before decoding with the generated schema.
+For canonical list/search results, `meta.messageHeaders` is keyed by the full
+source message key and contains only optional `type`, `originator` and `issuedAt`
+fields from the canonical document. Cards use the MSGID originator and issue
+time; absent values stay unavailable. Subjects remain in each message's `subject`.
+This header projection adds no per-message detail queries or raw/audit payloads.
 Evidence returns `{messageKey, records, retrievedAt, state}`.
 `GET /api/v1/source/status` reports cluster, model, passage embedding states and
 publication job counts. HTTP liveness is separately available at `/api/health`.

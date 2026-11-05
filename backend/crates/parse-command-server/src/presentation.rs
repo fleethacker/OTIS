@@ -3,6 +3,20 @@ use crate::{
     private::{Private, text, timestamp},
 };
 use serde_json::{Value, json};
+/// Bounded browse/search header fields; full records remain a detail read.
+pub fn message_header(core: &Value) -> Value {
+    let mut header = serde_json::Map::new();
+    for (source, target) in [
+        ("type", "type"),
+        ("originator", "originator"),
+        ("issued_at", "issuedAt"),
+    ] {
+        if let Some(value) = core[source].as_str() {
+            header.insert(target.into(), json!(value));
+        }
+    }
+    Value::Object(header)
+}
 pub fn message(
     core: &Value,
     private: &Private,

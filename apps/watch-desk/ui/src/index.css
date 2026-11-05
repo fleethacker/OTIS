@@ -442,3 +442,13 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .calendar-scroll .rbc-day-slot .calendar-event-card .optask-icon { margin-top: 1px; }
 
 .calendar-event-card .calendar-event-title { flex: 1 1 auto; }
+
+/* Two-row source headers for message search cards. */
+.record-entry { gap: 5px; padding: 12px 16px; }
+.record-card-heading, .record-card-metadata { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; }
+.record-card-heading .optask-icon { flex: none; width: 15px; height: 15px; }
+.record-card-type { flex: none; font-size: 11px; font-weight: 600; color: var(--color-bc-muted); white-space: nowrap; }
+.record-entry .record-card-subject { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-card-metadata { justify-content: space-between; color: var(--color-bc-muted); font-size: 11px; }
+.record-card-originator { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-card-metadata time, .record-card-metadata > span:last-child { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }

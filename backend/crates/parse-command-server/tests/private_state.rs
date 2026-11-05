@@ -165,3 +165,16 @@ fn migration_preserves_owners_history_and_orphans_and_is_idempotent() {
     drop(db);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn search_headers_expose_only_source_type_originator_and_issue_time() {
+    let core = json!({"id":"internal","revision":"parser-v1","type":"OPTASK COMMS","originator":"TRAINING COMMAND","issued_at":"2008-03-31T18:00:30Z","subject":"Example","review_flags":["internal_flag"],"activities":[{"type":"example"}]});
+    assert_eq!(
+        presentation::message_header(&core),
+        json!({"type":"OPTASK COMMS","originator":"TRAINING COMMAND","issuedAt":"2008-03-31T18:00:30Z"})
+    );
+    assert_eq!(
+        presentation::message_header(&json!({"type":null,"issued_at":null})),
+        json!({})
+    );
+}

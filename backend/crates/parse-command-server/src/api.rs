@@ -182,9 +182,15 @@ impl App {
             .ok_or_else(Error::unavailable)?;
         let more = hits.len() > 20;
         let mut messages = Vec::new();
+        let mut headers = serde_json::Map::new();
         {
             let store = self.store()?;
             for hit in hits.iter().take(20) {
+                let core = &hit["_source"];
+                headers.insert(
+                    format!("{}@{}", text(core, "id"), text(core, "revision")),
+                    presentation::message_header(core),
+                );
                 messages.push(presentation::message(
                     &hit["_source"],
                     &store,
@@ -212,7 +218,7 @@ impl App {
         Ok(envelope(
             messages,
             "Canonical messages from OpenSearch; extraction and command assignments require review",
-            json!({"dataset":"canonical","executedMode":"browse","nextPageToken":next,"limit":20}),
+            json!({"dataset":"canonical","executedMode":"browse","nextPageToken":next,"limit":20,"messageHeaders":headers}),
         ))
     }
     async fn search_messages(&self, request: ReadRequest, filters: Value) -> Result<Value> {
@@ -282,6 +288,7 @@ impl App {
         };
         let docs = hydrated["docs"].as_array().ok_or_else(Error::unavailable)?;
         let mut messages = Vec::new();
+        let mut headers = serde_json::Map::new();
         let mut stale = 0;
         {
             let store = self.store()?;
@@ -294,6 +301,11 @@ impl App {
                     stale += 1;
                     continue;
                 }
+                let core = &doc["_source"];
+                headers.insert(
+                    format!("{}@{}", text(core, "id"), text(core, "revision")),
+                    presentation::message_header(core),
+                );
                 messages.push(presentation::message(
                     &doc["_source"],
                     &store,
@@ -306,7 +318,7 @@ impl App {
         Ok(envelope(
             messages,
             "Ranked message results from a bounded passage candidate window; no complete result count is claimed",
-            json!({"dataset":"canonical","requestedMode":mode,"executedMode":mode,"limit":20,"candidateLimit":100,"windowLimited":hits.len()>=100,"staleHitsDropped":stale,"matchedExcerpts":excerpts,"tookMs":response["took"]}),
+            json!({"dataset":"canonical","requestedMode":mode,"executedMode":mode,"limit":20,"candidateLimit":100,"windowLimited":hits.len()>=100,"staleHitsDropped":stale,"matchedExcerpts":excerpts,"messageHeaders":headers,"tookMs":response["took"]}),
         ))
     }
     pub async fn detail(&self, key: &str) -> Result<Value> {

@@ -28,7 +28,13 @@ export interface TimelineItem {
   reason?: string;
   reviewRequired: boolean;
 }
+export interface MessageHeader {
+  type?: string;
+  originator?: string;
+  issuedAt?: string;
+}
 export interface SourceMeta {
+  messageHeaders?: Record<string, MessageHeader>;
   dataset?: Dataset;
   nextPageToken?: string;
   executedMode?: string;

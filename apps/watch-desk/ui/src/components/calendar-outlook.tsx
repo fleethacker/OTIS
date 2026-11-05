@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { Command } from "./command-roster";
 import { Modal } from "./modal";
 import { AppButton, Notice, TextInput } from "./ui";
-import { useSource, type Dataset } from "./source-data";
+import { readJson, useSource, type Dataset } from "./source-data";
+import { sessionFetch } from "./session-access";
 import { UNASSIGNED } from "./ship-calendars";
 import { formatMinuteUTC } from "./watch-boundary";
 import {
@@ -37,7 +38,8 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
   const [types, setTypes] = useState<Set<string> | undefined>();
   const [first, setFirst] = useState(date);
   const [last, setLast] = useState(() => calendarExportEnd(date));
-  const [stub, setStub] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ tone: "info" | "success" | "error"; message: string }>();
   const [downloadError, setDownloadError] = useState("");
   const range = calendarExportRange(first, last);
   // Read the chosen window, not just the currently visible calendar day. Ships and
@@ -59,11 +61,40 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
     if (next.has(type)) next.delete(type); else next.add(type);
     setTypes(next);
   }
+  function calendarText() {
+    return generateCalendarIcs(preview?.events ?? [], { now: new Date(), origin: window.location.origin, returnTo });
+  }
+  async function sync() {
+    if (!ready || !preview?.events.length || preview.events.length > 500 || syncing) return;
+    setSyncing(true);
+    setSyncNotice(undefined);
+    try {
+      const body = JSON.stringify({ ics: calendarText() });
+      if (new TextEncoder().encode(body).length > 2 * 1024 * 1024) throw new Error("Choose fewer events: the sync request exceeds 2 MiB.");
+      const response = await sessionFetch("/api/v1/calendar/outlook-sync", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body,
+      });
+      if (response.status === 404) {
+        setSyncNotice({ tone: "info", message: "Direct sync is not configured on this deployment. Use Download .ics to import." });
+        return;
+      }
+      const reply = await readJson(response);
+      const { synced, created, updated } = reply;
+      if (typeof synced !== "number" || typeof created !== "number" || typeof updated !== "number" ||
+          ![synced, created, updated].every((value) => Number.isInteger(value) && value >= 0) ||
+          synced !== preview.events.length || created + updated !== synced) throw new Error("Calendar sync returned an invalid response. Retry safely.");
+      setSyncNotice({ tone: "success", message: `Synced ${synced} events to the mailbox calendar (${created} new, ${updated} updated)` });
+    } catch (error) {
+      setSyncNotice({ tone: "error", message: error instanceof Error ? error.message : "Mailbox calendar sync failed. Some events may have synced; retry safely." });
+    } finally {
+      setSyncing(false);
+    }
+  }
   function download() {
     if (!ready || !preview?.events.length) return;
     setDownloadError("");
     try {
-      const content = generateCalendarIcs(preview.events, { now: new Date(), origin: window.location.origin, returnTo });
+      const content = calendarText();
       const url = URL.createObjectURL(new Blob([content], { type: "text/calendar;charset=utf-8" }));
       const link = document.createElement("a");
       try {
@@ -82,7 +113,7 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
   }
   return <div className="outlook-panel">
     <p>Choose events to import into Outlook. These filters are separate from the calendar search.</p>
-    <fieldset>
+    <fieldset disabled={syncing}>
       <legend>Ships</legend>
       <div className="outlook-actions">
         <AppButton size="sm" onClick={() => setShips(undefined)}>Select all</AppButton>
@@ -98,7 +129,7 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
         </label>)}
       </div>
     </fieldset>
-    <fieldset>
+    <fieldset disabled={syncing}>
       <legend>Event types</legend>
       <div className="outlook-choices">
         {typeOptions.map((type) => <label key={type}>
@@ -107,7 +138,7 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
       </div>
       {ready && !typeOptions.length && <p>No event types in this window.</p>}
     </fieldset>
-    <fieldset>
+    <fieldset disabled={syncing}>
       <legend>Date range · UTC</legend>
       <div className="outlook-dates">
         <label>From (UTC)<TextInput className="input-sm" type="date" value={first} onChange={(event) => setFirst(event.target.value)} /></label>
@@ -136,10 +167,11 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
     <p>Recurring events export as individual occurrences in this range, not repeating series. Extracted events are not operational confirmation.</p>
     <div className="outlook-actions">
       <AppButton variant="primary" size="sm" disabled={!ready || !preview?.events.length} onClick={download}>Download .ics</AppButton>
-      <AppButton size="sm" onClick={() => setStub(true)} aria-describedby="outlook-connection-status">Sync to Outlook</AppButton>
+      <AppButton size="sm" disabled={syncing || !ready || !preview?.events.length || preview.events.length > 500} onClick={() => void sync()} aria-describedby="outlook-connection-status">{syncing ? "Syncing…" : "Sync to Outlook"}</AppButton>
     </div>
-    <p id="outlook-connection-status">Direct sync is not configured. No Outlook connection will be made.</p>
-    {stub && <Notice role="status">Outlook connection is not configured on this deployment. Use Download .ics to import.</Notice>}
+    <p id="outlook-connection-status">Direct sync writes to the demo mailbox calendar only. No email is sent.</p>
+    {preview && preview.events.length > 500 && <Notice tone="warning">Choose at most 500 events for direct sync. Download .ics remains available.</Notice>}
+    {syncNotice && <Notice tone={syncNotice.tone} role={syncNotice.tone === "error" ? "alert" : "status"}>{syncNotice.message}</Notice>}
     {downloadError && <Notice tone="error" role="alert">{downloadError}</Notice>}
   </div>;
 }

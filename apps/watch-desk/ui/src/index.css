@@ -483,3 +483,36 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .message-search-summary svg { width: 13px; height: 13px; }
 
 .message-search-actions .popover-trigger { min-width: 32px; padding-inline: 7px; }
+
+/* Source-set message reader. */
+.message-reader-status, .message-acknowledgement { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.message-reader-status { margin-top: 8px; }
+.message-acknowledgement { flex: 1; }
+.message-acknowledgement > button { margin-left: auto; }
+.status-pill { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--color-base-300); border-radius: 999px; padding: 2px 8px; font-size: 11px; line-height: 1.5; font-weight: 500; color: var(--color-bc-muted); }
+.status-pill-review { color: var(--color-warning); border-color: var(--color-warning); }
+.usmtf-set-list { display: grid; gap: 10px; padding-top: 12px; }
+.usmtf-set-card { min-width: 0; border: 1px solid var(--color-base-300); border-radius: 10px; padding: 12px; overflow-wrap: anywhere; }
+.message-reader .usmtf-set-card > header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 8px; }
+.usmtf-set-card h3 { font-size: 11px; font-weight: 650; color: var(--color-bc-muted); letter-spacing: .035em; }
+.usmtf-set-card h4 { font-size: 13px; font-weight: 600; }
+.usmtf-set-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 8px 16px; margin: 0; }
+.usmtf-set-fields dt, .acknowledgement-reference dt { font-size: 11px; color: var(--color-bc-muted); }
+.usmtf-set-fields dd, .acknowledgement-reference dd { margin: 2px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.usmtf-narrative { font-size: 13px; white-space: pre-wrap; line-height: 1.5; margin: 0; }
+.usmtf-table-scroll { overflow-x: auto; margin-top: 8px; }
+.usmtf-table-scroll td { white-space: pre-wrap; overflow-wrap: anywhere; }
+.usmtf-raw { font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 12px; }
+.app-modal { width: min(580px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow: auto; padding: 20px; border: 1px solid var(--color-base-300); border-radius: 14px; background: var(--color-base-100); color: var(--color-base-content); margin: auto; box-shadow: 0 16px 64px #0005; }
+.app-modal::backdrop { background: #0007; }
+.app-modal > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.app-modal h2 { font-size: 16px; font-weight: 600; }
+.app-modal button svg { width: 16px; height: 16px; }
+.acknowledgement-form { display: grid; gap: 16px; }
+.acknowledgement-reference { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 0; }
+.acknowledgement-reference > div:last-child { grid-column: 1 / -1; }
+.acknowledgement-form > label { display: grid; gap: 6px; font-size: 12px; }
+.acknowledgement-form .select { width: 100%; }
+.acknowledgement-preview { width: 100%; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.6; }
+.acknowledgement-form > footer { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.acknowledgement-form [role="alert"] { color: var(--color-error); font-size: 12px; }

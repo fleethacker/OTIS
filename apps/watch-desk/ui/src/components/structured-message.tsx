@@ -1,214 +1,148 @@
-import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import type { ReactNode } from "react";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
-import { useDisplayTime } from "./display-time";
-import { isObject, structuredPayload, type Fields, type Value } from "./structured-message-format";
+import { structuredPayload } from "./structured-message-format";
+import { sourceSets, setFieldLabel, type SetField, type SourceSet } from "./usmtf-sets";
 
-// Registration controls grouping and labels, never filters the source. All unregistered keys
-// flow into Additional fields at every object level; new activity types need no bespoke card.
-const sections: Record<string, string[]> = {
-  "Message metadata": [
-    "type",
-    "subject",
-    "originator",
-    "serial",
-    "id",
-    "revision",
-    "status",
-    "issued_at",
-    "expires_at",
-    "command_ids",
-  ],
-  "Security metadata": ["security"],
-  "Review flags": ["review_flags"],
-  Periods: ["periods"],
-  Frequencies: ["frequencies"],
-  Activities: ["activities"],
-  Contacts: ["contacts"],
-};
-const registered = new Set(Object.values(sections).flat());
-const knownFields = new Set([
-  "id",
-  "revision",
-  "type",
-  "subject",
-  "originator",
-  "serial",
-  "status",
-  "issued_at",
-  "expires_at",
-  "command_ids",
-  "policy",
-  "classification",
-  "release_to",
-  "security",
-  "review_flags",
-  "start_at",
-  "end_at",
-  "end_status",
-  "start_status",
-  "hz",
-  "upper_hz",
-  "plan",
-  "designator",
-  "channel",
-  "emission",
-  "usage",
-  "scope",
-  "task_type",
-  "description",
-  "start_time",
-  "end_time",
-  "variant",
-  "circuits",
-  "participants",
-  "at",
-  "coordination",
-  "material",
-  "line",
-  "mode",
-  "report",
-  "responsible_party",
-  "as_of_time",
-  "as_of_status",
-  "deadline_time",
-  "deadline_status",
-  "delivery",
-  "as_of_label",
-  "deadline_label",
-  "time",
-  "time_status",
-  "equipment",
-  "name",
-  "position",
-  "unit",
-  "channels",
-  "location",
-  "role",
-  "value",
-  "course",
-]);
-const labels: Record<string, string> = {
-  id: "Source ID",
-  revision: "Source revision",
-  hz: "Frequency",
-  upper_hz: "Upper range",
-  status: "Status",
-  issued_at: "Issued at",
-  expires_at: "Expires at",
-};
-function label(key: string) {
-  return labels[key] ?? key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-}
-function DataValue({ value, field = "" }: { value: Value | undefined; field?: string }) {
-  const { format } = useDisplayTime();
-  if (value === undefined) {
-    return <span className="feature-note">Not supplied</span>;
-  }
-  if (value === null) {
-    return <span className="feature-note">Unavailable (null)</span>;
-  }
-  if (Array.isArray(value)) {
-    return value.length > 0 ? (
-      <ol className="structured-items">
-        {value.map((item, index) => (
-          <li key={index}>
-            <DataValue value={item} />
-          </li>
-        ))}
-      </ol>
-    ) : (
-      <span className="feature-note">None supplied (empty list)</span>
-    );
-  }
-  if (isObject(value)) {
-    return Object.keys(value).length > 0 ? (
-      <ObjectFields value={value} />
-    ) : (
-      <span>Empty object</span>
-    );
-  }
-  if (typeof value === "string") {
-    // Only complete offset-bearing instants are display-zone converted. Fragments stay literal.
-    if (
-      /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/.test(value) &&
-      Number.isFinite(Date.parse(value))
-    ) {
-      return <time dateTime={value}>{format(timestampFromDate(new Date(value)))}</time>;
-    }
-    return (
-      <span className={/status|flags/.test(field) ? "structured-attention" : undefined}>
-        {value === "" ? 'Empty string ("")' : value}
-      </span>
-    );
-  }
+export function UsmtfSetCard({
+  name,
+  title,
+  children,
+}: {
+  name: string;
+  title?: string;
+  children: ReactNode;
+}) {
   return (
-    <span>
-      {String(value)}
-      {typeof value === "number" && (field === "hz" || field === "upper_hz") ? " Hz" : ""}
-    </span>
+    <section
+      className={`usmtf-set-card usmtf-set-${name.toLowerCase()}`}
+      aria-label={`${name}${title !== undefined && title !== "" ? ` — ${title}` : ""}`}
+    >
+      <header>
+        <h3>{name}</h3>
+        {title !== undefined && title !== "" && <h4>{title}</h4>}
+      </header>
+      {children}
+    </section>
   );
 }
-function FieldList({ entries }: { entries: [string, Value | undefined][] }) {
+function Fields({
+  fields,
+  set,
+  examples,
+}: {
+  fields: SetField[];
+  set: string;
+  examples: boolean | undefined;
+}) {
   return (
-    <dl className="structured-fields">
-      {entries.map(([key, value]) => (
-        <div key={key}>
-          <dt>{label(key)}</dt>
-          <dd>
-            <DataValue value={value} field={key} />
-          </dd>
+    <dl className="usmtf-set-fields">
+      {fields.map((field, index) => (
+        <div key={index}>
+          <dt>{setFieldLabel(set, field.position, examples)}</dt>
+          <dd>{field.value}</dd>
         </div>
       ))}
     </dl>
   );
 }
-function ObjectFields({ value }: { value: Fields }) {
-  const entries = Object.entries(value);
-  const known = entries.filter(([key]) => knownFields.has(key));
-  const extra = entries.filter(([key]) => !knownFields.has(key));
+function ColumnarSet({ set }: { set: SourceSet }) {
   return (
-    <>
-      <FieldList entries={known} />
-      {extra.length > 0 && (
-        <section className="structured-extra">
-          <h4>Additional fields</h4>
-          <FieldList entries={extra} />
-        </section>
-      )}
-    </>
+    <div className="usmtf-table-scroll">
+      <table className="table table-xs">
+        <tbody>
+          {set.rows.map((row, index) => (
+            <tr key={index}>
+              {row.fields.map((field, j) => (
+                <td key={j}>{field.value}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function SetCard({ set, examples }: { set: SourceSet; examples: boolean | undefined }) {
+  const { set_id: name, fields } = set;
+  if (name === "GENTEXT") {
+    return (
+      <UsmtfSetCard name={name} title={fields[0]?.value}>
+        {fields.slice(1).map((field, index) => (
+          <p className="usmtf-narrative" key={index}>
+            {field.value}
+          </p>
+        ))}
+      </UsmtfSetCard>
+    );
+  }
+  if (["AMPN", "NARR", "RMKS"].includes(name)) {
+    return (
+      <UsmtfSetCard name={name}>
+        {fields.map((field, index) => (
+          <p className="usmtf-narrative" key={index}>
+            {field.value}
+          </p>
+        ))}
+      </UsmtfSetCard>
+    );
+  }
+  if (name === "FREQPLAN" && examples === true) {
+    const groups: SetField[][] = [];
+    for (let i = 2; i < fields.length; i += 4) {
+      groups.push(fields.slice(i, i + 4));
+    }
+    return (
+      <UsmtfSetCard name={name}>
+        <Fields fields={fields.slice(0, 2)} set={name} examples={examples} />
+        {groups.length > 0 && (
+          <div className="usmtf-table-scroll">
+            <table className="table table-xs">
+              <thead>
+                <tr>
+                  {["Channel", "Frequency", "Emission", "Usage"].map((label) => (
+                    <th key={label}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group, i) => (
+                  <tr key={i}>
+                    {group.map((field, j) => (
+                      <td key={j}>{field.value}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </UsmtfSetCard>
+    );
+  }
+  return (
+    <UsmtfSetCard name={name}>
+      <Fields fields={fields} set={name} examples={examples} />
+      {set.rows.length > 0 && <ColumnarSet set={set} />}
+    </UsmtfSetCard>
   );
 }
 export function StructuredMessage({ message }: { message: MessageRecord }) {
   const payload = structuredPayload(message);
-  if (!payload) {
-    return (
-      <p role="alert">Structured payload unavailable or invalid. Legacy fields remain below.</p>
-    );
+  const sets = sourceSets(payload);
+  if (sets === undefined || sets.length === 0) {
+    return <p className="text-sm">Parsed sets unavailable.</p>;
   }
-  const extra = Object.entries(payload).filter(([key]) => !registered.has(key));
+  const examples =
+    payload?.source_profile === "observed-optask-extensions-v1"
+      ? true
+      : payload?.source_profile === "usmtf-2003-subset-v1"
+        ? false
+        : undefined;
   return (
-    <div className="structured-message">
-      <p className="feature-note">
-        Structured source data, not original raw USMTF. Periods and activities are not confirmed
-        calendar events. Security metadata is supplied, not authorization or validated markings.
-      </p>
-      {Object.entries(sections).map(([title, keys]) => (
-        <section className="structured-section" key={title} aria-label={title}>
-          <h3>{title}</h3>
-          <FieldList
-            entries={keys.map((key) => [
-              key,
-              Object.prototype.hasOwnProperty.call(payload, key) ? payload[key] : undefined,
-            ])}
-          />
-        </section>
+    <div className="usmtf-set-list">
+      {sets.map((set, index) => (
+        <SetCard key={index} set={set} examples={examples} />
       ))}
-      {extra.length > 0 && (
-        <section className="structured-section">
-          <h3>Additional fields</h3>
-          <FieldList entries={extra} />
-        </section>
-      )}
     </div>
   );
 }

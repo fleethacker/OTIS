@@ -3,6 +3,53 @@ use crate::{
     private::{Private, text, timestamp},
 };
 use serde_json::{Value, json};
+/// Display only the persisted scanner's source fields, never audit/rule IDs or inferred facts.
+/// Verify every field against the same hash-checked decoded body used by the detail response.
+pub fn source_sets(audits: &[Value], raw: &str) -> Result<(String, Value)> {
+    let Some(completed) = audits
+        .iter()
+        .filter(|v| v["kind"] == "parse_completed")
+        .max_by_key(|v| v["recorded_at"].as_str().unwrap_or(""))
+    else {
+        return Ok((String::new(), json!([])));
+    };
+    let payload = &completed["payload"];
+    let records = payload["records"]
+        .as_array()
+        .ok_or_else(Error::unavailable)?;
+    let fields = |values: &Value| -> Result<Vec<Value>> {
+        values
+            .as_array()
+            .ok_or_else(Error::unavailable)?
+            .iter()
+            .map(|f| {
+                let start = f["start_byte"]
+                    .as_u64()
+                    .and_then(|v| usize::try_from(v).ok())
+                    .ok_or_else(Error::unavailable)?;
+                let end = f["end_byte"]
+                    .as_u64()
+                    .and_then(|v| usize::try_from(v).ok())
+                    .ok_or_else(Error::unavailable)?;
+                let value = f["raw_text"].as_str().ok_or_else(Error::unavailable)?;
+                if raw.get(start..end) != Some(value) || !f["position"].is_u64() {
+                    return Err(Error::unavailable());
+                }
+                Ok(json!({"position":f["position"],"value":value}))
+            })
+            .collect()
+    };
+    let mut sets = Vec::with_capacity(records.len());
+    for record in records {
+        let name = record["set_id"].as_str().ok_or_else(Error::unavailable)?;
+        let mut rows = Vec::new();
+        for row in record["rows"].as_array().ok_or_else(Error::unavailable)? {
+            rows.push(json!({"fields":fields(&row["fields"])?}));
+        }
+        sets.push(json!({"set_id":name,"fields":fields(&record["fields"])? ,"rows":rows}));
+    }
+    Ok((text(payload, "profile").to_owned(), json!(sets)))
+}
 /// Bounded browse/search header fields; full records remain a detail read.
 pub fn message_header(core: &Value) -> Value {
     let mut header = serde_json::Map::new();

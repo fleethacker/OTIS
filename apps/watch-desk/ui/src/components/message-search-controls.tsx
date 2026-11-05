@@ -28,11 +28,15 @@ function FilterForm({
       onSubmit={(event) => {
         event.preventDefault();
         const values = new FormData(event.currentTarget);
+        const text = (name: string) => {
+          const value = values.get(name);
+          return typeof value === "string" ? value : "";
+        };
         onApply({
-          messageType: String(values.get("messageType") ?? ""),
-          sender: String(values.get("sender") ?? ""),
-          fromDate: String(values.get("fromDate") ?? ""),
-          throughDate: String(values.get("throughDate") ?? ""),
+          messageType: text("messageType"),
+          sender: text("sender"),
+          fromDate: text("fromDate"),
+          throughDate: text("throughDate"),
         });
       }}
     >

@@ -390,3 +390,34 @@ pub async fn review_all(State(app): State<Arc<App>>, headers: HeaderMap, Json(re
     value["watermark"] = json!(request.watermark);
     Ok(Json(value))
 }
+/// Delete the caller's review record. Returns whether one existed.
+pub async fn clear_reviews(state: &parse_command_state::Store, owner: &str) -> Result<bool> {
+    for _ in 0..5 {
+        let Some(doc) = state.get(REVIEWS, owner).await? else { return Ok(false) };
+        match state.delete(&doc).await {
+            Ok(()) => return Ok(true),
+            Err(parse_command_state::Error("state_conflict")) => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(parse_command_state::Error("state_conflict").into())
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DemoReset {
+    /// Complete ISO UTC time, or `"turnover"`. Omitted: 06:00Z of the current UTC day.
+    #[serde(default)] pub last_seen_at: Option<String>,
+}
+/// Demo only: clear the caller's reviews and move the caller's `lastSeenAt` and the
+/// current session's pinned boundary to one time, so the catch-up shows at once. The
+/// subject is always the session identity; only the demo flag enables the route.
+pub async fn demo_reset(State(app): State<Arc<App>>, headers: HeaderMap, Json(request): Json<DemoReset>) -> Result<Json<Value>> {
+    if !app.config.intake.demo_fixture_assignments { return Err(Error::new("not_found", "Not found")); }
+    let identity = app.headers_identity(&headers).await?;
+    let turnovers = crate::watch::turnovers(&app.private.state).await;
+    let at = crate::watch::reset_time(request.last_seen_at.as_deref(), &turnovers, Utc::now())?;
+    let cleared = clear_reviews(&app.private.state, &identity.owner).await?;
+    crate::watch::reset(&app, &headers, &identity.owner, at).await?;
+    let at = crate::watch::millis(at);
+    Ok(Json(json!({"lastSeenAt":at,"since":at,"basis":"last_seen","reviewsCleared":cleared})))
+}

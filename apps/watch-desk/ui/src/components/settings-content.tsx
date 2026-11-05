@@ -13,6 +13,7 @@ import {
 import { commandName, useCommands } from "./command-roster";
 import { UNASSIGNED } from "./ship-calendars";
 import { WatchSuggestions } from "./watch-suggestions";
+import { DemoReset } from "./watch-demo-reset";
 /** Comma- or space-separated Zulu times, normalized to the stored ascending list. */
 export function parseTurnovers(text: string): string[] {
   const values = text.split(/[\s,]+/).map((v) => v.trim().toUpperCase()).filter(Boolean);
@@ -170,6 +171,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
           </form>
         </>
       )}
+      {tab === "preferences" && roster.data?.assignmentEnabled === true && <DemoReset />}
       {tab === "command" && (
         <form
           onSubmit={(e) => {

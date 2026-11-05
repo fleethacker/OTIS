@@ -7,7 +7,6 @@ use axum::{
 use parse_command_server::{
     api::{App, role_identity},
     auth, commands,
-    config::Config,
     private::Private,
     publisher::Status,
     search::Search,
@@ -17,43 +16,6 @@ use std::sync::{Arc, atomic::AtomicBool};
 use tower::ServiceExt;
 mod support;
 
-/// App whose state endpoints are unreachable: only checks that fail before any
-/// state read can pass.
-fn offline_app(demo: bool) -> Arc<App> {
-    let mut intake = parse_command_intake::config::Config::load(std::path::Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../config/demo-compose-intake.json"
-    )))
-    .unwrap();
-    assert!(!intake.demo_fixture_assignments);
-    intake.demo_fixture_assignments = demo;
-    let state =
-        parse_command_state::Store::new("http://127.0.0.1:9", ".parse-command-offline").unwrap();
-    let config = Config {
-        intake,
-        search: "http://127.0.0.1:9".into(),
-        state_index: state.index().into(),
-        auth: support::auth_config(),
-        tokenizer: "unused".into(),
-        tokenizer_hash: String::new(),
-        listen: "127.0.0.1:0".into(),
-        auto_role: None,
-        allow_fixtures: false,
-    };
-    Arc::new(App {
-        search: Search::new(config.search.clone()).unwrap(),
-        auth: auth::Auth::new(config.auth.clone(), state.clone()).unwrap(),
-        config,
-        private: Private::new(state.clone()),
-        custody: state,
-        notification_sync: Arc::new(tokio::sync::Mutex::new(())),
-        status: Status {
-            ready: Arc::new(AtomicBool::new(false)),
-            model: Arc::new(AtomicBool::new(false)),
-        },
-        inference: Arc::new(tokio::sync::Semaphore::new(1)),
-    })
-}
 fn routes(app: Arc<App>) -> Router {
     Router::new()
         .route("/commands/list", post(commands::list))
@@ -85,7 +47,7 @@ async fn call(
 
 #[tokio::test]
 async fn roster_and_turnover_reads_require_a_session_and_reject_write_fields() {
-    let routes = routes(offline_app(true));
+    let routes = routes(support::offline_app(true));
     let bounds = r#"{"since":"2026-11-05T04:00:00Z","until":"2026-11-05T08:00:00Z"}"#;
     assert_eq!(
         call(&routes, "/changes/list", None, bounds).await.0,
@@ -105,7 +67,7 @@ async fn roster_and_turnover_reads_require_a_session_and_reject_write_fields() {
 
 #[tokio::test]
 async fn watch_settings_writes_are_admin_only_before_any_state_read() {
-    let app = offline_app(true);
+    let app = support::offline_app(true);
     let viewer = role_identity("viewer").unwrap();
     for operation in ["update", "use-suggestion", "dismiss-suggestion"] {
         let error = settings::execute(

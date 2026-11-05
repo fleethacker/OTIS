@@ -194,3 +194,10 @@ main:has(.calendar-page.calendar-with-ships) { flex: 1 0 auto; }
   .turnover-boundary input { width: 100%; }
   .turnover-reviewed .turnover-source { flex-basis: 100%; }
 }
+/* Demo-only catch-up reset in Settings > Preferences. */
+.settings-content .settings-demo-reset { display: grid; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border-strong); }
+.settings-content .settings-demo-reset h3 { margin: 0; font-size: 14px; }
+.settings-content .settings-demo-reset fieldset { display: grid; gap: 6px; border: 0; padding: 0; margin: 0; }
+.settings-content .settings-demo-reset :is(label, .settings-demo-time) { display: flex; align-items: center; gap: 8px; }
+.settings-content .settings-demo-reset input[type="radio"] { width: auto; flex: none; }
+.settings-content .settings-demo-reset small { color: var(--color-bc-muted); font-size: 12px; }

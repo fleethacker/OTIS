@@ -5,7 +5,7 @@ import { useLocation } from "react-router-dom";
 import { create } from "@bufbuild/protobuf";
 import { MessageRecordSchema } from "../gen/app/v1/models_pb";
 import { renderWithProviders } from "../test-utils/render";
-import { WatchSessionContext, useWatchSession, type WatchSession } from "./watch-session";
+import { WatchSessionContext, useUpdateWatchSession, useWatchSession, type WatchSession } from "./watch-session";
 import { AuthGate } from "./AuthGate";
 import { WatchTurnoverPanel } from "./watch-turnover-panel";
 import { DayTimeline } from "./day-timeline";
@@ -39,6 +39,21 @@ test("authenticated session passes additive pinned boundary metadata to catch-up
   const view = renderWithProviders(<AuthGate><Probe /></AuthGate>);
   try { await waitFor(() => expect(view.getByText(`${since} · last_seen`)).toBeTruthy()); }
   finally { view.unmount(); fetch.mockRestore(); }
+});
+
+test("a demo reset replaces the pinned boundary without a new sign-in", async () => {
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json({ scope: "a".repeat(64), expiresAt: null, sessionExpiresAt: null, mode: "local_demo", since, basis: "turnover" }));
+  function Probe() {
+    const value = useWatchSession(); const update = useUpdateWatchSession();
+    return <><p>{value?.since} · {value?.basis}</p><button onClick={() => update({ since: "2026-11-05T06:00:00.000Z", basis: "last_seen" })}>move</button></>;
+  }
+  const view = renderWithProviders(<AuthGate><Probe /></AuthGate>);
+  try {
+    await waitFor(() => expect(view.getByText(`${since} · turnover`)).toBeTruthy());
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "move" })); });
+    expect(view.getByText("2026-11-05T06:00:00.000Z · last_seen")).toBeTruthy();
+  } finally { view.unmount(); fetch.mockRestore(); }
 });
 
 test("pinned session groups additions, navigates to the event date, and records caller-scoped review", async () => {

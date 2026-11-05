@@ -149,3 +149,41 @@ test("calendar marks new messages in every view without changing title controls;
   const bell = new URL(watchPanelHref("/calendar?date=2026-11-05&since=closed:auto"), "http://localhost");
   expect(bell.hash).toBe("#since-last-watch"); expect(bell.searchParams.get("since")).toBe("auto");
 });
+
+test("standalone recurrences show the rule's times and panel times display to the minute", async () => {
+  const preciseSince = "2026-11-05T15:19:46.392Z";
+  const recurring = (factId: string, rule?: string) => ({ factId, title: "communications check", kind: "recurring", commandIds: ["demo-meridian"], recurring: true,
+    recurrence: { rule } });
+  const row: WatchChange = { ...base, id: "fictional-r", title: "Fictional recurring", messageKey: `sha256:${"d".repeat(64)}@fictional-r1`,
+    issuedAt: "2026-11-05T15:25:07.250Z", recordedAt: "2026-11-05T15:26:41.009Z",
+    addedEvents: [recurring("r1", "FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0"), recurring("r2", "FREQ=DAILY"), recurring("r3", "FREQ=WEEKLY;BYDAY=MO"),
+      recurring("r4", "FREQ=DAILY;BYHOUR=8"), recurring("r5")] };
+  const requests: Record<string, unknown>[] = [];
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+    const body = JSON.parse(String(init?.body)); requests.push(body); return Response.json(page([row], body));
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = renderWithProviders(<QueryClientProvider client={client}><WatchSessionContext.Provider value={{ ...session, since: preciseSince }}>
+    <WatchTurnoverPanel turnovers={["0000Z", "0800Z"]} now={Date.parse("2026-11-05T16:00:00Z")} returnTo="/calendar" />
+  </WatchSessionContext.Provider></QueryClientProvider>, { route: "/calendar" });
+  try {
+    await waitFor(() => expect(view.getByRole("link", { name: "Fictional recurring" })).toBeTruthy());
+    const lines = [...view.container.querySelectorAll(".turnover-addition")].map((p) => p.textContent!.replace(/\s+/g, " ").trim());
+    expect(lines.map((line) => line.split(" · ").slice(0, 2).join(" · "))).toEqual([
+      "Adds communications check · 0800Z, 2000Z daily", "Adds communications check · daily", "Adds communications check · recurring",
+      "Adds communications check · daily", "Adds communications check · recurring"]);
+    expect(view.container.textContent).not.toContain("(time not set)");
+    expect(view.container.querySelector(".turnover-addition span")?.getAttribute("title")).toBe("FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0");
+    // Minutes on screen, full precision in tooltips.
+    const boundary = view.getByText("Since you were last here · 05 NOV 2026 1519Z");
+    expect(boundary.getAttribute("title")).toBe("05 NOV 2026 151946.392Z");
+    const sent = view.getByText("05 NOV 2026 1525Z");
+    expect(sent.getAttribute("title")).toBe("2026-11-05T15:25:07.250Z");
+    const received = view.getByText("Received 05 NOV 2026 1526Z");
+    expect(received.getAttribute("title")).toBe("2026-11-05T15:26:41.009Z");
+    expect(view.container.textContent).not.toMatch(/\d{6}(\.\d{3})?Z/);
+    // The request still uses the pinned session boundary and a full-precision window end.
+    expect(requests[0].since).toBeUndefined();
+    expect(requests[0].until).toBe("2026-11-05T16:00:00.001Z");
+  } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
+});

@@ -22,6 +22,10 @@ export function formatSinceUTC(value: number): string {
   const fraction = d.getUTCMilliseconds() ? `.${String(d.getUTCMilliseconds()).padStart(3, "0")}` : "";
   return `${pad(d.getUTCDate())} ${months[d.getUTCMonth()]} ${String(d.getUTCFullYear()).padStart(4, "0")} ${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${seconds}${fraction}Z`;
 }
+/** To the minute (seconds and milliseconds dropped), e.g. "05 NOV 2026 1519Z". */
+export function formatMinuteUTC(value: number): string {
+  return Number.isFinite(value) ? formatSinceUTC(Math.floor(value / 60_000) * 60_000) : "Time unavailable";
+}
 export function latestTurnover(now: number, times?: string[]): number | undefined {
   if (!times?.length || times.some((v) => !/^(?:[01]\d|2[0-3])[0-5]\dZ$/.test(v))) return undefined;
   const day = new Date(now); day.setUTCHours(0, 0, 0, 0);

@@ -3,7 +3,8 @@ import { act, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { renderWithProviders } from "../test-utils/render";
-import { formatSinceUTC, isoBoundary, latestTurnover, parseSinceUTC, sinceState } from "./watch-boundary";
+import { formatMinuteUTC, formatSinceUTC, isoBoundary, latestTurnover, parseSinceUTC, sinceState } from "./watch-boundary";
+import { recurrenceCadence, recurrenceTimes } from "./watch-recurrence";
 import { WatchTurnoverPanel } from "./watch-turnover-panel";
 import type { ChangeRequest, WatchChange } from "./watch-changes";
 
@@ -23,6 +24,26 @@ test("UTC input validates real dates, preserves precision and selects inclusive 
   expect(sinceState(null, now, times).open).toBe(false);
   expect(sinceState("closed:2026-11-05T04:00:00Z", now, times).boundary).toBe(boundary);
   expect(sinceState("broken", now, times).invalid).toBe(true);
+});
+test("minute display drops seconds and milliseconds while full precision stays available", () => {
+  const at = Date.parse("2026-11-05T15:19:46.392Z");
+  expect(formatMinuteUTC(at)).toBe("05 NOV 2026 1519Z");
+  expect(formatSinceUTC(at)).toBe("05 NOV 2026 151946.392Z");
+  expect(formatMinuteUTC(Date.parse("2026-11-05T15:19:59.999Z"))).toBe("05 NOV 2026 1519Z");
+  expect(formatMinuteUTC(Date.parse("2026-11-05T00:00:00Z"))).toBe("05 NOV 2026 0000Z");
+  expect(formatMinuteUTC(Number.NaN)).toBe("Time unavailable");
+});
+test("recurrence times come only from BYHOUR and BYMINUTE of the rule", () => {
+  expect(recurrenceTimes("FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0")).toEqual(["0800Z", "2000Z"]);
+  expect(recurrenceTimes("FREQ=DAILY;BYHOUR=20,8;BYMINUTE=30,0")).toEqual(["0800Z", "0830Z", "2000Z", "2030Z"]);
+  expect(recurrenceTimes("FREQ=WEEKLY;BYDAY=MO,TH;BYHOUR=8;BYMINUTE=15")).toEqual(["0815Z"]);
+  for (const rule of [undefined, "", "FREQ=DAILY", "FREQ=DAILY;BYHOUR=8", "FREQ=DAILY;BYMINUTE=0", "FREQ=DAILY;BYHOUR=24;BYMINUTE=0",
+    "FREQ=DAILY;BYHOUR=8;BYMINUTE=60", "FREQ=DAILY;BYHOUR=a;BYMINUTE=0", "FREQ=HOURLY;BYHOUR=8,20;BYMINUTE=0", "FREQ=DAILY;BYHOUR=0,1,2,3,4,5,6,7,8,9,10,11,12;BYMINUTE=0,30"]) {
+    expect(recurrenceTimes(rule)).toEqual([]);
+  }
+  expect(recurrenceCadence("FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0")).toBe("daily");
+  expect(recurrenceCadence("FREQ=DAILY")).toBe("daily");
+  for (const rule of [undefined, "", "FREQ=WEEKLY;BYDAY=MO", "FREQ=DAILY;INTERVAL=2", "FREQ=DAILY;BYDAY=MO"]) expect(recurrenceCadence(rule)).toBe("recurring");
 });
 function Location() { return <output data-testid="location">{useLocation().search}</output>; }
 function SinceLinks() {

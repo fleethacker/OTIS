@@ -11,6 +11,8 @@ export interface AddedEvent {
   start?: string;
   end?: string;
   commandIds?: string[];
+  /** "recurring" for a standalone recurrence rule with no single time. */
+  kind?: string;
   recurring?: boolean;
   recurrence?: boolean | { rule?: string; description?: string };
 }

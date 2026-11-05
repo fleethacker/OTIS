@@ -5,7 +5,8 @@ import { CommandChips, type Command } from "./command-roster";
 import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "./ship-calendars";
 import { useSettings } from "./settings-data";
 import { useReviewChanges, type AddedEvent, type WatchChange } from "./watch-changes";
-import { formatSinceUTC, parseSinceUTC } from "./watch-boundary";
+import { formatMinuteUTC, formatSinceUTC, parseSinceUTC } from "./watch-boundary";
+import { recurrenceCadence, recurrenceTimes } from "./watch-recurrence";
 import { needsWatchReview, reviewKnown, useWatchCatchup, type WatchCatchup } from "./watch-catchup";
 import { addedEventInstant, showOnCalendar } from "./watch-calendar-link";
 import { useDisplayTime } from "./display-time";
@@ -36,9 +37,13 @@ function AddedEventLine({ event, commands }: { event: AddedEvent; commands: Comm
   const clock = (value: string) => formatSinceUTC(Date.parse(value)).split(" ").slice(-1)[0];
   const recurrence = typeof event.recurrence === "object" ? event.recurrence : undefined;
   const recurring = event.recurring || event.recurrence;
+  // A standalone recurrence has no single time: show the rule's times of day, never an inferred one.
+  const standalone = event.kind === "recurring" && !at;
+  const times = standalone ? recurrenceTimes(recurrence?.rule) : [];
+  const cadence = recurrenceCadence(recurrence?.rule);
   return <p className="turnover-addition">
-    Adds {at ? <time dateTime={at} title={at}>{clock(at)}{event.end && Number.isFinite(Date.parse(event.end)) ? `–${clock(event.end)}` : ""} </time> : "(time not set) "}
-    {event.title || "Scheduled event"}{recurring ? ` · ${recurrence?.rule?.includes("FREQ=DAILY") ? "daily" : "recurring"}` : ""}
+    Adds {at ? <time dateTime={at} title={at}>{clock(at)}{event.end && Number.isFinite(Date.parse(event.end)) ? `–${clock(event.end)}` : ""} </time> : standalone ? "" : "(time not set) "}
+    {event.title || "Scheduled event"}{recurring ? <> · {times.length > 0 && <span title={recurrence?.rule}>{times.join(", ")} </span>}{cadence}</> : ""}
     {event.commandIds && <> · <CommandChips ids={event.commandIds} commands={commands} /></>}
   </p>;
 }
@@ -62,9 +67,9 @@ function ChangeRow({ row, commands, returnTo, pending, review }: {
       {row.addedEvents?.slice(0, 20).map((event, index) => <AddedEventLine key={event.key ?? `${event.factId ?? "event"}:${index}`} event={event} commands={commands} />)}
       {row.addedEvents?.length === 0 && <p>No scheduled events in this message.</p>}
       {row.eventsLimited && <p>Event list is limited; open the message for all tasking.</p>}
-      <p>{row.sender ? `${row.sender} · ` : ""}{row.issuedAt ? <>Sent <time dateTime={row.issuedAt} title={row.issuedAt}>{formatSinceUTC(Date.parse(row.issuedAt))}</time></> : "No issue time in source — not counted in this watch"} · <CommandChips ids={row.commandIds} commands={commands} /></p>
+      <p>{row.sender ? `${row.sender} · ` : ""}{row.issuedAt ? <>Sent <time dateTime={row.issuedAt} title={row.issuedAt}>{formatMinuteUTC(Date.parse(row.issuedAt))}</time></> : "No issue time in source — not counted in this watch"} · <CommandChips ids={row.commandIds} commands={commands} /></p>
       {!row.commandIds.length && <p>Ship assignment is not set.</p>}
-      <small>{row.recordedAt ? `Received ${formatSinceUTC(Date.parse(row.recordedAt))}` : "Received time unavailable"}</small>
+      <small title={row.recordedAt ?? undefined}>{row.recordedAt ? `Received ${formatMinuteUTC(Date.parse(row.recordedAt))}` : "Received time unavailable"}</small>
     </>}
   </li>;
 }
@@ -119,7 +124,7 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
       </summary>
       <div className="turnover-content">
         <div className="turnover-head">
-          {boundary !== undefined && <p className="turnover-since" title={formatSinceUTC(boundary)}>{model.basis === "last_seen" ? `Since you were last here · ${formatSinceUTC(boundary)}` : model.basis === "default_24h" ? "Last 24 hours" : model.basis === "turnover" ? `Since ${formatSinceUTC(boundary).split(" ").slice(-1)[0]} turnover` : `Since ${formatSinceUTC(boundary)}`}</p>}
+          {boundary !== undefined && <p className="turnover-since" title={formatSinceUTC(boundary)}>{model.basis === "last_seen" ? `Since you were last here · ${formatMinuteUTC(boundary)}` : model.basis === "default_24h" ? "Last 24 hours" : model.basis === "turnover" ? `Since ${formatMinuteUTC(boundary).split(" ").slice(-1)[0]} turnover` : `Since ${formatMinuteUTC(boundary)}`}</p>}
           <details className="turnover-change" open={!valid ? true : undefined}>
             <summary>Change…</summary>
             <BoundaryEditor key={`${model.choice}:${boundary}`} boundary={boundary} now={now} apply={(at) => changeSince(new Date(at).toISOString())}

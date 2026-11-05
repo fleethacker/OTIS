@@ -1,40 +1,57 @@
 /* Watch Desk port only. Parker's base stylesheet remains unchanged apart from this import. */
-/* Bounded review disclosure stays reachable without displacing the time grid. */
-.calendar-review { flex: none; margin-top: 8px; border-left: 3px solid var(--color-warning); background: var(--color-base-100); color: var(--color-base-content); }
-.calendar-review summary { cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 650; }
-.calendar-review-content { max-height: 26vh; overflow: auto; padding: 0 12px 10px; font-size: 12px; overflow-wrap: anywhere; }
-.calendar-review-content p { margin: 6px 0; }
-.calendar-review-content ul { list-style: none; padding: 0; }
-.calendar-review-content li { padding: 8px 0; border-top: 1px solid var(--color-base-300); }
-.calendar-review-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
-.calendar-review-content small { color: var(--color-bc-muted); }
 .calendar-result-limit { padding: 8px 16px; font-size: 12px; color: var(--color-base-content); }
 .calendar-search-status { flex: none; font-size: 12px; margin: 0 0 8px; overflow-wrap: anywhere; }
 .calendar-search-status a { color: var(--color-primary); text-decoration: underline; }
-.calendar-review-limit { font-weight: 600; }
-.calendar-review :is(summary, a, button):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 /* Never inherit RBC's white gutter in the dark theme. */
 .calendar-with-ships .ship-calendar .rbc-time-gutter, .calendar-with-ships .ship-calendar .rbc-time-header-gutter { background: var(--color-base-100); color: var(--color-base-content); }
 
 /* The roster is independent of filtered/limited source pages. */
-.calendar-page.calendar-with-ships { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 16px; }
+.calendar-page.calendar-with-ships { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 12px; }
+.calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: 32px minmax(0, 1fr); }
 .calendar-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.ships-sidebar { overflow: auto; min-height: 0; font-size: 12px; }
-.ships-sidebar summary { cursor: pointer; font-size: 15px; font-weight: 650; padding: 6px 0; }
-.ships-sidebar fieldset { margin: 14px 0; min-width: 0; }
-.ships-sidebar legend label, .ship-choice label { display: flex; align-items: center; gap: 7px; }
-.ships-sidebar legend { font-weight: 600; color: var(--color-bc-muted); margin-bottom: 4px; }
-.ship-choice { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin: 6px 0; }
-.ship-choice label { min-width: 0; overflow-wrap: anywhere; }
-.ship-choice input { flex: none; }
-.ship-swatch { flex: none; width: 9px; height: 9px; border-radius: 2px; }
-.ship-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
-.roster-provenance, .ships-sidebar small { color: var(--color-bc-muted); font-size: 11px; overflow-wrap: anywhere; }
+.ships-sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; font-size: 13px; }
+.ships-header { display: flex; flex: none; align-items: center; gap: 2px; margin-bottom: 6px; }
+.ships-header h2 { display: flex; flex: 1; align-items: baseline; gap: 6px; min-width: 0; font-size: 13px; font-weight: 600; }
+.ships-header small { color: var(--color-bc-muted); font-size: 11px; font-weight: 400; }
+.ships-header .popover-trigger, .ships-header .ships-toggle { width: 32px; height: 32px; min-height: 32px; padding: 6px; flex: none; }
+.ships-header svg { width: 16px; height: 16px; }
+.ships-header .popover-panel { min-width: 140px; }
+.ships-sidebar[data-expanded="false"] .ships-header { justify-content: center; }
+.ships-content { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.ships-content[hidden] { display: none; }
+.ships-sidebar .ship-search { flex: none; width: 100%; min-height: 32px; height: 32px; padding: 4px 8px; font-size: 13px; }
+.ship-list { overflow-y: auto; min-height: 0; padding: 4px; }
+.ships-sidebar fieldset { margin: 0 0 12px; min-width: 0; }
+.ships-sidebar legend label, .ship-choice label { display: flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.ships-sidebar legend { font-size: 11px; font-weight: 600; color: var(--color-bc-muted); }
+.ships-sidebar input[type="checkbox"] { flex: none; width: 14px; height: 14px; accent-color: var(--color-primary); }
+.ship-choice { display: flex; align-items: center; justify-content: space-between; gap: 2px; border-radius: var(--radius-field); }
+.ship-choice:hover, .ship-choice:focus-within { background: var(--brand-selection); }
+.ship-choice label { flex: 1; min-width: 0; padding: 3px 0; line-height: 1.35; overflow-wrap: anywhere; }
+.ship-choice .ship-only { opacity: 0; flex: none; height: 24px; min-height: 24px; padding: 2px 4px; font-size: 11px; font-weight: 500; }
+.ship-choice:hover .ship-only, .ship-choice:focus-within .ship-only { opacity: 1; }
+.ship-swatch { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.ship-calendar-options { display: grid; gap: 2px; }
+.ship-calendar-options .btn { justify-content: flex-start; min-height: 30px; padding: 4px 8px; font-size: 13px; font-weight: 400; }
+.ships-warning, .ships-error { font-size: 12px; overflow-wrap: anywhere; }
+.ships-warning { color: var(--color-warning); }
+.ships-sidebar :is(button, input):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .command-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: baseline; }
 .command-chip { color: white; font-size: 10px; font-weight: 600; line-height: 1.4; padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
-  .calendar-page.calendar-with-ships { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
-  .ships-sidebar { max-height: 30vh; }
+  .calendar-page.calendar-with-ships,
+  .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
+  .ships-content { max-height: 30vh; }
+  .ships-sidebar[data-expanded="false"] .ships-header { justify-content: flex-start; margin-bottom: 0; }
+}
+@media (hover: none) { .ship-choice .ship-only { opacity: 1; } }
+@media (pointer: coarse) {
+  .ships-header .popover-trigger, .ships-header .ships-toggle { width: 44px; height: 44px; min-height: 44px; }
+  .ship-choice .ship-only, .ship-calendar-options .btn, .ships-sidebar .ship-search,
+  .ships-sidebar legend label, .ship-choice label { min-height: 44px; }
+}
+@media (pointer: coarse) and (min-width: 901px) {
+  .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: 44px minmax(0, 1fr); }
 }
 
 /* Narrow view scrolls the page rather than crushing the calendar below wrapped chrome. */
@@ -110,7 +127,7 @@
 .context-suggestion small { font-size: 12px; font-weight: 400; }
 .context-suggestion a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
 .context-suggestion .settings-actions { justify-content: flex-start; margin-top: 6px; }
-.context-conflict { border-left: 3px solid var(--color-warning); padding-left: 10px; }
+.context-conflict { padding-left: 10px; }
 @media (max-width: 600px) {
   .settings-content .context-ship-options { grid-template-columns: minmax(0, 1fr); }
 }
@@ -128,5 +145,5 @@
 .turnover-content a { color: var(--color-primary); text-decoration: underline; }
 .turnover-content small { color: var(--color-bc-muted); }
 .turnover-content h3 { font-weight: 600; margin-top: 12px; }
-.turnover-hidden { border-left: 3px solid var(--color-warning); padding-left: 8px; }
+.turnover-hidden { padding-left: 8px; }
 .turnover-content [role="alert"] { color: var(--color-error); }

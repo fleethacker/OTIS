@@ -77,6 +77,20 @@ test("native click, click, double-click sequence selects Vice and ordinary click
   expect(document.documentElement.getAttribute("data-theme")).toBe(themeName);
 });
 
+test("a second pointer click selects Vice even when the webview omits dblclick", () => {
+  const view = render(<ThemeControl />);
+  const button = view.getByRole("button");
+  fireEvent.click(button, { detail: 1 });
+  expect(document.documentElement.getAttribute("data-theme")).toBe(darkThemeName);
+  fireEvent.click(button, { detail: 2 });
+  expect(document.documentElement.getAttribute("data-theme")).toBe(viceThemeName);
+  expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe(viceThemeName);
+
+  // Keyboard activation is a separate single activation, even after a double-click.
+  fireEvent.click(button, { detail: 0 });
+  expect(document.documentElement.getAttribute("data-theme")).toBe(themeName);
+});
+
 test("Shift+Enter provides keyboard access to Vice without a subsequent native click", () => {
   const view = render(<ThemeControl />);
   const button = view.getByRole("button");

@@ -1,12 +1,12 @@
 import { AppButton, Notice, TextInput } from "../components/ui";
-import { useCalendarParams } from "../components/calendar-params";
+import { CalendarParamsProvider, useCalendarParams } from "../components/calendar-params";
+import { BrowserPreferenceScope, CalendarPreferencesProvider } from "../components/calendar-preferences";
 import { useSettings } from "../components/settings-data";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
 import { DayTimeline } from "../components/day-timeline";
-import { CalendarReview } from "../components/calendar-review";
 import {
   utcDate,
   monthBounds,
@@ -22,6 +22,12 @@ import { ShipsSidebar } from "../components/ships-sidebar";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
+  const scope = useContext(BrowserPreferenceScope);
+  return <CalendarPreferencesProvider scope={scope}>
+    <CalendarParamsProvider><CalendarPage /></CalendarParamsProvider>
+  </CalendarPreferencesProvider>;
+}
+function CalendarPage() {
   const { shared } = useSettings();
   const { zone } = useDisplayTime();
   const roster = useCommands();
@@ -93,6 +99,7 @@ export default function Calendar() {
           if (selected === undefined) next.set("ships", ALL_SHIPS);
           else next.set("ships", JSON.stringify([...selected].sort()));
         })}
+        onReset={() => setParams((next) => next.delete("ships"))}
       />
       <div className="calendar-main">
       {dataset === "canonical" && <WatchTurnoverPanel
@@ -101,16 +108,15 @@ export default function Calendar() {
         returnTo={returnTo}
       />}
       <section className="calendar-controls" aria-label="Calendar controls">
-        <label className="schedule-search">
-          Search schedule
-          <TextInput
-            className="input-sm"
-            type="search"
-            value={query}
-            placeholder="Search"
-            onChange={(event) => update("q", event.target.value)}
-          />
-        </label>
+        <TextInput
+          className="schedule-search input-sm"
+          type="search"
+          aria-label="Search schedule"
+          title="Search schedule"
+          value={query}
+          placeholder="Search"
+          onChange={(event) => update("q", event.target.value)}
+        />
         <div className="join" aria-label="Calendar view">
           <AppButton
             size="sm"
@@ -166,19 +172,18 @@ export default function Calendar() {
         <AppButton size="sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
           Next →
         </AppButton>
-        <label>
-          {zone === "UTC" ? "UTC date" : "Date"}
-          <TextInput
-            className="input-sm"
-            type="date"
-            value={date}
-            onChange={(event) => {
-              if (event.target.value) {
-                update("date", event.target.value);
-              }
-            }}
-          />
-        </label>
+        <TextInput
+          className="calendar-date input-sm"
+          type="date"
+          aria-label={zone === "UTC" ? "UTC date" : "Date"}
+          title={`Date (${zone})`}
+          value={date}
+          onChange={(event) => {
+            if (event.target.value) {
+              update("date", event.target.value);
+            }
+          }}
+        />
       </section>
       {!noShips && query.trim() && !refreshing && !result.isError && result.data && (
         <p className="calendar-search-status">
@@ -245,20 +250,6 @@ export default function Calendar() {
           })}
         />}
       </section>
-      {dataset === "canonical" && (noShips || (result.data && !refreshing && !result.isError)) && (
-        <CalendarReview
-          items={noShips ? undefined : result.data?.meta.reviewItems}
-          notQueried={noShips}
-          commands={roster.isError ? [] : roster.data?.commands}
-          limited={!noShips && result.data?.meta.windowLimited === true}
-          filtered={ships !== undefined || query.trim() !== ""}
-          returnTo={returnTo}
-          onShowAll={() => setParams((next) => {
-            next.set("ships", ALL_SHIPS);
-            next.delete("q");
-          })}
-        />
-      )}
       </div>
     </div>
   );

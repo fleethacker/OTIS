@@ -10,6 +10,7 @@ import Calendar from "../pages/calendar";
 import { DayTimeline } from "./day-timeline";
 import { commandKeys, readCommands, type CommandRoster } from "./command-roster";
 import { effectiveShips } from "./ship-calendars";
+import { SettingsContext, type SettingsReply } from "./settings-data";
 
 const roster: CommandRoster = {
   commands: [
@@ -19,8 +20,16 @@ const roster: CommandRoster = {
   source: "backend/config/watchdesk-demo.json", version: "fictional-test", provenance: "Fictional demo", assignmentEnabled: true,
 };
 function Location() { return <output data-testid="location">{useLocation().search}</output>; }
+const shared: SettingsReply = {
+  revision: "test-1",
+  settings: {
+    version: 1, shipName: "USS Meridian", unitName: "Meridian", commandIds: ["demo-meridian"],
+    outgoingCommand: "FLEETHACKER", actionAuthority: "FLEETHACKER", defaultTimezone: "UTC", ai: null,
+    turnoverUtc: [], defaultShips: ["unit:demo-halyard"], operationName: "", groupCommand: "",
+  },
+};
 
-test("sidebar sends explicit IDs/none through the existing JSON URL; Show preserves Week", async () => {
+test("sidebar keeps IDs, None, All and Defaults distinct in the URL while preserving Week", async () => {
   const requests: Record<string, unknown>[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     if (String(url).endsWith("/commands/list")) return Response.json(roster);
@@ -29,29 +38,43 @@ test("sidebar sends explicit IDs/none through the existing JSON URL; Show preser
     return Response.json({ messages: [], meta: { timelineItems: [], reviewItems: [], windowLimited: false } });
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /><Location /></QueryClientProvider>, {
-    route: "/calendar?date=2026-11-05&view=week&layout=expanded",
+  const view = renderWithProviders(<QueryClientProvider client={client}>
+    <SettingsContext.Provider value={{ shared, timezone: "UTC" }}><Calendar /><Location /></SettingsContext.Provider>
+  </QueryClientProvider>, {
+    route: "/calendar?date=2026-11-05&view=week&layout=expanded&ships=all",
   });
   try {
+    fireEvent.click(view.getByRole("button", { name: "Expand ship calendars" }));
     await waitFor(() => expect(view.getByRole("button", { name: "Only USS Meridian" })).toBeTruthy());
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Only USS Meridian" })); });
     await waitFor(() => expect(requests.some((r) => JSON.stringify(r.filters).includes('"commandIds":["demo-meridian"]'))).toBe(true));
     let params = new URLSearchParams(view.getByTestId("location").textContent!);
     expect(JSON.parse(params.get("ships")!)).toEqual(["unit:demo-meridian"]);
     expect(params.get("layout")).toBe("expanded");
+    fireEvent.click(view.getByRole("button", { name: "Ship calendar options" }));
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Clear all" })); });
     await waitFor(() => expect(view.getByText("No ships selected. Choose a ship or Unassigned.")).toBeTruthy());
     expect(requests.some((r) => (r.filters as { noCommands?: boolean }).noCommands)).toBe(false);
-    expect(view.getByText("No ships selected; review was not queried.")).toBeTruthy();
-    expect(view.queryByText(/No unresolved times/)).toBeNull();
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(new URLSearchParams(view.getByTestId("location").textContent!).get("ships")).toBe("[]");
-    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Show all ships and clear search" })); });
+    fireEvent.click(view.getByRole("button", { name: "Ship calendar options" }));
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Select all" })); });
     await waitFor(() => expect(client.isFetching()).toBe(0));
     params = new URLSearchParams(view.getByTestId("location").textContent!);
     // Explicit all-ships state, so shared default ships do not re-apply.
     expect(params.get("ships")).toBe("all");
     expect(params.get("view")).toBe("week");
+    fireEvent.click(view.getByRole("button", { name: "Ship calendar options" }));
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Use app defaults" })); });
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    params = new URLSearchParams(view.getByTestId("location").textContent!);
+    expect(params.has("ships")).toBe(false);
+    expect(params.get("view")).toBe("week");
+    expect(params.get("layout")).toBe("expanded");
+    expect(view.getByRole("checkbox", { name: "USS Halyard", exact: true })).toBeChecked();
+    expect(view.getByRole("checkbox", { name: "USS Meridian", exact: true })).not.toBeChecked();
+    expect((requests.at(-1)!.filters as { commandIds: string[] }).commandIds).toEqual(["demo-halyard"]);
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });
 
@@ -65,9 +88,10 @@ test("explicit none has the same unqueried empty state in every layout", async (
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, { route: `/calendar?date=2026-11-05&ships=%5B%5D&${suffix}` });
       try {
+        fireEvent.click(view.getByRole("button", { name: "Expand ship calendars" }));
         await waitFor(() => expect(view.getByRole("button", { name: "Only USS Meridian" })).toBeTruthy());
         expect(view.getByText("No ships selected. Choose a ship or Unassigned.")).toBeTruthy();
-        expect(view.queryByText(/No unresolved times/)).toBeNull();
+        expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
       } finally { view.unmount(); client.clear(); }
     }
   } finally { fetch.mockRestore(); }

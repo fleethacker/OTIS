@@ -184,6 +184,22 @@ there is no automatic transfer based on matching names/emails. Demo sessions and
 short-lived search cursors are invalidated; drafts, preparations, orphan records,
 notifications/read state, raw hashes and lifecycle history are preserved.
 
+## Browser calendar preferences
+
+Calendar display preferences are stored in IndexedDB on the current browser,
+keyed by the server-verified user/role scope. They include Day/Week/Month, ship
+selection, layout, interval, separate Day/Week zoom, and the Ships and Since last
+watch panel states. Panels start closed without a saved choice.
+Selecting ship Defaults resumes the shared setting instead of storing its current
+resolved value. Message content, authentication tokens, dates, and search text are
+not stored in this preference database.
+
+Opening Calendar starts on today with an empty search. Explicit URL parameters
+take precedence over saved preferences, preserving message return links and
+shared calendar links. Preferences load before calendar data requests; unavailable
+browser storage falls back to in-memory defaults for that visit. Server-side
+preferences, settings, and operational state remain in OpenSearch.
+
 ## Checks
 
 ```sh

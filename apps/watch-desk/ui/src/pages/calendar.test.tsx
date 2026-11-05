@@ -1,6 +1,7 @@
 import "../route-registry";
 import { expect, spyOn, test } from "bun:test";
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { renderWithProviders } from "../test-utils/render";
@@ -15,6 +16,7 @@ import {
   weekBounds,
 } from "../components/calendar-time";
 import Calendar from "./calendar";
+import type { TimelineItem } from "../components/source-data";
 import { discover } from "../components/schedule-discovery";
 import {
   readShips,
@@ -117,17 +119,62 @@ test("actual UTC month lengths, exact fractions and keyboard day controls", () =
   expect(moveMonth("2026-03-31", -1)).toBe("2026-02-01");
 });
 async function withCalendar(route: string, assertions: (view: ReturnType<typeof renderWithProviders>) => void) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
     String(url).endsWith("/commands/list")
       ? { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false }
       : { messages: [], meta: { reviewItems: [], timelineItems: [] } }
   ));
-  const view = renderWithProviders(<Calendar />, { route });
+  const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, { route });
   try {
     assertions(view);
-    await waitFor(() => expect(view.getByRole("region", { name: "Needs review" })).toBeTruthy());
-  } finally { view.unmount(); fetch.mockRestore(); }
+    await waitFor(() => {
+      const timeline = client.getQueryCache().find({ queryKey: ["parse-command-source", "timeline"], exact: false });
+      expect(timeline?.state.status).toBe("success");
+      expect(timeline?.state.fetchStatus).toBe("idle");
+      // Compare a scalar: serializing Happy DOM nodes on each retry blocks its task queue.
+      expect(view.queryByText("Loading schedule…") === null).toBe(true);
+    });
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+  } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 }
+test("calendar omits review disclosure while retaining timed events and failure handling", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = `sha256:${"a".repeat(64)}@fictional-r1`;
+  const review: TimelineItem = {
+    key: `${key}#unresolved`, messageKey: key, factId: "unresolved", kind: "unresolved",
+    title: "Fictional undated inspection", reason: "No source date", reviewRequired: true,
+  };
+  const request = {
+    dataset: "canonical", query: "", mode: "hybrid",
+    from: "2026-11-05T00:00:00.000Z", to: "2026-11-06T00:00:00.000Z", filters: {},
+  };
+  client.setQueryData(["parse-command-source", "timeline", request], {
+    messages: [create(MessageRecordSchema, { sourceMessageId: key })],
+    meta: {
+      reviewItems: [review], windowLimited: true,
+      timelineItems: [{ ...review, key: `${key}#point`, factId: "point", title: "Fictional point", kind: "point", at: "2026-11-05T08:00:00Z" }],
+    },
+  });
+  client.setQueryData(["watchdesk-commands"], { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false });
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json({ message: "Fictional source unavailable" }, { status: 503 })
+  );
+  const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, {
+    route: "/calendar?date=2026-11-05",
+  });
+  try {
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+    expect(view.queryByText(review.title)).toBeNull();
+    expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
+    expect(view.getByText(/Partial source results/)).toBeTruthy();
+    await act(async () => { await client.invalidateQueries({ queryKey: ["parse-command-source"] }); });
+    await waitFor(() => expect(view.getByText(/Calendar could not be loaded/).textContent).toContain("Fictional source unavailable"));
+    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+    expect(view.queryByRole("link", { name: "Fictional point, source record" })).toBeNull();
+  } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
+});
+
 test("calendar mounts controls and truthful loading", async () => {
   await withCalendar("/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch", (view) => {
   expect(view.getByLabelText("UTC date")).toHaveValue("2026-11-04");

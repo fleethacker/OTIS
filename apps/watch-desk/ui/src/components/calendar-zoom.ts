@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 import type { CalendarView } from "./calendar-time";
+import { useCalendarPreference } from "./calendar-preferences";
 
 // Zoom only the time grid. Source timestamps, date selection and slot precision
 // are unchanged. A plain wheel scrolls as usual; Ctrl/⌘+wheel (and trackpad pinch,
@@ -11,18 +12,50 @@ export function useCalendarZoom(
   interval: number,
   windowKey: string
 ) {
-  const hourHeight = useRef<number | null>(null);
+  const [dayHourHeight, setDayHourHeight] = useCalendarPreference("dayHourHeight");
+  const [weekHourHeight, setWeekHourHeight] = useCalendarPreference("weekHourHeight");
+  const hourHeights = useRef({ day: dayHourHeight, week: weekHourHeight });
+  const saveHeight = useRef({ day: setDayHourHeight, week: setWeekHourHeight });
+  const scrollAnchor = useRef<{ view: CalendarView; windowKey: string; hourOffset: number } | null>(
+    null
+  );
+  // Keep pending wheel changes in refs. A preference write must not reinstall
+  // the listener or reset the grid while the user is still zooming.
+  useLayoutEffect(() => {
+    hourHeights.current.day = dayHourHeight;
+  }, [dayHourHeight]);
+  useLayoutEffect(() => {
+    hourHeights.current.week = weekHourHeight;
+  }, [weekHourHeight]);
+  useLayoutEffect(() => {
+    saveHeight.current = { day: setDayHourHeight, week: setWeekHourHeight };
+  }, [setDayHourHeight, setWeekHourHeight]);
   useLayoutEffect(() => {
     const container = root.current;
     if (!container || view === "month") {
       return;
     }
     let frame: number | null = null;
+    let commitTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingHeight: number | null = null;
     let delta = 0;
     let pointerY = 0;
     const scroller = container.querySelector<HTMLElement>(".rbc-time-content");
     if (!scroller) {
       return;
+    }
+    function clampScale(slotHeight: number, slots: number) {
+      const minimum = (scroller?.clientHeight ?? 0) / slots;
+      const maximum = Math.max(minimum, (192 * interval) / 60);
+      return Math.min(maximum, Math.max(minimum, slotHeight));
+    }
+    function commit() {
+      commitTimer = null;
+      if (pendingHeight !== null && view !== "month") {
+        const value = pendingHeight;
+        pendingHeight = null;
+        saveHeight.current[view](value);
+      }
     }
     function apply(slotHeight: number) {
       if (!container) {
@@ -40,8 +73,20 @@ export function useCalendarZoom(
           }
         });
     }
-    if (hourHeight.current !== null) {
-      apply((hourHeight.current * interval) / 60);
+    const remembered = hourHeights.current[view];
+    const slots = container.querySelectorAll(".rbc-time-gutter .rbc-timeslot-group").length;
+    let appliedHourHeight = slots > 0 ? (scroller.scrollHeight * 60) / (slots * interval) : 0;
+    if (remembered !== null && Number.isFinite(remembered) && remembered > 0 && slots > 0) {
+      const previous = scrollAnchor.current;
+      const hourOffset =
+        previous?.view === view && previous.windowKey === windowKey
+          ? previous.hourOffset
+          : appliedHourHeight > 0
+            ? scroller.scrollTop / appliedHourHeight
+            : 0;
+      apply(clampScale((remembered * interval) / 60, slots));
+      appliedHourHeight = (scroller.scrollHeight * 60) / (slots * interval);
+      scroller.scrollTop = hourOffset * appliedHourHeight;
     }
     function zoom() {
       frame = null;
@@ -59,18 +104,21 @@ export function useCalendarZoom(
         Math.min(scroller.clientHeight, pointerY - scroller.getBoundingClientRect().top)
       );
       const anchor = (scroller.scrollTop + y) / height;
-      const minimum = scroller.clientHeight / slots;
-      const maximum = Math.max(minimum, (192 * interval) / 60);
-      const next = Math.min(
-        maximum,
-        Math.max(minimum, (height / slots) * Math.exp(-delta * 0.003))
-      );
+      const next = clampScale((height / slots) * Math.exp(-delta * 0.003), slots);
       delta = 0;
-      hourHeight.current = (next * 60) / interval;
+      pendingHeight = (next * 60) / interval;
+      if (view !== "month") {
+        hourHeights.current[view] = pendingHeight;
+      }
       apply(next);
       // Reading the new extent after the CSS update keeps the pointed-to time
       // stationary, including when reaching the fitted-day and close-up bounds.
       scroller.scrollTop = anchor * scroller.scrollHeight - y;
+      appliedHourHeight = (scroller.scrollHeight * 60) / (slots * interval);
+      if (commitTimer !== null) {
+        clearTimeout(commitTimer);
+      }
+      commitTimer = setTimeout(commit, 150);
     }
     function wheel(event: WheelEvent) {
       if (
@@ -94,6 +142,17 @@ export function useCalendarZoom(
       if (frame !== null) {
         cancelAnimationFrame(frame);
       }
+      if (commitTimer !== null) {
+        clearTimeout(commitTimer);
+      }
+      commit();
+      scrollAnchor.current = {
+        view,
+        windowKey,
+        // React may already have replaced the time slots for a new interval.
+        // Use the scale that was applied before that change.
+        hourOffset: appliedHourHeight > 0 ? scroller.scrollTop / appliedHourHeight : 0,
+      };
       container.style.removeProperty("--calendar-slot-height");
       delete container.dataset.timeZoom;
     };

@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { messageHref } from "./calendar-links";
 import { CommandChips, type Command } from "./command-roster";
 import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "./ship-calendars";
 import { useSettings } from "./settings-data";
 import { useChanges, type WatchChange } from "./watch-changes";
 import { formatSinceUTC, parseSinceUTC, sinceState, useWatchClock } from "./watch-boundary";
+import { useCalendarParams } from "./calendar-params";
+import { useCalendarPreference } from "./calendar-preferences";
 
 function BoundaryEditor({ boundary, now, apply, automatic }: { boundary?: number; now: number; apply: (value: number) => void; automatic: () => void }) {
   const [draft, setDraft] = useState(boundary === undefined ? "" : formatSinceUTC(boundary));
@@ -36,9 +38,18 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
 }) {
   const clock = useWatchClock(fixedNow === undefined);
   const now = fixedNow ?? clock;
-  const [params, setParams] = useSearchParams();
+  const [params, updateParams] = useCalendarParams();
+  const [rememberedOpen, setRememberedOpen] = useCalendarPreference("turnoverOpen");
   const { shared } = useSettings();
-  const state = sinceState(params.get("since"), now, turnovers);
+  const rawSince = params.get("since");
+  const state = sinceState(rawSince, now, turnovers);
+  const open = rawSince === null ? rememberedOpen : state.open;
+  useEffect(() => {
+    // Shared links control disclosure; an absent URL choice leaves the saved value intact.
+    if (rawSince !== null && rememberedOpen !== !rawSince.startsWith("closed:")) {
+      setRememberedOpen(!rawSince.startsWith("closed:"));
+    }
+  }, [rawSince, rememberedOpen, setRememberedOpen]);
   const valid = state.boundary !== undefined && state.boundary <= now && now + 1 - state.boundary <= 42 * 86400000;
   const query = useChanges({
     since: state.boundary === undefined ? "" : new Date(state.boundary).toISOString(),
@@ -54,11 +65,14 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
   const unknown = first?.unknownTime ?? [];
   const unknownHidden = first?.unknownHiddenCount ?? 0;
   function changeSince(value: string) {
-    const next = new URLSearchParams(params); next.set("since", value); setParams(next);
+    updateParams((next) => next.set("since", value));
   }
   return <section className="watch-turnover" aria-label="Since last watch">
-    <details open={state.open} onToggle={(e) => {
-      if (e.currentTarget.open !== state.open) changeSince(e.currentTarget.open ? state.choice : `closed:${state.choice}`);
+    <details open={open} onToggle={(e) => {
+      if (e.currentTarget.open !== open) {
+        setRememberedOpen(e.currentTarget.open);
+        changeSince(e.currentTarget.open ? state.choice : `closed:${state.choice}`);
+      }
     }}>
       <summary>
         Since last watch{state.boundary !== undefined ? ` · ${formatSinceUTC(state.boundary)}` : ""} · {unavailable ? "unavailable" : query.isPending || query.isRefetching ? "loading…" : `${returned} ${returned === 1 ? "message" : "messages"} sent`}
@@ -74,7 +88,7 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
         {first && <>
           <p>{first.scope} Through {formatSinceUTC(now)}.</p>
           {(hidden > 0 || unknownHidden > 0) && <p className="turnover-hidden">{hidden} dated and {unknownHidden} undated records on hidden ships · <button className="btn btn-sm" onClick={() => {
-            const next = new URLSearchParams(params); next.set("ships", ALL_SHIPS); next.delete("q"); setParams(next);
+            updateParams((next) => { next.set("ships", ALL_SHIPS); next.delete("q"); });
           }}>Show all ships</button></p>}
           {items.length ? <ul>{items.map((row) => <ChangeRow key={row.id} row={row} commands={commands} returnTo={returnTo} />)}</ul> : <p>No messages sent since this watch began for the selected ships.</p>}
           {query.hasNextPage && <button className="btn btn-sm" disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>Load more messages</button>}

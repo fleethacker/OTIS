@@ -45,7 +45,7 @@ test("inline search wraps and retains schedule context", async ({ page }) => {
     await expect(page.getByLabel("Visible hours (Local)")).toHaveValue("6-12");
     await expect(page.getByRole("button", { name: "Local", exact: true })).toHaveAttribute("aria-pressed", "true");
     await search.fill("pending coordination");
-    await expect(page.getByRole("region", { name: "Needs review" })).toContainText("FICTIONAL-003");
+    await expect(page.getByRole("region", { name: "Needs review" })).toHaveCount(0);
     await expect(upcoming).toContainText("No upcoming timed events");
     await search.fill("");
     await expectCalendarSections(page);

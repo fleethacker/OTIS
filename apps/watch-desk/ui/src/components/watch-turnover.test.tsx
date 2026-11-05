@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { renderWithProviders } from "../test-utils/render";
 import { formatSinceUTC, isoBoundary, latestTurnover, parseSinceUTC, sinceState } from "./watch-boundary";
 import { WatchTurnoverPanel } from "./watch-turnover-panel";
@@ -25,6 +25,48 @@ test("UTC input validates real dates, preserves precision and selects inclusive 
   expect(sinceState("broken", now, times).invalid).toBe(true);
 });
 function Location() { return <output data-testid="location">{useLocation().search}</output>; }
+function SinceLinks() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  function link(since: string | null) {
+    const next = new URLSearchParams(location.search);
+    if (since === null) next.delete("since"); else next.set("since", since);
+    void navigate(`/calendar?${next}`);
+  }
+  return <>
+    <button onClick={() => link(null)}>Remove since URL</button>
+    <button onClick={() => link("closed:auto")}>Closed watch link</button>
+    <button onClick={() => link("auto")}>Open watch link</button>
+  </>;
+}
+test("turnover defaults closed, remembers disclosure, and lets explicit links win", async () => {
+  const view = renderWithProviders(<>
+    <WatchTurnoverPanel now={now} returnTo="/calendar" /><SinceLinks /><Location />
+  </>, { route: "/calendar?view=week&ships=%5B%5D" });
+  const details = view.container.querySelector("details")!;
+  const params = () => new URLSearchParams(view.getByTestId("location").textContent!);
+  try {
+    expect(details.open).toBe(false);
+    expect(params().has("since")).toBe(false);
+    await act(async () => { details.open = true; fireEvent(details, new Event("toggle")); });
+    await waitFor(() => expect(params().get("since")).toBe("auto"));
+    expect(view.getByRole("button", { name: "Use automatic watch" })).toBeTruthy();
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Remove since URL" })); });
+    await waitFor(() => expect(params().has("since")).toBe(false));
+    expect(details.open).toBe(true);
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Closed watch link" })); });
+    await waitFor(() => expect(details.open).toBe(false));
+    expect(params().get("since")).toBe("closed:auto");
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Remove since URL" })); });
+    await waitFor(() => expect(params().has("since")).toBe(false));
+    expect(details.open).toBe(false);
+    await act(async () => { fireEvent.click(view.getByRole("button", { name: "Open watch link" })); });
+    await waitFor(() => expect(details.open).toBe(true));
+    expect(params().get("since")).toBe("auto");
+    expect(params().get("view")).toBe("week");
+    expect(params().get("ships")).toBe("[]");
+  } finally { view.unmount(); }
+});
 test("unavailable custody is not displayed as zero changes", async () => {
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ code: "unavailable", message: "Custody unavailable" }, { status: 503 }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

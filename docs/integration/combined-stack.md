@@ -2,6 +2,9 @@
 
 > Current authentication, settings and state migration are defined in [Settings, OIDC and hidden state](settings-oidc.md).
 
+See the [architecture overview](architecture.md) for the Compose data flows and
+the separate Kubernetes/UDS Core deployment layers.
+
 The root Compose project contains `parse-command-server` (Rust), `web`
 (React static assets and same-origin Nginx proxy), and CPU-only OpenSearch.
 The SMTP/IMAP demo is a separate Compose project with independent mail volumes.

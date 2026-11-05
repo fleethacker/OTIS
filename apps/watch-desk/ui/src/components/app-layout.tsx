@@ -6,6 +6,7 @@ import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
 import { SettingsButton } from "./settings-button";
 import { Notifications } from "./notifications";
+import { ThemeControl } from "./theme-control";
 import { DisplayTimeProvider, useDisplayTime } from "./display-time";
 
 export function AppLayout() {
@@ -39,6 +40,7 @@ function DeskLayout() {
           <Notifications />
           <UserMenu />
           <SettingsButton />
+          <ThemeControl />
         </div>
       </header>
       <main id="main" tabIndex={-1}>

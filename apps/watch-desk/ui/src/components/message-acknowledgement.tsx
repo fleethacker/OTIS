@@ -1,3 +1,4 @@
+import { AppButton, Notice, SelectInput, TextArea } from "./ui";
 import { useSettings } from "./settings-data";
 import { useContext, useState } from "react";
 import { useQuery, useMutationWithInvalidate } from "@defense-unicorns/ark-ui";
@@ -68,8 +69,9 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
                 ? "Draft ready · unsent"
                 : "Not acknowledged"}
       </span>
-      <button
-        className="btn btn-outline btn-sm"
+      <AppButton
+        variant="outline"
+        size="sm"
         type="button"
         disabled={read.isPending || read.isError}
         onClick={() => {
@@ -81,11 +83,11 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
         }}
       >
         Send Acknowledgement
-      </button>
+      </AppButton>
       {read.isError && (
-        <button className="btn btn-ghost btn-xs" type="button" onClick={() => void read.refetch()}>
+        <AppButton variant="ghost" size="xs" type="button" onClick={() => void read.refetch()}>
           Retry
-        </button>
+        </AppButton>
       )}
       {open && (
         <Modal
@@ -123,8 +125,8 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
             </dl>
             <label>
               Acknowledgement type
-              <select
-                className="select select-sm"
+              <SelectInput
+                className="select-sm"
                 value={selection}
                 disabled={save.isPending}
                 required
@@ -150,10 +152,10 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
                     </option>
                   ))}
                 </optgroup>
-              </select>
+              </SelectInput>
             </label>
             {missing.length > 0 && (
-              <p role="alert">
+              <Notice role="alert" tone="error">
                 Reference incomplete:{" "}
                 {missing
                   .map(
@@ -170,26 +172,31 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
                   )
                   .join(", ")}
                 .
-              </p>
+              </Notice>
             )}
             {(generated || preview) && (
               <label>
                 Draft · unsent
-                <textarea
-                  className="textarea acknowledgement-preview"
+                <TextArea
+                  className="acknowledgement-preview"
                   readOnly
                   rows={6}
                   value={generated || preview}
                 />
               </label>
             )}
-            {failure && <p role="alert">{failure}</p>}
+            {failure && (
+              <Notice role="alert" tone="error">
+                {failure}
+              </Notice>
+            )}
             <footer>
               {generated ? (
                 <>
                   <span className="status-pill">Draft saved · unsent</span>
-                  <button
-                    className="btn btn-outline btn-sm"
+                  <AppButton
+                    variant="outline"
+                    size="sm"
                     type="button"
                     onClick={() => {
                       void navigator.clipboard
@@ -199,16 +206,17 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
                     }}
                   >
                     {copied ? "Copied" : "Copy draft"}
-                  </button>
+                  </AppButton>
                 </>
               ) : (
-                <button
-                  className="btn btn-primary btn-sm"
+                <AppButton
+                  variant="primary"
+                  size="sm"
                   type="submit"
                   disabled={!preview || save.isPending}
                 >
                   {save.isPending ? "Saving…" : "Generate draft"}
-                </button>
+                </AppButton>
               )}
             </footer>
           </form>

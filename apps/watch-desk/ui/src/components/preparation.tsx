@@ -1,3 +1,4 @@
+import { AppButton, Notice, SelectInput, TextArea, TextInput } from "./ui";
 import { useEffect, useId, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useMutationWithInvalidate } from "@defense-unicorns/ark-ui";
@@ -178,8 +179,7 @@ export function Preparation({
   const input = (key: Exclude<keyof PreparationFields, "confirmed">, label: string) => (
     <div className="preparation-field" key={key}>
       <label htmlFor={`${id}-${key}`}>{label}</label>
-      <input
-        className="input"
+      <TextInput
         id={`${id}-${key}`}
         value={fields[key]}
         aria-invalid={errors[key] !== undefined}
@@ -209,12 +209,12 @@ export function Preparation({
       {read.isPending ? (
         <p role="status">Loading private preparation…</p>
       ) : read.isError || corrupt ? (
-        <div role="alert">
+        <Notice role="alert" tone="error">
           Private preparation unavailable. Existing data has not been replaced.
-          <button className="btn btn-sm" onClick={() => void read.refetch()}>
+          <AppButton size="sm" onClick={() => void read.refetch()}>
             Retry private preparation
-          </button>
-        </div>
+          </AppButton>
+        </Notice>
       ) : (
         <>
           {tracking ? (
@@ -242,8 +242,7 @@ export function Preparation({
                   I confirm acknowledgement occurred outside OTIS.
                 </label>
                 <label htmlFor={`${id}-note`}>Optional tracking note</label>
-                <input
-                  className="input"
+                <TextInput
                   id={`${id}-note`}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -252,19 +251,18 @@ export function Preparation({
                 <label htmlFor={`${id}-occurred`}>
                   Occurrence time (RFC3339 with timezone; blank if unknown)
                 </label>
-                <input
-                  className="input"
+                <TextInput
                   id={`${id}-occurred`}
                   value={occurred}
                   onChange={(e) => setOccurred(e.target.value)}
                 />
                 <div className="preparation-actions">
-                  <button className="btn btn-primary" onClick={() => void track(true)}>
+                  <AppButton variant="primary" onClick={() => void track(true)}>
                     Record external acknowledgement
-                  </button>
-                  <button className="btn btn-outline" onClick={() => void track(false)}>
+                  </AppButton>
+                  <AppButton variant="outline" onClick={() => void track(false)}>
                     Reset personal tracking
-                  </button>
+                  </AppButton>
                 </div>
               </fieldset>
               <h4>Private activity history</h4>
@@ -306,8 +304,7 @@ export function Preparation({
               <fieldset disabled={busy}>
                 <legend>2. Response and context</legend>
                 <label htmlFor={`${id}-family`}>Response family</label>
-                <select
-                  className="select"
+                <SelectInput
                   id={`${id}-family`}
                   value={fields.family}
                   onChange={(e) => change("family", e.target.value)}
@@ -315,10 +312,9 @@ export function Preparation({
                   <option value="">Choose a family</option>
                   <option value="ACTAGCY">Normal command response (ACTAGCY)</option>
                   <option value="ICVALID">Intelligence validation (ICVALID)</option>
-                </select>
+                </SelectInput>
                 <label htmlFor={`${id}-response`}>How can your command respond?</label>
-                <select
-                  className="select"
+                <SelectInput
                   id={`${id}-response`}
                   value={fields.response}
                   onChange={(e) => change("response", e.target.value)}
@@ -329,10 +325,9 @@ export function Preparation({
                       {code} — {label}
                     </option>
                   ))}
-                </select>
+                </SelectInput>
                 <label htmlFor={`${id}-context-kind`}>Optional context (mutually exclusive)</label>
-                <select
-                  className="select"
+                <SelectInput
                   id={`${id}-context-kind`}
                   value={fields.contextKind}
                   onChange={(e) => change("contextKind", e.target.value)}
@@ -340,7 +335,7 @@ export function Preparation({
                   <option value="">No context</option>
                   <option>EXER</option>
                   <option>OPER</option>
-                </select>
+                </SelectInput>
                 {input("context", "Exercise identity or operation codeword")}
                 {input("notes", "Reviewer notes (private metadata, not message body)")}
                 <label>
@@ -354,34 +349,28 @@ export function Preparation({
                   safeguard only; not an F541 field or proof of authorization.
                 </label>
                 {Object.keys(errors).length > 0 && (
-                  <div role="alert">
+                  <Notice role="alert" tone="error">
                     {Object.entries(errors).map(([key, error]) => (
                       <p key={key}>
                         {key}: {error}
                       </p>
                     ))}
-                  </div>
+                  </Notice>
                 )}
                 <div className="preparation-actions">
-                  <button className="btn btn-outline" onClick={() => void persist(false)}>
+                  <AppButton variant="outline" onClick={() => void persist(false)}>
                     Save preparation
-                  </button>
-                  <button className="btn btn-primary" onClick={() => void persist(true)}>
+                  </AppButton>
+                  <AppButton variant="primary" onClick={() => void persist(true)}>
                     Generate message
-                  </button>
+                  </AppButton>
                 </div>
               </fieldset>
               <p>{dirty ? "Unsaved changes · Unsent" : "Private preparation · Unsent"}</p>
               <label htmlFor={`${id}-preview`}>Reviewable message (plain text)</label>
-              <textarea
-                className="textarea"
-                id={`${id}-preview`}
-                readOnly
-                rows={7}
-                value={output}
-              />
-              <button
-                className="btn btn-outline"
+              <TextArea id={`${id}-preview`} readOnly rows={7} value={output} />
+              <AppButton
+                variant="outline"
                 disabled={!output || busy}
                 onClick={() => {
                   setStatus("");
@@ -397,7 +386,7 @@ export function Preparation({
                 }}
               >
                 Copy message
-              </button>
+              </AppButton>
               <p>
                 Limited 2003-reference profile: one reference, one response, single-field EXER or
                 OPER, complete Zulu DTG only. Repeated references/authorities, other date
@@ -409,7 +398,11 @@ export function Preparation({
         </>
       )}
       {status && <p role="status">{status}</p>}
-      {failure && <p role="alert">{failure}</p>}
+      {failure && (
+        <Notice role="alert" tone="error">
+          {failure}
+        </Notice>
+      )}
     </section>
   );
 }

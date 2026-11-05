@@ -1,0 +1,171 @@
+/* App-owned brand tokens. Operational flags/symbol colors are independent of these themes. */
+@plugin "daisyui" {
+  themes: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "app";
+  default: true;
+  color-scheme: light;
+  --color-base-100: #dfe4e6;
+  --color-base-200: #b4bfc6;
+  --color-base-300: #9ca6ad;
+  --color-base-content: #152630;
+  --color-primary: #193b50;
+  --color-primary-content: #ffffff;
+  --color-secondary: #354e5c;
+  --color-secondary-content: #ffffff;
+  --color-accent: #803d32;
+  --color-accent-content: #ffffff;
+  --color-neutral: #24343c;
+  --color-neutral-content: #ffffff;
+  --color-info: #205571;
+  --color-info-content: #ffffff;
+  --color-success: #245a3a;
+  --color-success-content: #ffffff;
+  --color-warning: #805000;
+  --color-warning-content: #ffffff;
+  --color-error: #a12e32;
+  --color-error-content: #ffffff;
+  --color-bc-muted: #21313b;
+  --color-bc-subtle: #24343c;
+  --color-border-strong: #687b85;
+  --color-border-subtle: #9ca6ad;
+  --brand-canvas: linear-gradient(135deg, #aab3b9, #8e9ba4);
+  --brand-header: linear-gradient(110deg, #a4afb6, #b7c1c6);
+  --brand-header-text: #152630;
+  --brand-header-muted: #21313b;
+  --brand-trim: #803d32;
+  --brand-trim-fill: #24343c;
+  --brand-selection: #c4d1d9;
+  --brand-warning-bg: #fff0cc;
+  --brand-warning-text: #805000;
+  --brand-success-bg: #d5e8db;
+  --brand-error-bg: #f7dfdf;
+  --brand-focus: #17485f;
+  --brand-shadow: 0 8px 24px #15263026;
+  --radius-selector: 0.1875rem;
+  --radius-field: 0.1875rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "app-dark";
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: #0b2c3a;
+  --color-base-200: #061e2a;
+  --color-base-300: #254956;
+  --color-base-content: #f5f0df;
+  --color-primary: #e5cc88;
+  --color-primary-content: #092331;
+  --color-secondary: #b7cdd2;
+  --color-secondary-content: #092331;
+  --color-accent: #e5cc88;
+  --color-accent-content: #092331;
+  --color-neutral: #173e4c;
+  --color-neutral-content: #f5f0df;
+  --color-info: #a8d7eb;
+  --color-info-content: #092331;
+  --color-success: #9bd9b0;
+  --color-success-content: #092331;
+  --color-warning: #ffce79;
+  --color-warning-content: #302212;
+  --color-error: #ffacb1;
+  --color-error-content: #351820;
+  --color-bc-muted: #b7cdd2;
+  --color-bc-subtle: #a8c0c7;
+  --color-border-strong: #668b96;
+  --color-border-subtle: #254956;
+  --brand-canvas: linear-gradient(145deg, #061726, #07323e);
+  --brand-header: linear-gradient(110deg, #082432, #0c3b48);
+  --brand-header-text: #f5f0df;
+  --brand-header-muted: #b7cdd2;
+  --brand-trim: #e5cc88;
+  --brand-trim-fill: linear-gradient(90deg, #a87b33, #e5cc88, #a87b33);
+  --brand-selection: #244652;
+  --brand-warning-bg: #3c301e;
+  --brand-warning-text: #ffce79;
+  --brand-success-bg: #183e36;
+  --brand-error-bg: #421f2c;
+  --brand-focus: #e5cc88;
+  --brand-shadow: 0 8px 24px #00000055;
+  --radius-selector: 0.1875rem;
+  --radius-field: 0.1875rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "app-vice";
+  color-scheme: dark;
+  --color-base-100: #2b1042;
+  --color-base-200: #210a38;
+  --color-base-300: #593369;
+  --color-base-content: #fff1fc;
+  --color-primary: #ff55c5;
+  --color-primary-content: #290b3d;
+  --color-secondary: #28e9e1;
+  --color-secondary-content: #141133;
+  --color-accent: #28e9e1;
+  --color-accent-content: #141133;
+  --color-neutral: #411c59;
+  --color-neutral-content: #fff1fc;
+  --color-info: #a9deff;
+  --color-info-content: #141133;
+  --color-success: #9bd9b0;
+  --color-success-content: #141133;
+  --color-warning: #ffce79;
+  --color-warning-content: #302212;
+  --color-error: #ffacb1;
+  --color-error-content: #351820;
+  --color-bc-muted: #dfbfe9;
+  --color-bc-subtle: #d1abdf;
+  --color-border-strong: #a16fbd;
+  --color-border-subtle: #593369;
+  --brand-canvas: radial-gradient(ellipse at 95% 0, #521275 0, transparent 48%), linear-gradient(160deg, #21063c, #0c1636);
+  --brand-header: linear-gradient(110deg, #1c1550, #53106b);
+  --brand-header-text: #fff1fc;
+  --brand-header-muted: #dfbfe9;
+  --brand-trim: #28e9e1;
+  --brand-trim-fill: linear-gradient(90deg, #28e9e1, #ff55c5, #b779ff);
+  --brand-selection: #43194f;
+  --brand-warning-bg: #3c301e;
+  --brand-warning-text: #ffce79;
+  --brand-success-bg: #193b32;
+  --brand-error-bg: #491d38;
+  --brand-focus: #28e9e1;
+  --brand-shadow: 0 8px 24px #0b062f66;
+  --radius-selector: 0.1875rem;
+  --radius-field: 0.1875rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Local font names only. Licensed webfont files are not included in this repository. */
+:root {
+  --font-display-stack: "Times New Roman", Times, serif;
+  --font-body-stack: "Times New Roman", Times, serif;
+  --font-mono-stack: "Courier New", Courier, monospace;
+  --font-ship-stack: Impact, Eurostile, "Arial Black", sans-serif;
+  --font-hull-stack: "ITC Machine", "Machine ITC", "MachineITC", monospace;
+  --brand-space-1: 4px;
+  --brand-space-2: 8px;
+  --brand-space-3: 12px;
+  --brand-space-4: 16px;
+  --brand-space-6: 24px;
+  --brand-control-height: 40px;
+}

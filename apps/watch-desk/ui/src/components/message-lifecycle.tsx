@@ -1,3 +1,4 @@
+import { Notice } from "./ui";
 import moment from "moment-timezone";
 import { useDisplayTime } from "./display-time";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
@@ -46,7 +47,9 @@ export function MessageLifecycle({ message }: { message: MessageRecord }) {
   return (
     <section aria-label="Message lifecycle">
       {payload?.lifecycle_state === "unavailable" && (
-        <p role="alert">Ingestion history unavailable.</p>
+        <Notice role="alert" tone="error">
+          Ingestion history unavailable.
+        </Notice>
       )}
       <ol className="message-vertical-timeline">
         {issued.length === 0 && (

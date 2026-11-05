@@ -26,8 +26,8 @@ function ChangeRow({ row, commands, returnTo }: { row: WatchChange; commands: Co
   return <li>
     <CommandChips ids={row.commandIds} commands={commands} /> {" "}
     {row.messageKey ? <Link to={`${messageHref(row.messageKey, returnTo)}&tab=lifecycle`}>{row.title}</Link> : <strong>{row.title} · source unavailable</strong>}
-    <p>{row.recordedAt ? <><time dateTime={row.recordedAt} title={row.recordedAt}>{formatSinceUTC(Date.parse(row.recordedAt))}</time> · first custody recording</> : "Custody time unknown — not counted in this watch"}</p>
-    <small>{row.receiptId ? `Custody receipt ${row.receiptId}` : "Custody receipt unavailable"} · {row.messageKey ?? row.id}</small>
+    <p>{row.issuedAt ? <>Sent <time dateTime={row.issuedAt} title={row.issuedAt}>{formatSinceUTC(Date.parse(row.issuedAt))}</time></> : "No issue time in source — not counted in this watch"}</p>
+    <small>{row.recordedAt ? <>Received {formatSinceUTC(Date.parse(row.recordedAt))} · </> : null}{row.receiptId ? `Custody receipt ${row.receiptId}` : "Custody receipt unavailable"} · {row.messageKey ?? row.id}</small>
   </li>;
 }
 export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fixedNow }: {
@@ -59,12 +59,12 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
       if (e.currentTarget.open !== state.open) changeSince(e.currentTarget.open ? state.choice : `closed:${state.choice}`);
     }}>
       <summary>
-        Since last watch{state.boundary !== undefined ? ` · ${formatSinceUTC(state.boundary)}` : ""} · {unavailable ? "unavailable" : query.isPending || query.isRefetching ? "loading…" : `${returned} new custody records returned`}
-        {hidden > 0 ? ` · ${hidden} hidden` : ""}{unknown.length + unknownHidden > 0 ? ` · ${unknown.length + unknownHidden} time unknown` : ""}{first && query.hasNextPage ? " · more pages" : ""}
+        Since last watch{state.boundary !== undefined ? ` · ${formatSinceUTC(state.boundary)}` : ""} · {unavailable ? "unavailable" : query.isPending || query.isRefetching ? "loading…" : `${returned} ${returned === 1 ? "message" : "messages"} sent`}
+        {hidden > 0 ? ` · ${hidden} hidden` : ""}{unknown.length + unknownHidden > 0 ? ` · ${unknown.length + unknownHidden} without sent time` : ""}{first && query.hasNextPage ? " · more pages" : ""}
       </summary>
       <div className="turnover-content">
         <BoundaryEditor key={`${state.choice}:${state.boundary}`} boundary={state.boundary} now={now} apply={(at) => changeSince(new Date(at).toISOString())} automatic={() => changeSince("auto")} />
-        <p>Custody recording time, not message issue time or scheduled start. Ship filters apply; calendar search/date do not filter this history.</p>
+        <p>Messages by sent time (source DTG), newest first; received time is shown beneath. Ship filters apply; calendar search/date do not filter this history.</p>
         <p>Amended: not available · Cancelled: not available · Review transitions: not available. No authoritative producer is connected for these kinds.</p>
         {!valid && <p>{state.invalid ? "Invalid since value in URL." : "A valid watch boundary is unavailable. Configure UTC turnovers in Settings or pin a UTC time above."}</p>}
         {query.isError && <p role="alert">Turnover evidence unavailable. {query.error.message} <button className="btn btn-sm" onClick={() => { void query.refetch(); }}>Retry turnover</button></p>}
@@ -74,11 +74,11 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
           {(hidden > 0 || unknownHidden > 0) && <p className="turnover-hidden">{hidden} dated and {unknownHidden} undated records on hidden ships · <button className="btn btn-sm" onClick={() => {
             const next = new URLSearchParams(params); next.delete("ships"); next.delete("q"); setParams(next);
           }}>Show all ships</button></p>}
-          {items.length ? <ul>{items.map((row) => <ChangeRow key={row.id} row={row} commands={commands} returnTo={returnTo} />)}</ul> : <p>No selected dated custody records in the returned pages.</p>}
-          {query.hasNextPage && <button className="btn btn-sm" disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>Load more custody records</button>}
-          {(unknown.length > 0 || first.unknownLimited) && <section aria-label="Custody time unknown">
-            <h3>Time unknown — outside dated counts</h3>
-            {first.unknownLimited && <p>Unknown-time list limited to 50 records.</p>}
+          {items.length ? <ul>{items.map((row) => <ChangeRow key={row.id} row={row} commands={commands} returnTo={returnTo} />)}</ul> : <p>No messages sent since this watch began for the selected ships.</p>}
+          {query.hasNextPage && <button className="btn btn-sm" disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>Load more messages</button>}
+          {(unknown.length > 0 || first.unknownLimited) && <section aria-label="No sent time in source">
+            <h3>No sent time in source — outside watch counts</h3>
+            {first.unknownLimited && <p>List limited to 50 messages.</p>}
             <ul>{unknown.map((row) => <ChangeRow key={row.id} row={row} commands={commands} returnTo={returnTo} />)}</ul>
           </section>}
         </>}

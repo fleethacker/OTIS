@@ -32,18 +32,18 @@ test("unavailable custody is not displayed as zero changes", async () => {
   try {
     await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Custody unavailable"));
     await waitFor(() => expect(client.isFetching()).toBe(0));
-    expect(view.queryByText(/0 new custody records/)).toBeNull();
+    expect(view.queryByText(/0 messages sent/)).toBeNull();
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });
 test("turnover uses exact custody sources, keeps unknowns outside counts and validates UTC before changing URL", async () => {
-  const base: WatchChange = { id: "fictional-tern", messageKey: `sha256:${"a".repeat(64)}@fictional-r1`, receiptId: "receipt-one", sequence: 1, title: "Fictional Tern receipt", commandIds: ["demo-tern"], recordedAt: "2026-11-05T04:00:00Z", basis: "first_custody_recording" };
-  const dated = [base, { ...base, id: "fictional-halyard", messageKey: `sha256:${"b".repeat(64)}@fictional-r1`, title: "Fictional Halyard receipt", commandIds: ["demo-halyard"], recordedAt: "2026-11-05T06:00:00Z" }];
-  const unknown = { ...base, id: "fictional-unknown", messageKey: null, title: "Fictional undated receipt", recordedAt: null, basis: "custody_time_unavailable" };
+  const base: WatchChange = { id: "fictional-tern", messageKey: `sha256:${"a".repeat(64)}@fictional-r1`, receiptId: "receipt-one", sequence: 1, title: "Fictional Tern receipt", commandIds: ["demo-tern"], issuedAt: "2026-11-05T04:00:00Z", recordedAt: "2026-11-05T09:00:00Z", basis: "source_issue_time" };
+  const dated = [base, { ...base, id: "fictional-halyard", messageKey: `sha256:${"b".repeat(64)}@fictional-r1`, title: "Fictional Halyard receipt", commandIds: ["demo-halyard"], issuedAt: "2026-11-05T06:00:00Z" }];
+  const unknown = { ...base, id: "fictional-unknown", messageKey: null, title: "Fictional undated receipt", issuedAt: null, basis: "issue_time_unavailable" };
   const requests: ChangeRequest[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     if (!String(url).endsWith("/changes/list")) throw new Error("Unexpected request");
     const request: ChangeRequest = JSON.parse(String(init?.body)); requests.push(request);
-    const inWindow = dated.filter((r) => Date.parse(r.recordedAt!) >= Date.parse(request.since) && Date.parse(r.recordedAt!) < Date.parse(request.until));
+    const inWindow = dated.filter((r) => Date.parse(r.issuedAt!) >= Date.parse(request.since) && Date.parse(r.issuedAt!) < Date.parse(request.until));
     const visible = (ids: string[]) => !request.filters.noCommands &&
       ((!request.filters.commandIds?.length && !request.filters.unassignedOnly) || ids.some((id) => request.filters.commandIds?.includes(id)) || (!ids.length && request.filters.unassignedOnly));
     return Response.json({ items: inWindow.filter((r) => visible(r.commandIds)), unknownTime: visible(unknown.commandIds) ? [unknown] : [], unknownHiddenCount: visible(unknown.commandIds) ? 0 : 1, unknownLimited: false,
@@ -56,7 +56,7 @@ test("turnover uses exact custody sources, keeps unknowns outside counts and val
   try {
     await waitFor(() => expect(view.getByRole("link", { name: base.title })).toBeTruthy());
     expect(view.getByText(/Amended: not available/)).toBeTruthy();
-    expect(view.getByText(/2 new custody records returned/)).toBeTruthy();
+    expect(view.getByText(/2 messages sent/)).toBeTruthy();
     expect(view.getByText(/Fictional undated receipt · source unavailable/)).toBeTruthy();
     const source = new URL(view.getByRole("link", { name: base.title }).getAttribute("href")!, "http://localhost");
     expect(source.searchParams.get("record")).toBe(base.messageKey);

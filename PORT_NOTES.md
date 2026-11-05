@@ -385,7 +385,7 @@ is claimed. Keep mail, custody and private-state volumes separate and intact.
   additive time details? Retain changed-fields last-write-wins?
 - Rename the misleading Send Acknowledgement label to Prepare acknowledgement later?
 
-## P5 — Since last watch from custody evidence
+## P5 — Since last watch by sent time (DTG)
 
 - **Files:** server `changes.rs`, route/module wiring, `tests/changes.rs` and session
   contract tests; UI `watch-boundary.ts`, `watch-changes.ts`, `watch-turnover-panel.tsx`,
@@ -397,13 +397,13 @@ is claimed. Keep mail, custody and private-state volumes separate and intact.
   at most 42 days, with millisecond request precision. Strict fields; no actor/role
   input and no new application write. Two concurrent read jobs, seven-second read
   deadline, 2 MiB output cap. No raw-body transfer or OpenSearch fan-out.
-- **Evidence:** new **body records**, not new tasking. The immutable first receipt
-  sequence supplies `received_at`, never issue time, event time, indexing time or
-  fetch time. Repeated receipts/parser revisions do not create another new body.
-  A changed fixture body has a different message hash and is a separate record,
-  not an amendment. Scope is published custody projections, not every inbox/search
-  document. SQL does coarse date pruning; chrono applies exact inclusive/exclusive
-  comparisons, including submillisecond source timestamps.
+- **Time basis:** messages are windowed and ordered by **source issue time** (`issued_at`,
+  the message DTG): when the originator sent it. First receipt time is returned as
+  `recordedAt` and shown beneath as "Received …" custody metadata only. Messages with no
+  issue time in source are listed separately, outside watch counts. Repeated receipts or
+  parser revisions do not create another entry; a changed body is a separate message,
+  not an amendment. Paging uses the receipt-sequence cursor; each page is sorted newest
+  sent first.
 - **Citations:** first receipt ID/time and the exact first-receipt revision when it
   has a published projection. If that revision is unavailable, no fallback revision
   link is fabricated. Explicit projection `command_ids` alone determine visibility;

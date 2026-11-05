@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { messageHref } from "./calendar-links";
 import type { TimelineItem } from "./source-data";
 import { CommandChips, type Command } from "./command-roster";
+import { reviewTime } from "./review-time";
 
 /** A bounded source projection, never a count of all unresolved tasking. */
 export function CalendarReview({
@@ -27,8 +28,8 @@ export function CalendarReview({
         <summary>Needs review · {notQueried ? "not queried" : items === undefined ? "unavailable" : `${items.length} returned`}</summary>
         <div className="calendar-review-content">
           <p>
-            Unresolved times are not plotted. These are returned source facts, not a complete
-            review queue; their dates may be unknown. Timed facts also need operational confirmation.
+            Undated items appear in every calendar view because they cannot be placed on a date.
+            These returned source facts are not a complete review queue; timed facts also need operational confirmation.
           </p>
           {limited && <p className="calendar-review-limit">Source limit reached; review results are incomplete.</p>}
           {filtered && (
@@ -51,7 +52,7 @@ export function CalendarReview({
                   {item.messageKey ? (
                     <Link to={messageHref(item.messageKey, returnTo)}>{item.title}</Link>
                   ) : <strong>{item.title}</strong>}
-                  <p>{item.reason || "Source time is unresolved."}</p>
+                  <p>{reviewTime(item)}</p>
                   <small>
                     {item.messageKey || "Source unavailable"}
                     {item.messageKey && item.factId ? ` · Fact ${item.factId}` : ""}

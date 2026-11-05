@@ -39,6 +39,8 @@ export interface TimelineItem {
   start?: string;
   end?: string;
   reason?: string;
+  reasonCode?: "non_positive_interval" | "missing_time" | "unresolved_time";
+  timeDetails?: { endpoint: string; status?: string; clock?: string; label?: string; at?: string }[];
   reviewRequired: boolean;
 }
 export interface MessageHeader {

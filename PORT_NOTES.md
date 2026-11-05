@@ -353,6 +353,26 @@ Parker must run the external OPTASK regression against his unavailable samples.
 - Static diff check only. Container tests pending; attach Clear all and stale-ship URL
   screenshots in Combined and Side. Mixed known/unknown keys remain preserved, not broadened.
 
+## Polish 6 — Explain missing time, not a generic warning
+
+- Minimal server seam in `presentation::timeline`: additive `reasonCode` and
+  `timeDetails[{endpoint,status,clock,label,at}]` for unresolved activities. Five
+  canonical endpoint groups, each string capped at 128 characters; no source-body
+  reads, schema/generated-type changes or parser edits. Coordinate this small
+  presentation hunk when merging recurrence work; no new recurrence modules touched.
+- Copy uses typed endpoint statuses and raw labels where present. The demo's
+  1200Z/1800Z source tokens survive canonically as normalized 12:00Z/18:00Z clocks,
+  NOT raw labels, so UI says “normalized clocks”. Missing end, missing zone/year,
+  open end and non-positive intervals remain distinct. Old responses get a fallback.
+- View-independent explanation is limited to undated items. Verified the existing
+  timeline template includes activities lacking start_at regardless of view bounds;
+  dated intervals/points still use normal bounds. No source timestamp is invented.
+- Files: `presentation.rs`, private-state tests, UI source-data/review/review-time tests.
+  Projection tests cover Day/Week/Month; renderer tests cover clocks, raw labels and
+  missing/invalid endpoints. Static diff check only; container execution pending.
+- Attach both demo review rows and unchanged source return links in Day/Week/Month.
+  Parker: accept additive presentation fields and retain Calendar review placement?
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

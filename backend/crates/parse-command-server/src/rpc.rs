@@ -27,7 +27,7 @@ impl Rpc {
     }
     async fn scope(&self, ctx: &RequestContext, key: &str) -> crate::Result<String> {
         let id = self.identity(ctx).await?;
-        self.0.scope(key).await?;
+        self.0.scope(key, &id.owner).await?;
         Ok(id.owner)
     }
 }

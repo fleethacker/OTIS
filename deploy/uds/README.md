@@ -161,6 +161,19 @@ local-demo profile. Realm-wide logout remains follow-up work. The retained old
 local validation client has optional MFA at the user's request; shared Keycloak
 policy and chart defaults were not weakened.
 
+`SERVER.requireStationAssignment` enables the native station-assignment gate;
+the example sets it to `true`. Assign the test account to its approved station
+before running the synthetic-mail smoke test. Role groups remain independent of
+station and responsibility metadata. All of that metadata persists in hidden
+OpenSearch state, with no additional application PVC.
+
+`SERVER.intake.sourceRouting` is optional and defaults to `null`. An approved
+mailbox-wide policy uses an explicit `policyId` and 1–32 exact `commandIds`.
+The validator rejects inferred or malformed policies. A retained intake revision
+cannot silently change its routing binding; inspect/migrate existing custody
+using [the routing procedure](../../backend/INTAKE.md#source-routing-and-fictional-fixtures).
+Source routing never relaxes verified mailbox TLS or the mesh boundary.
+
 ## Install and verify a separate target
 
 Configure pinned Core, certificates, storage, DNS, mailbox and identity first.

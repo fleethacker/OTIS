@@ -1,3 +1,5 @@
+import { useSession } from "./session";
+import { sourceScopeKey } from "./source-data";
 import { AppButton, Notice } from "./ui";
 import { useDisplayTime } from "./display-time";
 import { useEffect, useId, useRef, useState } from "react";
@@ -26,10 +28,16 @@ import {
 
 export function Notifications() {
   const identity = useIdentity();
+  const { session } = useSession();
   if (identity.isLoading || !identity.username) {
     return null;
   }
-  const key = JSON.stringify([identity.username, identity.email]);
+  const key = JSON.stringify([
+    identity.username,
+    identity.email,
+    session?.user?.id,
+    sourceScopeKey(session),
+  ]);
   return <NotificationPanel key={key} identity={key} />;
 }
 export function NotificationPanel({ identity }: { identity: string }) {

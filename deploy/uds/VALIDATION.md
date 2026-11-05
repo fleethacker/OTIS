@@ -1,5 +1,17 @@
 # Issue #9 validation evidence
 
+## Watch-planning integration (2026-11-05)
+
+The `new-branch` merge retains current main's native UDS packaging, artifact
+verification, mesh policy, Secret contracts, configurable hidden indices and
+legacy-volume safeguards. It adds station-assignment configuration, bounded
+source-routing validation and native-session/station smoke preconditions.
+Twenty deployment input/unit tests and Python compilation pass without accessing
+a cluster. Helm rendering and Zarf lint pass for fresh, retained-legacy and
+adopted-search configurations (18/20/17 objects); base, intake-compatibility and
+watch-demo Compose configurations render. Existing live validation below remains
+historical; this merge does not deploy, migrate or certify a new runtime candidate.
+
 ## Rebase onto current main and OTIS (2026-11-05)
 
 The signed, validated SQLite/Authservice checkpoint is commit `f551c8d`, pushed

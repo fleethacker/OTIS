@@ -1,7 +1,8 @@
+import { CommandChips } from "./command-chips";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { messageHref } from "./calendar-links";
-import { CommandChips, type Command } from "./command-roster";
+import { type Command } from "./command-roster";
 import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "./ship-calendars";
 import { useSettings } from "./settings-data";
 import { useChanges, type WatchChange } from "./watch-changes";
@@ -33,8 +34,8 @@ function ChangeRow({ row, commands, returnTo }: { row: WatchChange; commands: Co
     <small>{row.recordedAt ? <>Received {formatSinceUTC(Date.parse(row.recordedAt))} · </> : null}{row.receiptId ? `Custody receipt ${row.receiptId}` : "Custody receipt unavailable"} · {row.messageKey ?? row.id}</small>
   </li>;
 }
-export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fixedNow }: {
-  turnovers?: string[]; commands?: Command[]; returnTo: string; now?: number;
+export function WatchTurnoverPanel({ turnovers, defaultShips, commands = [], returnTo, now: fixedNow }: {
+  turnovers?: string[]; defaultShips?: string[]; commands?: Command[]; returnTo: string; now?: number;
 }) {
   const clock = useWatchClock(fixedNow === undefined);
   const now = fixedNow ?? clock;
@@ -54,7 +55,7 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
   const query = useChanges({
     since: state.boundary === undefined ? "" : new Date(state.boundary).toISOString(),
     // Include the currently observed millisecond with an exclusive upper endpoint.
-    until: new Date(now + 1).toISOString(), filters: selectedShipFilters(effectiveShips(params.get("ships"), shared?.settings)),
+    until: new Date(now + 1).toISOString(), filters: selectedShipFilters(effectiveShips(params.get("ships"), { defaultShips: defaultShips ?? shared?.settings.defaultShips ?? [], commandIds: shared?.settings.commandIds ?? [] })),
   }, valid);
   const unavailable = !valid || query.isError;
   const pages = unavailable || query.isRefetching ? [] : query.data?.pages ?? [];

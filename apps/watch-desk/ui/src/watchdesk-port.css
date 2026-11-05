@@ -147,3 +147,24 @@
 .turnover-content h3 { font-weight: 600; margin-top: 12px; }
 .turnover-hidden { padding-left: 8px; }
 .turnover-content [role="alert"] { color: var(--color-error); }
+
+/* App-owned Settings; read-only users see the same confirmed context. */
+.watch-settings { max-width: 900px; margin: 0 auto; }
+.watch-settings h1 { font-size: 24px; font-weight: 650; margin: 16px 0; }
+.watch-settings > p, .watch-settings .context-editor p, .watch-settings .context-confirmation { color: var(--color-bc-muted); font-size: 12px; margin: 8px 0; overflow-wrap: anywhere; }
+.watch-settings .context-editor { border: 1px solid var(--color-base-300); border-radius: var(--radius-box); padding: 14px; margin-top: 12px; }
+.watch-settings .context-editor legend { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.watch-settings .context-editor .input, .watch-settings .context-editor .select { width: min(100%, 480px); }
+.watch-settings .context-editor button { display: block; margin-top: 8px; }
+.watch-settings .context-ship-options { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.watch-settings .context-ship-options label, .watch-settings .context-hide-confirm { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.watch-settings .context-hide-confirm { border: 1px solid var(--color-warning); border-radius: var(--radius-box); padding: 8px; }
+.watch-settings .context-suggestions { margin-top: 24px; }
+.watch-settings .context-suggestions h2 { font-size: 18px; font-weight: 600; }
+.watch-settings .context-suggestions > p { font-size: 12px; margin: 8px 0; }
+.watch-settings .context-suggestion { border: 1px solid var(--color-base-300); padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+.watch-settings .context-suggestion h3 { font-weight: 600; }
+.watch-settings .context-suggestion a, .watch-settings .context-confirmation a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
+.watch-settings .context-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.watch-settings .context-conflict { border: 1px solid var(--color-warning); border-radius: var(--radius-box); padding-left: 10px; }
+.watch-settings [role="alert"] { color: var(--color-error); font-size: 13px; }

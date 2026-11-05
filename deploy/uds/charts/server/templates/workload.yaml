@@ -95,6 +95,7 @@ spec:
             - {name: PARSE_COMMAND_VIEWER_GROUP, value: {{ .Values.config.viewerGroup | quote }}}
             - {name: PARSE_COMMAND_STATE_INDEX, value: {{ .Values.config.stateIndex | quote }}}
             - {name: PARSE_COMMAND_REQUIRE_STATE_MIGRATION, value: {{ .Values.config.requireStateMigration | toString | quote }}}
+            - {name: PARSE_COMMAND_REQUIRE_STATION_ASSIGNMENT, value: {{ .Values.config.requireStationAssignment | toString | quote }}}
             - {name: PARSE_COMMAND_OIDC_CLIENT_SECRET_FILE, value: /etc/parse-command/client/secret}
             - {name: PARSE_COMMAND_SESSION_KEY_FILE, value: /etc/parse-command/sso/session-key}
             - {name: PARSE_COMMAND_IDP_CA_FILE, value: /etc/parse-command/sso/ca.pem}

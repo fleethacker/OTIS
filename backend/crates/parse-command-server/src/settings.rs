@@ -301,7 +301,7 @@ pub struct Request {
 pub fn revision(doc: &parse_command_state::Document) -> String {
     format!("{}:{}", doc.seq, doc.term)
 }
-async fn command_options(app: &App) -> Result<Vec<String>> {
+pub(crate) async fn command_options(app: &App) -> Result<Vec<String>> {
     let value = app
         .search
         .post(
@@ -360,7 +360,7 @@ pub async fn execute(
         }
         "suggestions" => {
             let (_, doc) = shared(store).await?;
-            let (metadata, available) = suggestions(app).await;
+            let (metadata, available) = suggestions(app, identity).await;
             let dismissed = dismissed(&doc.record.payload);
             let list: Vec<_> = metadata
                 .suggestions
@@ -380,7 +380,7 @@ pub async fn execute(
                 .suggestion
                 .filter(|v| !v.is_empty() && v.len() <= 128)
                 .ok_or_else(|| Error::invalid("Select a suggestion"))?;
-            let (metadata, _) = suggestions(app).await;
+            let (metadata, _) = suggestions(app, identity).await;
             let suggestion = metadata
                 .suggestions
                 .into_iter()
@@ -622,6 +622,27 @@ pub fn apply(
         entry["evidence"] = evidence;
     }
     audit.push(entry);
+    // Native Settings edits invalidate evidence for any changed watch field.
+    if let Some(metadata) = payload
+        .get_mut("watch_context")
+        .and_then(Value::as_object_mut)
+    {
+        if let Some(confirmations) = metadata
+            .get_mut("confirmations")
+            .and_then(Value::as_object_mut)
+        {
+            for key in &changed {
+                let field = if key == "commandIds" {
+                    "ownShipId"
+                } else {
+                    key.as_str()
+                };
+                confirmations.remove(field);
+            }
+        }
+        metadata.insert("updatedBy".into(), json!(actor));
+        metadata.insert("updatedAt".into(), json!(now()));
+    }
     payload["settings"] = new;
     Ok(())
 }
@@ -644,12 +665,23 @@ async fn save(
             "Settings changed; reload before saving",
         ));
     }
-    let options = command_options(app).await?;
+    // Command-free settings must remain editable before the first source index exists.
+    let roster = crate::commands::catalog(app.config.intake.demo_fixture_assignments)?;
+    let needs_options = !settings.command_ids.is_empty()
+        || settings
+            .default_ships
+            .iter()
+            .filter_map(|v| v.strip_prefix("unit:"))
+            .any(|id| !roster.commands.iter().any(|c| c.id == id));
+    let options = if needs_options {
+        command_options(app).await?
+    } else {
+        Vec::new()
+    };
     if settings.command_ids.iter().any(|v| !options.contains(v)) {
         return Err(Error::invalid("Select an indexed command"));
     }
     // Default ships may also name the configured demo roster before its fixtures index.
-    let roster = crate::commands::catalog(app.config.intake.demo_fixture_assignments)?;
     if settings
         .default_ships
         .iter()
@@ -671,14 +703,14 @@ async fn save(
 }
 static SUGGESTION_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
 /// Read-only citation scan; bounded so it never blocks settings reads or writes.
-async fn suggestions(app: &App) -> (Metadata, bool) {
+async fn suggestions(app: &App, identity: &Identity) -> (Metadata, bool) {
     let Ok(_permit) = SUGGESTION_READS.try_acquire() else {
         return (Metadata::default(), false);
     };
-    match tokio::time::timeout(
-        Duration::from_secs(5),
-        crate::context_metadata::read(&app.custody),
-    )
+    match tokio::time::timeout(Duration::from_secs(5), async {
+        let scope = crate::station::effective_scope(&app.private, &identity.owner).await?;
+        crate::context_metadata::read_scoped(&app.custody, &scope).await
+    })
     .await
     {
         Ok(Ok(metadata)) => (metadata, true),

@@ -641,6 +641,7 @@ impl Auth {
             )
             .await?;
         self.store.put(&row, Some(&doc)).await?;
+        crate::briefing::retention(&self.store, &row.owner, &key, Some(row.expires)).await?;
         Ok(())
     }
     pub async fn logout(&self, cookie: Option<&str>) -> Result<()> {
@@ -648,6 +649,7 @@ impl Auth {
             let key = token_hash(token);
             if let Some(doc) = self.store.get("oidc_session", &key).await? {
                 self.store.delete(&doc).await?;
+                crate::briefing::retention(&self.store, &doc.record.owner, &key, None).await?;
             }
             self.store.release("oidc_sessions", &key).await?;
         }

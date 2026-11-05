@@ -94,6 +94,8 @@ impl Private {
     pub async fn logout(&self, token: &str) -> Result<()> {
         if let Some(doc) = self.state.get("demo_session", &token_hash(token)).await? {
             self.state.delete(&doc).await?;
+            crate::briefing::retention(&self.state, &doc.record.owner, &token_hash(token), None)
+                .await?;
         }
         self.state
             .release("demo_sessions", &token_hash(token))

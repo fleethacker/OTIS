@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { DraftEditor } from "./draft-editor";
 import { StructuredMessage } from "./structured-message";
 import { messageTitle } from "./structured-message-format";
@@ -13,6 +13,7 @@ export function MessageReader({ message }: { message: MessageRecord }) {
   const [params] = useSearchParams();
   const [tab, setTab] = useState(params.get("tab") === "lifecycle" ? "lifecycle" : "parsed");
   const id = useId();
+  const returnTo = params.get("returnTo");
   const views = ["parsed", "raw", "lifecycle"];
   const needsReview = message.processingStatus === "needs_review";
   return (
@@ -20,6 +21,14 @@ export function MessageReader({ message }: { message: MessageRecord }) {
       <article className="message-reader" aria-label="Selected message">
         <header>
           <h2>{messageTitle(message)}</h2>
+          {message.sourceMessageId !== "" && !message.sourceMessageId.startsWith("legacy:") && (
+            <Link
+              className="btn btn-ghost btn-sm"
+              to={`/messages?${new URLSearchParams({ similarTo: message.sourceMessageId, ...(returnTo !== null ? { returnTo } : {}) })}`}
+            >
+              Find similar messages
+            </Link>
+          )}
           <div className="message-reader-status">
             {needsReview && (
               <RecordStatus value="needs_review" className="status-pill status-pill-review">

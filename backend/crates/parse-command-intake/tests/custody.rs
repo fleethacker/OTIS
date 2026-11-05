@@ -1,5 +1,10 @@
 use base64::Engine;
-use parse_command_intake::{config::Config, journal::Receipt, mime, service::Service};
+use parse_command_intake::{
+    config::{Config, SourceRouting},
+    journal::Receipt,
+    mime,
+    service::Service,
+};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
 struct TestConfig(Config);
@@ -569,6 +574,265 @@ fn burst_is_bounded_and_resumes_without_duplicate_receipts() {
         &email("SUBJ: Burst exercise", body())
     ));
     assert_eq!(service.journal.status().unwrap(), status);
+}
+
+fn routing(policy: &str, ids: &[&str]) -> SourceRouting {
+    SourceRouting {
+        policy_id: policy.into(),
+        command_ids: ids.iter().map(|value| (*value).into()).collect(),
+    }
+}
+fn projections(service: &Service) -> Vec<serde_json::Value> {
+    let mut output = Vec::new();
+    service.journal.export(&mut output).unwrap();
+    String::from_utf8(output)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+#[test]
+fn source_routing_config_is_explicit_bounded_and_strict() {
+    let config = TestConfig::new();
+    for source_routing in [
+        routing("invalid policy", &["SHIP-A"]),
+        routing("policy-v1", &[]),
+        routing("policy-v1", &["SHIP-A", "SHIP-A"]),
+        routing("policy-v1", &[" SHIP-A"]),
+        routing("policy-v1", &["SHIP\nA"]),
+        routing("policy-v1", &[&"x".repeat(257)]),
+        SourceRouting {
+            policy_id: "policy-v1".into(),
+            command_ids: (0..33).map(|n| format!("SHIP-{n}")).collect(),
+        },
+    ] {
+        let mut invalid = config.0.clone();
+        invalid.source_routing = Some(source_routing);
+        assert!(invalid.validate().is_err());
+    }
+    let mut json: serde_json::Value =
+        serde_json::from_str(include_str!("../../../config/demo-intake.json")).unwrap();
+    json["sourceRouting"] =
+        serde_json::json!({"policyId":"approved-feed-v1","commandIds":["SHIP-A"]});
+    let parsed: Config = serde_json::from_value(json.clone()).unwrap();
+    parsed.validate().unwrap();
+    assert_eq!(parsed.command_ids(), vec!["SHIP-A"]);
+    json["sourceRouting"]["inferFromMentions"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<Config>(json).is_err());
+}
+
+#[test]
+#[ignore = "requires isolated OpenSearch test indices"]
+fn absent_routing_never_promotes_subject_or_originator_to_applicability() {
+    let config = TestConfig::new();
+    assert!(config.0.source_routing.is_none());
+    let c = &config.0;
+    let mut service = Service::open(c.clone()).unwrap();
+    stage(
+        &mut service,
+        c,
+        10,
+        1,
+        &email(
+            "SUBJ: USS AMERICA engineering",
+            &body().replace("EXAMPLE UNIT", "USS AMERICA"),
+        ),
+    );
+    service.process(&AtomicBool::new(false)).unwrap();
+    let docs = projections(&service);
+    assert_eq!(docs[0]["originator"], "USS AMERICA");
+    assert_eq!(docs[0]["command_ids"], serde_json::json!([]));
+}
+
+#[test]
+#[ignore = "requires isolated OpenSearch test indices"]
+fn demo_assignments_and_source_routing_cannot_silently_replace_each_other() {
+    let mut config = TestConfig::new();
+    config.0.demo_fixture_assignments = true;
+    let mut invalid = config.0.clone();
+    invalid.source_routing = Some(routing("approved-feed-v1", &["SHIP-A"]));
+    assert_eq!(
+        invalid.validate().unwrap_err().0,
+        "conflicting_source_routing_modes"
+    );
+    let mut service = Service::open(config.0.clone()).unwrap();
+    let fixture = include_str!("../../../config/watchdesk-fixtures/shared.txt");
+    stage(
+        &mut service,
+        &config.0,
+        70,
+        1,
+        &email("SUBJ: Fictional shared watch", fixture),
+    );
+    service.process(&AtomicBool::new(false)).unwrap();
+    let original = projections(&service);
+    drop(service);
+    let mut changed = config.0.clone();
+    changed.demo_fixture_assignments = false;
+    assert_eq!(
+        Service::open(changed).err().unwrap().0,
+        "source_routing_revision_conflict"
+    );
+    let service = Service::open(config.0.clone()).unwrap();
+    assert_eq!(projections(&service), original);
+}
+
+#[test]
+#[ignore = "requires isolated OpenSearch test indices"]
+fn approved_routing_preserves_policy_and_receipt_audit_across_restart() {
+    let mut config = TestConfig::new();
+    config.0.source_routing = Some(routing("station-feed-v1", &["SHIP-B", "SHIP-A"]));
+    let c = &config.0;
+    let mut service = Service::open(c.clone()).unwrap();
+    stage(&mut service, c, 80, 1, &email("SUBJ: SHIP-C", body()));
+    service.process(&AtomicBool::new(false)).unwrap();
+    let original = projections(&service);
+    assert_eq!(
+        original[0]["command_ids"],
+        serde_json::json!(["SHIP-A", "SHIP-B"])
+    );
+    let receipts = service.journal.store.list("receipt", vec![], 10).unwrap();
+    let audits = receipts[0].record.payload["audit"].as_array().unwrap();
+    let audit = audits
+        .iter()
+        .find(|a| a["kind"] == "source_routing_applied")
+        .unwrap();
+    assert_eq!(audit["payload"]["policy_id"], "station-feed-v1");
+    assert_eq!(
+        audit["payload"]["policy_fingerprint"],
+        c.routing_fingerprint()
+    );
+    assert_eq!(audit["payload"]["command_ids"], original[0]["command_ids"]);
+    assert_eq!(audit["payload"]["grants_access"], false);
+    assert_eq!(audit["security"], original[0]["security"]);
+    drop(service);
+    let mut reordered = c.clone();
+    reordered
+        .source_routing
+        .as_mut()
+        .unwrap()
+        .command_ids
+        .reverse();
+    let service = Service::open(reordered).unwrap();
+    assert_eq!(projections(&service), original);
+    let mut changed = c.clone();
+    changed.account_id = "different-source".into();
+    changed.source_routing = Some(routing("different-policy", &["SHIP-C"]));
+    assert_eq!(
+        Service::open(changed.clone()).err().unwrap().0,
+        "source_routing_revision_conflict"
+    );
+    changed.revision = "routing-v2".into();
+    let mut next = Service::open(changed.clone()).unwrap();
+    stage(&mut next, &changed, 80, 1, &email("SUBJ: Replay", body()));
+    next.process(&AtomicBool::new(false)).unwrap();
+    let docs = projections(&next);
+    assert_eq!(docs.len(), 2);
+    assert_eq!(
+        docs.iter().find(|d| d["revision"] == c.revision).unwrap(),
+        &original[0]
+    );
+}
+
+#[test]
+#[ignore = "requires isolated OpenSearch test indices"]
+fn unbound_historical_revision_requires_explicit_migration() {
+    let config = TestConfig::new();
+    let c = &config.0;
+    let store =
+        parse_command_state::BlockingStore::new(&c.opensearch_url, &c.custody_index).unwrap();
+    store.provision().unwrap();
+    let old = parse_command_state::Record::new(
+        "mailbox_identity",
+        "old-account",
+        serde_json::json!({"revision":c.revision}),
+    );
+    store.put(&old, None).unwrap();
+    assert_eq!(
+        Service::open(c.clone()).err().unwrap().0,
+        "source_routing_revision_unbound"
+    );
+    assert!(
+        store
+            .get("source_routing_revision", &c.revision)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+#[ignore = "requires isolated OpenSearch test indices"]
+fn demo_recurrence_security_and_assignment_evidence_survive_opensearch_staging() {
+    let mut config = TestConfig::new();
+    config.0.demo_fixture_assignments = true;
+    let fixtures = [
+        include_str!("../../../config/watchdesk-fixtures/shared.txt"),
+        include_str!("../../../config/watchdesk-fixtures/recurring-radio.txt"),
+        include_str!("../../../config/watchdesk-fixtures/baseline-crypto.txt"),
+    ];
+    let mut service = Service::open(config.0.clone()).unwrap();
+    for (index, body) in fixtures.iter().enumerate() {
+        stage(
+            &mut service,
+            &config.0,
+            90,
+            index as u32 + 1,
+            &email("SUBJ: Fictional Watch Desk", body),
+        );
+    }
+    service.process(&AtomicBool::new(false)).unwrap();
+    let docs = projections(&service);
+    assert_eq!(docs.len(), 3);
+    let recurring: Vec<_> = docs
+        .iter()
+        .filter(|d| d.get("recurrences").is_some())
+        .collect();
+    assert_eq!(recurring.len(), 2);
+    for doc in recurring {
+        assert_eq!(doc["recurrences"][0]["dtstart"], "2026-11-05T00:00:00Z");
+        assert_eq!(doc["recurrences"][0]["until"], "2026-11-08T23:59:00Z");
+    }
+    let baseline = docs.iter().find(|d| d["type"] == "OPTASK LINK").unwrap();
+    assert_eq!(baseline["security"]["policy"], "FICTIONAL_DEMO_ONLY");
+    assert!(baseline["activities"][0].get("at").is_none());
+    let records = service
+        .journal
+        .store
+        .list("projection", vec![], 10)
+        .unwrap();
+    for record in records {
+        let audits = record.record.payload["audits"].as_array().unwrap();
+        let evidence = audits
+            .iter()
+            .find(|a| a["kind"] == "demo_command_assignment")
+            .unwrap();
+        assert_eq!(evidence["payload"]["version"], "watchdesk-demo-v3");
+        assert_eq!(
+            evidence["payload"]["command_ids"],
+            record.record.payload["core"]["command_ids"]
+        );
+    }
+    let disabled = TestConfig::new();
+    let mut service = Service::open(disabled.0.clone()).unwrap();
+    for (index, body) in fixtures[1..].iter().enumerate() {
+        stage(
+            &mut service,
+            &disabled.0,
+            90,
+            index as u32 + 1,
+            &email("SUBJ: No implicit policy", body),
+        );
+    }
+    service.process(&AtomicBool::new(false)).unwrap();
+    let docs = projections(&service);
+    assert_eq!(docs.len(), 1);
+    assert!(docs[0].get("recurrences").is_none());
+    assert_eq!(docs[0]["command_ids"], serde_json::json!([]));
+    assert_eq!(
+        service.journal.status().unwrap()["receipts"]["quarantined"],
+        1
+    );
 }
 
 #[test]

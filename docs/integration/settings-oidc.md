@@ -54,6 +54,27 @@ of enclave-local OpenAI-compatible base URLs, normally ending `/v1`.
 `PARSE_COMMAND_AI_SECRET_`. Resolve credentials on the server; never submit secret
 values through Settings. No public provider or default remote endpoint is configured.
 
+## Station and responsibility scope
+
+Native user records also hold station assignments, department responsibilities
+and account relevance preferences. `GET /api/v1/auth/session` returns this profile
+for an already authenticated session. Account preferences use
+`PATCH /api/v1/account/settings`; Admin station updates use `GET /api/v1/users`
+and `PATCH /api/v1/users/{id}`. Station changes cannot grant an IdP role or alter
+the native enablement/revocation policy.
+
+`PARSE_COMMAND_REQUIRE_STATION_ASSIGNMENT=true` requires an assigned station
+before scoped message access. It defaults off in local Compose; the UDS example
+enables it. Responsibility definitions carry explicit categories; names do not
+infer access. Assigned scope applies to search, detail, evidence, related messages,
+notifications and canonical private state. Personal relevance preferences may
+narrow that scope. Paging windows bind its current value.
+
+Shared watch context lives on `/watch-settings`, separate from the administrator
+Settings modal. Login briefings capture a frozen availability window; token
+refresh does not move it. See [watch planning](main3-sync.md) and the
+[Rust application API](rust-application-api.md#watch-station-and-briefing-apis).
+
 ## Keycloak / UDS client contract
 
 | Setting | Local test value |
@@ -125,6 +146,11 @@ Runtime persistence is entirely OpenSearch:
 - `.parse-command-custody-v1`: raw email receipts, mailbox cursors, parse projections,
   audit/publication outboxes, retries and lifecycle history.
 
+Station metadata and responsibilities use the application-state index. Custody
+also retains explicit routing bindings and the bounded availability ledger that
+atomically records arrival sequences for login briefings. Old issue dates remain
+separate from arrival times.
+
 Both indices are hidden, strict, one primary shard, zero replicas for the laptop
 profile, and request-durable translogs. Payloads are unindexed; only the small state
 envelope is searchable. Hidden indices are not an authorization boundary: prevent
@@ -140,6 +166,12 @@ waits for up to 30 seconds for that lease to expire, then refuses to start if a 
 Custody/history are not silently purged. Capacity uses retained serialized bytes
 and receipt count; disk/translog headroom must be monitored separately. The existing
 365-day message retention policy does not apply to application state.
+
+Existing OpenSearch revisions also require a verified routing-policy binding.
+`backend/tools/migrate_routing.py` inspects retained custody read-only by default
+and supports create-only binding after validation with writers stopped. Follow
+[the intake routing procedure](../../backend/INTAKE.md#source-routing-and-fictional-fixtures);
+do not reset custody or guess routing from names or contacts.
 
 Migration tool: `backend/tools/migrate_state.py`. It opens SQLite **read-only** as a
 snapshot import source; neither Rust runtime crate depends on SQLite.
@@ -178,6 +210,11 @@ OIDC owners always fail. The source issuer, subject provenance and group policy
 must be verified first; display names/emails never authorize reassignment.
 Migrated OIDC rows grant no Admin role; native login validates current IdP
 claims before establishing access.
+
+Earlier watch accounts, preferences, responsibilities, watch context and custody
+routing/availability are imported only when supported and unambiguous. Unknown
+tables, unresolved `local` timezone values and ambiguous owner/routing mappings
+stop the import for review.
 
 SSO owners are distinct;
 there is no automatic transfer based on matching names/emails. Demo sessions and

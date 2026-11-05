@@ -1,6 +1,6 @@
 # Parse Command backend
 
-The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the imported UI and its Go presentation service live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration analysis](../docs/integration/ark-export.md) and [decision to retain Go for now](../docs/decisions/0001-retain-watch-desk-go-service.md). SDK version 0.2.0 implements ICD 1.1.0 as local, compiled crates; nothing is published to a package registry.
+The Rust parser, intake worker and application server live here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the React UI and retained Go reference source live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration guide](../docs/integration/ark-export.md). SDK version 0.2.0 implements ICD 1.3.0 as local, compiled crates; nothing is published to a package registry.
 
 The root [`compose.intake.yml`](../compose.intake.yml) overlay runs this worker
 with Watch Desk, OpenSearch and the demo mail server in one Compose project.
@@ -65,7 +65,7 @@ The profile selector distinguishes the short 2003 header from the observed stand
 
 Core status remains `partial` while records are retained without semantic projection. Bad record layouts produce audit diagnostics and a review flag while subsequent sound records remain available. All facts from a record are validated before emission; output-limit or cancellation errors still abort the entire result. Unknown classifications retain conflict status, and source caveats flag security review. Source POCs/participants do not assign local C2 roles or resolve command aliases.
 
-The implementation validates exact integer-Hz conversion, date calendars, verified-time checksums and conditional period qualifiers. Baseline daily crypto recurrence evidence stays in audit; partial times are not expanded into a dated schedule. Full issue timestamps alone establish retention. Resource limits remain caller-supplied, and the crate adds no new third-party dependencies to the foundation's dependency set.
+The implementation validates exact integer-Hz conversion, date calendars, verified-time checksums and conditional period qualifiers. Daily crypto recurrences carry explicit UTC evidence and bounded expansion; unresolved dates remain unresolved. Full issue timestamps alone establish retention. Resource limits remain caller-supplied, and the crate adds no new third-party dependencies to the foundation's dependency set.
 
 ## Add a parser crate
 

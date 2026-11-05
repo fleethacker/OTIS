@@ -3,7 +3,12 @@ import { ConnectQueryProvider } from "@defense-unicorns/ark-ui";
 import { useIdentity } from "./hooks/useIdentity";
 import { routes } from "./route-registry";
 import { AppLayout } from "./components/app-layout";
+import { useEffect, useState } from "react";
+import { QueryClient } from "@tanstack/react-query";
 import { sessionInterceptor } from "./components/session-access";
+import { AccountProfileProvider } from "./components/AccountProfileProvider";
+import { SettingsProvider } from "./components/SettingsProvider";
+import { ShiftLanding } from "./components/shift-landing";
 
 /**
  * App is the single mount point — it wires:
@@ -36,6 +41,7 @@ function AppContent() {
 
   return (
     <BrowserRouter>
+      <ShiftLanding />
       <Routes>
         <Route element={<AppLayout />}>
           {routes.map((r) => (
@@ -48,9 +54,28 @@ function AppContent() {
 }
 
 export function App() {
+  // AuthGate remounts this tree when account or role changes. Own the client
+  // here so Ark's shared default cache cannot outlive the verified account.
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { staleTime: 0, retry: 1 } },
+      })
+  );
+  useEffect(
+    () => () => {
+      void queryClient.cancelQueries();
+      queryClient.clear();
+    },
+    [queryClient]
+  );
   return (
-    <ConnectQueryProvider baseUrl="/" interceptors={[sessionInterceptor]}>
-      <AppContent />
+    <ConnectQueryProvider baseUrl="/" queryClient={queryClient} interceptors={[sessionInterceptor]}>
+      <SettingsProvider>
+        <AccountProfileProvider>
+          <AppContent />
+        </AccountProfileProvider>
+      </SettingsProvider>
     </ConnectQueryProvider>
   );
 }

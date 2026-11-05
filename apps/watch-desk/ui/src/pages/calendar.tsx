@@ -3,6 +3,8 @@ import { CalendarParamsProvider, useCalendarParams } from "../components/calenda
 import { BrowserPreferenceScope, CalendarPreferencesProvider } from "../components/calendar-preferences";
 import { useSettings } from "../components/settings-data";
 import { useContext, useState } from "react";
+import { TbRefresh } from "react-icons/tb";
+import { useAccountSettings } from "../components/session";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
@@ -23,7 +25,8 @@ import { ShipsSidebar } from "../components/ships-sidebar";
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
   const scope = useContext(BrowserPreferenceScope);
-  return <CalendarPreferencesProvider scope={scope}>
+  const settings = useAccountSettings();
+  return <CalendarPreferencesProvider scope={scope} defaultView={settings.defaultCalendarView}>
     <CalendarParamsProvider><CalendarPage /></CalendarParamsProvider>
   </CalendarPreferencesProvider>;
 }
@@ -47,7 +50,7 @@ function CalendarPage() {
   const to = month ? bounds.to : week ? weekly.to : civilHour(date, 24, zone);
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const ships = effectiveShips(params.get("ships"), shared?.settings);
+  const ships = effectiveShips(params.get("ships"), { defaultShips: roster.data?.defaultShips ?? shared?.settings.defaultShips ?? [], commandIds: shared?.settings.commandIds ?? [] });
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
   const filters = selectedShipFilters(ships);
   const noShips = ships !== undefined && (filters.noCommands === true ||
@@ -56,8 +59,11 @@ function CalendarPage() {
     dataset, query: debounced, mode: "hybrid",
     from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
   }, !noShips);
-  const messages = result.data?.messages ?? [];
-  const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
+  const awaitingSearch = query !== debounced;
+  const visibleData = awaitingSearch ? undefined : result.data;
+  const messages = visibleData?.messages ?? [];
+  const refreshing = !noShips && (result.isPending || result.isFetching || awaitingSearch);
+  const hasSnapshot = visibleData !== undefined;
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
   canonical.set("view", view);
@@ -103,7 +109,8 @@ function CalendarPage() {
       />
       <div className="calendar-main">
       {dataset === "canonical" && <WatchTurnoverPanel
-        turnovers={shared?.settings.turnoverUtc}
+        turnovers={roster.data?.turnoverUtc ?? shared?.settings.turnoverUtc}
+        defaultShips={roster.data?.defaultShips}
         commands={roster.isError ? [] : roster.data?.commands}
         returnTo={returnTo}
       />}
@@ -184,17 +191,20 @@ function CalendarPage() {
             }
           }}
         />
+        <AppButton
+          size="sm"
+          aria-label="Refresh calendar"
+          title={result.dataUpdatedAt > 0 ? `Last refreshed: ${new Date(result.dataUpdatedAt).toISOString()}` : "Refresh calendar"}
+          disabled={refreshing || noShips}
+          onClick={() => void result.refetch()}
+        >
+          <TbRefresh aria-hidden="true" />
+        </AppButton>
       </section>
-      {!noShips && query.trim() && !refreshing && !result.isError && result.data && (
-        <p className="calendar-search-status">
-          Calendar filtered by “{query}” · Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
-          {result.data.meta.executedMode === "hybrid" && " Ranked results may include related messages without a literal word match."}
-        </p>
-      )}
-      {refreshing && <p role="status">Loading schedule…</p>}
+      {refreshing && !hasSnapshot && <p role="status">Loading schedule…</p>}
       {!noShips && result.isError && (
         <Notice role="alert" tone="error">
-          Calendar could not be loaded. {result.error.message}
+          {hasSnapshot ? "Refresh failed. Showing saved schedule." : "Calendar could not be loaded."} {result.error.message}
           <AppButton size="sm" onClick={() => void result.refetch()}>
             Retry
           </AppButton>
@@ -204,7 +214,7 @@ function CalendarPage() {
         className={`timeline-section ${date === today ? "is-today" : ""}`}
         aria-labelledby="schedule-heading"
       >
-        {result.data?.meta.windowLimited === true && !refreshing && !result.isError && (
+        {visibleData?.meta.windowLimited === true && (
           <p className="calendar-result-limit" role="status">
             Partial source results. Narrow the range or search; counts cover returned records only.
           </p>
@@ -227,13 +237,11 @@ function CalendarPage() {
           commands={roster.isError ? [] : roster.data?.commands}
           shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
           selectedShips={ships}
-          ready={!refreshing && !result.isError}
-          messages={result.isError || refreshing ? [] : messages}
+          ready={hasSnapshot}
+          messages={messages}
           sourceItems={
             dataset === "canonical"
-              ? result.isError || refreshing
-                ? []
-                : (result.data?.meta.timelineItems ?? [])
+              ? visibleData?.meta.timelineItems ?? []
               : undefined
           }
           from={from}

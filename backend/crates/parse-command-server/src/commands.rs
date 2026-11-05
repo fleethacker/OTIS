@@ -30,17 +30,31 @@ pub async fn list(
     headers: HeaderMap,
     Json(_request): Json<Request>,
 ) -> Result<Json<Value>> {
-    app.headers_identity(&headers).await?;
+    let identity = app.headers_identity(&headers).await?;
+    let effective = crate::station::effective_scope(app.store()?, &identity.owner).await?;
     let demo = app.config.intake.demo_fixture_assignments;
     let mut catalog = catalog(demo)?;
-    let (settings, _) = crate::settings::shared(&app.private.state).await?;
-    let own = settings.own_ship().unwrap_or_default();
+    let mut snapshot = crate::watch_context::read(&app.private.state, demo).await?;
+    catalog
+        .commands
+        .retain(|command| effective.command_visible(&command.id));
+    snapshot.context.default_ships.retain(|id| {
+        if id == "unassigned:" {
+            effective.include_unassigned && !effective.match_none
+        } else {
+            id.strip_prefix("unit:")
+                .is_some_and(|id| effective.command_visible(id))
+        }
+    });
     for command in &mut catalog.commands {
-        command.is_own_ship = command.id == own;
+        command.is_own_ship = command.id == snapshot.context.own_ship_id;
     }
     // Compile-time bounded (<=32 commands). No search request, source body or roster write.
     Ok(Json(json!({
         "commands": catalog.commands,
+        "defaultShips": snapshot.context.default_ships,
+        "turnoverUtc": snapshot.context.turnover_utc,
+        "contextUpdatedBy": snapshot.updated_by,
         "source": if demo { CONFIG_SOURCE } else { "No command roster configured" },
         "version": catalog.version,
         "provenance": catalog.provenance,

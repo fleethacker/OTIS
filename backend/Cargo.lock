@@ -1959,6 +1959,7 @@ dependencies = [
  "connectrpc-build",
  "openidconnect",
  "parse-command-intake",
+ "parse-command-optask",
  "parse-command-state",
  "parse-command-types",
  "protoc-bin-vendored",

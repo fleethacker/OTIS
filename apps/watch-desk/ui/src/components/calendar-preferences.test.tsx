@@ -41,7 +41,7 @@ test("calendar hydration gates children and never saves defaults over a delayed 
     async write(scope, value) { writes.push({ scope, value }); },
   };
   const rendered = renderWithProviders(
-    <CalendarPreferencesProvider scope="alice" storage={storage}>
+    <CalendarPreferencesProvider scope="alice" storage={storage} defaultView="week">
       <PreferenceControls onView={(view) => renderedViews.push(view)} />
     </CalendarPreferencesProvider>
   );

@@ -1,19 +1,35 @@
 import { Notice } from "./ui";
-import { readJson } from "./source-data";
 import { sessionFetch } from "./session-access";
+import { readJson, sourceScopeKey } from "./source-data";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-export function AuditEvidence({ source }: { source: string }) {
+import { useSession } from "./session";
+export function AuditEvidence({
+  source,
+  passageId,
+  label = "Source audit evidence",
+}: {
+  source: string;
+  passageId?: string;
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
+  const { session } = useSession();
   const result = useQuery({
-    queryKey: ["parse-command-evidence", source],
+    queryKey: [
+      "parse-command-evidence",
+      session?.user?.id,
+      source,
+      passageId,
+      sourceScopeKey(session),
+    ],
     enabled: open,
     queryFn: async ({ signal }) => {
       const response = await sessionFetch("/api/v1/messages/evidence", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: source }),
+        body: JSON.stringify({ key: source, passageId }),
         signal,
       });
       const payload = await readJson(response);
@@ -27,7 +43,7 @@ export function AuditEvidence({ source }: { source: string }) {
   });
   return (
     <details onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>Source audit evidence</summary>
+      <summary>{label}</summary>
       {open &&
         (result.isPending ? (
           <p role="status">Loading evidence…</p>
@@ -35,6 +51,8 @@ export function AuditEvidence({ source }: { source: string }) {
           <Notice role="alert" tone="error">
             {result.error.message}
           </Notice>
+        ) : result.data.records.length === 0 ? (
+          <p>Source evidence unavailable.</p>
         ) : (
           <pre className="audit-evidence">{JSON.stringify(result.data.records, null, 2)}</pre>
         ))}

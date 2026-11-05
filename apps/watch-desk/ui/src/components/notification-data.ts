@@ -1,6 +1,8 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { readJson } from "./source-data";
 import { sessionFetch } from "./session-access";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { readJson, sourceScopeKey } from "./source-data";
+
+import { useSession } from "./session";
 
 export interface DeskNotification {
   id: number;
@@ -47,8 +49,15 @@ export async function notificationRequest<T>(
   return (await readJson(response)) as unknown as T;
 }
 export function useNotifications(identity: string) {
+  const { session } = useSession();
   return useInfiniteQuery({
-    queryKey: ["notifications", identity, "list"],
+    queryKey: [
+      "notifications",
+      identity,
+      "list",
+      session?.user?.id ?? "anonymous",
+      sourceScopeKey(session),
+    ],
     initialPageParam: null as number | null,
     queryFn: ({ pageParam, signal }) =>
       notificationRequest<NotificationPage>("list", { before: pageParam }, signal),
@@ -61,8 +70,16 @@ export function useNotifications(identity: string) {
   });
 }
 export function useNotificationMembers(identity: string, id?: number) {
+  const { session } = useSession();
   return useInfiniteQuery({
-    queryKey: ["notifications", identity, "members", id],
+    queryKey: [
+      "notifications",
+      identity,
+      "members",
+      id,
+      session?.user?.id ?? "anonymous",
+      sourceScopeKey(session),
+    ],
     initialPageParam: null as number | null,
     queryFn: ({ pageParam, signal }) =>
       notificationRequest<MemberPage>("members", { id, before: pageParam }, signal),

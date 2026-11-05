@@ -28,6 +28,7 @@ Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMA
 | [Stored search templates and frontend contract](opensearch/search-contract.md) | Local CPU narrative embeddings, typed filters and keyword/semantic/hybrid requests |
 | [UI test mappings](opensearch/README.md) | Isolated lexical test index definitions; fixtures stay outside Git |
 | [Implementation plan](planning/implementation-plan.md) | Proposed architecture, work packages, dependencies, validation gates, and two-day sequencing |
+| [Watch planning integration](integration/main3-sync.md) | Station assignments, responsibility scope, frozen login briefings, related messages and explicit routing |
 | [Settings, users, and OIDC plan](planning/settings-and-oidc.md) | Proposed shared settings, per-user timezone, Admin/Viewer roles, UDS/Keycloak integration, migration, and validation |
 | [Parser extension interface](planning/parser-extension-interface.md) | First-build priority: contributor contract, registration, isolation, and test harness |
 | [Sample-data location](review/json-structure/README.md) | Pointer to external fixtures; payloads are not stored in this Git folder |

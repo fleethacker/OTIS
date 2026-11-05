@@ -169,10 +169,11 @@ impl Service {
                         release_to: Vec::new(),
                         status: parse_command_types::SecurityStatus::Unvalidated,
                     });
+            let command_ids = self.config.command_ids_for(&email.body)?;
             let context = ParseContext {
                 revision: &self.config.revision,
                 recorded_at: &at,
-                command_ids: assignment.map(|f| f.command_ids.as_slice()).unwrap_or(&[]),
+                command_ids: &command_ids,
                 security_override: security.as_ref(),
                 reference_time: None,
                 budget: &budget,

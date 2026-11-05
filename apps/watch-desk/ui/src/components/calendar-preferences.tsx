@@ -16,21 +16,23 @@ export const CalendarPreferencesContext = createContext<{
   update: (change: (current: CalendarPreferences) => CalendarPreferences) => void;
 } | null>(null);
 
-export function CalendarPreferencesProvider({ scope, storage = calendarPreferenceStorage, children }: {
+export function CalendarPreferencesProvider({ scope, storage = calendarPreferenceStorage, defaultView = "day", children }: {
   scope?: string | null;
   storage?: CalendarPreferenceStorage;
+  defaultView?: CalendarPreferences["view"];
   children: ReactNode;
 }) {
   // A keyed child prevents late reads or writes from crossing account boundaries.
-  return <PreferenceSession key={scope ?? "ephemeral"} scope={scope} storage={storage}>{children}</PreferenceSession>;
+  return <PreferenceSession key={scope ?? "ephemeral"} scope={scope} storage={storage} defaultView={defaultView}>{children}</PreferenceSession>;
 }
 
-function PreferenceSession({ scope, storage, children }: {
+function PreferenceSession({ scope, storage, defaultView, children }: {
   scope?: string | null;
   storage: CalendarPreferenceStorage;
+  defaultView: CalendarPreferences["view"];
   children: ReactNode;
 }) {
-  const [preferences, setPreferences] = useState<CalendarPreferences>(DEFAULT_CALENDAR_PREFERENCES);
+  const [preferences, setPreferences] = useState<CalendarPreferences>(() => ({ ...DEFAULT_CALENDAR_PREFERENCES, view: defaultView }));
   const [ready, setReady] = useState(!scope);
   const latest = useRef(preferences);
   const mounted = useRef(true);
@@ -40,13 +42,13 @@ function PreferenceSession({ scope, storage, children }: {
     if (scope) {
       void storage.read(scope).catch(() => undefined).then((saved) => {
         if (!active) return;
-        latest.current = sanitizeCalendarPreferences(saved);
+        latest.current = sanitizeCalendarPreferences(saved ?? { view: defaultView });
         setPreferences(latest.current);
         setReady(true);
       });
     }
     return () => { active = false; mounted.current = false; };
-  }, [scope, storage]);
+  }, [scope, storage, defaultView]);
 
   const update = useCallback((change: (current: CalendarPreferences) => CalendarPreferences) => {
     if (!mounted.current) return;

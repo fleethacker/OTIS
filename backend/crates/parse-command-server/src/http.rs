@@ -4,7 +4,7 @@ use axum::{
     extract::{Request, State},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use std::{sync::Arc, time::Duration};
 pub fn router(app: Arc<App>) -> axum::Router {
@@ -33,9 +33,39 @@ pub fn router(app: Arc<App>) -> axum::Router {
             "/api/v1/settings/{operation}",
             post(crate::settings::handle),
         )
-        .route("/api/v1/source/status", get(crate::api::status))
-        .route("/api/v1/changes/list", post(crate::changes::list))
+        .route("/api/v1/auth/session", get(crate::accounts::profile))
+        .route(
+            "/api/v1/account/settings",
+            patch(crate::accounts::save_settings),
+        )
+        .route("/api/v1/users", get(crate::accounts::users))
+        .route("/api/v1/users/{id}", patch(crate::accounts::update_user))
+        .route(
+            "/api/v1/responsibilities",
+            get(crate::responsibilities::get).post(crate::responsibilities::create),
+        )
+        .route(
+            "/api/v1/responsibilities/{id}",
+            patch(crate::responsibilities::edit),
+        )
+        .route("/api/v1/briefing", post(crate::briefing::handle))
+        .route(
+            "/api/v1/briefing/responsibilities",
+            get(crate::responsibilities::get).post(crate::responsibilities::create),
+        )
+        .route(
+            "/api/v1/briefing/responsibilities/{id}",
+            patch(crate::responsibilities::edit),
+        )
+        .route("/api/v1/briefing/commands", get(crate::briefing::commands))
+        .route("/api/v1/account/commands", get(crate::briefing::commands))
         .route("/api/v1/commands/list", post(crate::commands::list))
+        .route("/api/v1/changes/list", post(crate::changes::list))
+        .route(
+            "/api/v1/watch-context/{operation}",
+            post(crate::watch_context::handle),
+        )
+        .route("/api/v1/source/status", get(crate::api::status))
         .route("/api/v1/messages/{operation}", post(crate::api::read))
         .route(
             "/api/v1/notifications/{operation}",

@@ -2,9 +2,10 @@ import "../route-registry";
 import { expect, test } from "bun:test";
 import { create } from "@bufbuild/protobuf";
 import { fireEvent, within } from "@testing-library/react";
-import { renderWithProviders } from "../test-utils/render";
+import { renderWithProviders, testSession } from "../test-utils/render";
 import { MessageRecordSchema } from "../gen/app/v1/models_pb";
 import { MessageReader } from "../components/message-reader";
+import { sourceScopeKey } from "../components/source-data";
 import Messages from "./messages";
 import { messageSearchState } from "../components/message-search-state";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -145,6 +146,8 @@ test("message search opens a compact reader on selection and closes back to full
       "parse-command-source",
       "search",
       messageSearchState(new URLSearchParams("q=preview"), "preview").request,
+      testSession.user!.id,
+      sourceScopeKey(testSession),
     ],
     {
       messages: [message],
@@ -159,14 +162,34 @@ test("message search opens a compact reader on selection and closes back to full
       },
     }
   );
-  client.setQueryData(["parse-command-source", "options", { dataset: "canonical" }], {
-    messages: [],
-    meta: { filterOptions: { messageTypes: ["OPTASK COMMS"], originators: ["TRAINING COMMAND"] } },
-  });
-  client.setQueryData(["parse-command-source", "detail", { key, dataset: "canonical" }], {
-    messages: [message],
-    meta: {},
-  });
+  client.setQueryData(
+    [
+      "parse-command-source",
+      "options",
+      { dataset: "canonical" },
+      testSession.user!.id,
+      sourceScopeKey(testSession),
+    ],
+    {
+      messages: [],
+      meta: {
+        filterOptions: { messageTypes: ["OPTASK COMMS"], originators: ["TRAINING COMMAND"] },
+      },
+    }
+  );
+  client.setQueryData(
+    [
+      "parse-command-source",
+      "detail",
+      { key, dataset: "canonical" },
+      testSession.user!.id,
+      sourceScopeKey(testSession),
+    ],
+    {
+      messages: [message],
+      meta: {},
+    }
+  );
   const transport = createRouterTransport((router) => {
     router.service(AppService, { getIdentity: () => ({ username: "test-user" }) });
     router.service(DraftService, {

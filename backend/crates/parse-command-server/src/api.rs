@@ -73,21 +73,43 @@ impl App {
         )
         .await
     }
-    pub async fn scope(&self, key: &str) -> Result<()> {
+    pub async fn scope(&self, key: &str, owner: &str) -> Result<()> {
+        let effective = crate::station::effective_scope(self.store()?, owner).await?;
         if key.starts_with("legacy:") {
+            if effective.assigned_commands.is_some()
+                || effective.message_types.is_some()
+                || !effective.include_unassigned
+                || effective.match_none
+            {
+                return Err(Error::new(
+                    "permission_denied",
+                    "Legacy fixtures cannot satisfy the selected station scope",
+                ));
+            }
             if !self.config.allow_fixtures {
                 return Err(Error::config("Legacy fixture mode is disabled"));
             }
             self.store()?.legacy(key).await?;
             return Ok(());
         }
-        let (id, revision) = split_key(key)?;
-        self.search.canonical(id, revision).await?;
+        self.station_message(key, &effective).await?;
         Ok(())
     }
-    pub async fn execute(&self, op: &str, request: ReadRequest, owner: &str) -> Result<Value> {
-        let filters = request.filters.validate()?;
+    pub async fn execute(&self, op: &str, mut request: ReadRequest, owner: &str) -> Result<Value> {
+        let mut filters = request.filters.validate()?;
+        let effective = crate::station::effective_scope(self.store()?, owner).await?;
         if request.dataset == Dataset::Legacy {
+            if effective.assigned_commands.is_some()
+                || effective.message_types.is_some()
+                || !effective.include_unassigned
+                || effective.match_none
+                || op == "similar"
+            {
+                return Err(Error::new(
+                    "permission_denied",
+                    "Legacy fixtures cannot satisfy the selected station scope",
+                ));
+            }
             if !self.config.allow_fixtures {
                 return Err(Error::config("Legacy fixture mode is disabled"));
             }
@@ -124,23 +146,111 @@ impl App {
                 json!({"dataset":"legacy","executedMode":"fixture","limit":100}),
             ));
         }
-        match op {
-            "list" => self.list(request, filters, owner).await,
+        request.relevance_fingerprint = effective.fingerprint.clone();
+        filters
+            .as_array_mut()
+            .ok_or_else(Error::unavailable)?
+            .extend(effective.search_filters()?);
+        if matches!(op, "detail" | "evidence") {
+            let key = request
+                .key
+                .as_deref()
+                .ok_or_else(|| Error::invalid("Message key is required"))?;
+            self.station_message(key, &effective).await?;
+        }
+        let mut result = match op {
+            "list" => self.list(request, filters, owner, &effective).await,
             "options" => self.options(filters).await,
-            "search" => self.search_messages(request, filters, owner).await,
+            "search" => {
+                self.search_messages(request, filters, owner, &effective)
+                    .await
+            }
+            "similar" => {
+                self.similar_messages(request, filters, owner, &effective)
+                    .await
+            }
             "detail" => {
                 self.detail(
                     request
                         .key
                         .as_deref()
                         .ok_or_else(|| Error::invalid("message key is required"))?,
+                    &effective,
                 )
                 .await
             }
-            "timeline" => self.timeline(request, filters, owner).await,
+            "timeline" => self.timeline(request, filters, owner, &effective).await,
             "evidence" => self.evidence_request(request).await,
             _ => Err(Error::new("not_found", "Unknown read operation")),
+        }?;
+        if result.get("meta").is_some() {
+            result["meta"]["stationContext"] = effective.context.clone();
+            result["meta"]["effectiveScope"] = json!({"allCommands":effective.assigned_commands.is_none(),"commandIds":effective.assigned_commands.as_deref().unwrap_or_default(),"includeUnassigned":effective.include_unassigned,"messageTypes":effective.message_types,"matchNone":effective.match_none});
         }
+        Ok(result)
+    }
+    async fn station_message(
+        &self,
+        key: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
+        let (id, revision) = split_key(key)?;
+        let core = self.search.canonical(id, revision).await?;
+        if !effective.matches(&core)? {
+            return Err(Error::new(
+                "not_found",
+                "Message is outside your station and relevance selection",
+            ));
+        }
+        Ok(core)
+    }
+    async fn similar_messages(
+        &self,
+        mut request: ReadRequest,
+        mut filters: Value,
+        owner: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
+        if !request.query.is_empty() || request.mode == Mode::Semantic {
+            return Err(Error::invalid(
+                "Similar messages use source text with hybrid or keyword matching",
+            ));
+        }
+        let key = request
+            .key
+            .clone()
+            .ok_or_else(|| Error::invalid("Choose a source message to find similar messages"))?;
+        let core = self.station_message(&key, effective).await?;
+        let (id, revision) = split_key(&key)?;
+        // Narrative passages come from the local index. Browser text cannot replace the seed.
+        let passages = self.search.post(&format!("/{PASSAGES}/_search?allow_partial_search_results=false"),
+            json!({"size":2,"_source":["message_id","revision","text"],"query":{"bool":{"filter":[{"term":{"message_id":id}},{"term":{"revision":revision}}]}},"sort":[{"ordinal":"asc"}],"timeout":"5s"})).await?;
+        if passages["timed_out"] == true || passages["_shards"]["failed"].as_u64().unwrap_or(1) > 0
+        {
+            return Err(Error::unavailable());
+        }
+        let hits = passages["hits"]["hits"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        let mut narrative = String::new();
+        for hit in hits.iter().take(2) {
+            let source = &hit["_source"];
+            if source["message_id"] != id || source["revision"] != revision {
+                return Err(Error::unavailable());
+            }
+            narrative.extend(text(source, "text").chars().take(2000));
+            narrative.push(' ');
+        }
+        request.query = similar_query(&core, &narrative)?;
+        request.exclude_message_id = Some(id.to_owned());
+        request.similar_to =
+            Some(json!({"messageKey":key,"subject":core["subject"].as_str().unwrap_or("")}));
+        filters
+            .as_array_mut()
+            .ok_or_else(Error::unavailable)?
+            .push(json!({"bool":{"must_not":[{"term":{"message_id":id}}]}}));
+        self.search_messages(request, filters, owner, effective)
+            .await
     }
     async fn options(&self, filters: Value) -> Result<Value> {
         let result = self
@@ -168,7 +278,13 @@ impl App {
             json!({"filterOptions":{"messageTypes":values("types"),"originators":values("originators")}}),
         ))
     }
-    async fn list(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
+    async fn list(
+        &self,
+        request: ReadRequest,
+        filters: Value,
+        owner: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
         let fingerprint = read_fingerprint("browse", owner, &request, &filters);
         let (id, page, mut state) = if let Some(value) = &request.page_token {
             let (id, page) = pagination::split_token(value)?;
@@ -249,6 +365,9 @@ impl App {
             let store = self.store()?;
             for hit in hits.iter().take(PAGE_SIZE) {
                 let core = &hit["_source"];
+                if !effective.matches(core)? || !request.filters.matches(core)? {
+                    return Err(Error::unavailable());
+                }
                 headers.insert(
                     format!("{}@{}", text(core, "id"), text(core, "revision")),
                     presentation::message_header(core),
@@ -267,6 +386,7 @@ impl App {
         request: ReadRequest,
         filters: Value,
         owner: &str,
+        effective: &crate::station::ResolvedScope,
     ) -> Result<Value> {
         if request.query.trim().is_empty() {
             return Err(Error::invalid("Use message browsing for an empty query"));
@@ -346,14 +466,21 @@ impl App {
                 || doc["_source"]["id"] != *id
                 || doc["_source"]["revision"] != *revision
                 || !request.filters.matches(&doc["_source"])?
+                || !effective.matches(&doc["_source"])?
+                || request.exclude_message_id.as_deref() == Some(id.as_str())
             {
                 stale += 1;
                 continue;
             }
             documents.push(doc["_source"].clone());
         }
+        excerpts.retain(|key, _| {
+            documents
+                .iter()
+                .any(|core| *key == format!("{}@{}", text(core, "id"), text(core, "revision")))
+        });
         pagination::sort_documents(&mut documents, request.sort)?;
-        let state = json!({"kind":"search","documents":documents,"excerpts":excerpts,"mode":mode,"windowLimited":hits.len()>=SEARCH_DEPTH,"staleHitsDropped":stale,"tookMs":response["took"],"snapshotAt":now()});
+        let state = json!({"kind":"search","documents":documents,"excerpts":excerpts,"mode":mode,"windowLimited":hits.len()>=SEARCH_DEPTH,"staleHitsDropped":stale,"tookMs":response["took"],"snapshotAt":now(),"similarTo":request.similar_to});
         let id = self.store()?.put_read_window(&fingerprint, &state).await?;
         self.search_page(&id, 0, &state).await
     }
@@ -402,9 +529,14 @@ impl App {
         meta["messageHeaders"] = json!(headers);
         meta["matchedExcerpts"] = json!(excerpts);
         meta["staleHitsDropped"] = state["staleHitsDropped"].clone();
+        meta["similarTo"] = state["similarTo"].clone();
         Ok(envelope(messages, "Page of ranked message matches", meta))
     }
-    pub async fn detail(&self, key: &str) -> Result<Value> {
+    pub async fn detail(
+        &self,
+        key: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
         let (id, revision) = split_key(key)?;
         let core = self.search.canonical(id, revision).await?;
         let audits = self
@@ -470,7 +602,10 @@ impl App {
                 )
                 .await
             {
-                Ok(value) if value["hits"]["hits"][0]["_source"]["id"] == key => {
+                Ok(value)
+                    if value["hits"]["hits"][0]["_source"]["id"] == key
+                        && effective.matches(&value["hits"]["hits"][0]["_source"])? =>
+                {
                     payload["casualty_history"] = value["hits"]["hits"][0]["_source"].clone();
                 }
                 _ => {
@@ -563,7 +698,13 @@ impl App {
         }
         Ok(json!({"messageKey":key,"records":audits,"retrievedAt":now(),"state":"available"}))
     }
-    async fn timeline(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
+    async fn timeline(
+        &self,
+        request: ReadRequest,
+        filters: Value,
+        owner: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
         let from = timestamp(
             request
                 .from
@@ -595,10 +736,11 @@ impl App {
                 query: request.query.clone(),
                 mode: request.mode.clone(),
                 filters: request.filters.clone(),
+                relevance_fingerprint: request.relevance_fingerprint.clone(),
                 ..ReadRequest::default()
             };
             let results = self
-                .search_messages(search_request, filters.clone(), owner)
+                .search_messages(search_request, filters.clone(), owner, effective)
                 .await?;
             // Forward execution metadata only; preserve the existing ranking/filter path.
             executed_mode = results["meta"]["executedMode"].clone();
@@ -644,6 +786,9 @@ impl App {
             let store = self.store()?;
             for hit in hits.iter().take(100) {
                 let core = &hit["_source"];
+                if !effective.matches(core)? || !request.filters.matches(core)? {
+                    return Err(Error::unavailable());
+                }
                 let (mut dated, mut unresolved) = presentation::timeline_with_limit(
                     core,
                     &from,
@@ -685,7 +830,41 @@ impl App {
     }
 }
 fn read_fingerprint(kind: &str, owner: &str, request: &ReadRequest, filters: &Value) -> String {
-    format!("{:x}",Sha256::digest(json!({"kind":kind,"owner":owner,"query":request.query,"mode":request.mode.as_str(),"sort":request.sort.as_str(),"filters":filters}).to_string().as_bytes()))
+    format!("{:x}",Sha256::digest(json!({"kind":kind,"owner":owner,"query":request.query,"mode":request.mode.as_str(),"sort":request.sort.as_str(),"filters":filters,"relevance":request.relevance_fingerprint,"similarTo":request.key}).to_string().as_bytes()))
+}
+/// Plain, bounded terms avoid promoting query-language punctuation from source prose.
+pub fn similar_query(core: &Value, narrative: &str) -> Result<String> {
+    let subject = text(core, "subject").chars().take(100).collect::<String>();
+    let mut parts = vec![subject, narrative.chars().take(4000).collect()];
+    for activity in core["activities"].as_array().into_iter().flatten().take(8) {
+        for field in ["description", "report", "task_type"] {
+            parts.push(text(activity, field).chars().take(200).collect());
+        }
+    }
+    parts.push(text(core, "type").to_owned());
+    let mut query = String::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for part in parts {
+        for word in part.split(|c: char| !c.is_alphanumeric()) {
+            if word.chars().count() < 2 || word.len() > 64 || !seen.insert(word.to_lowercase()) {
+                continue;
+            }
+            let extra = usize::from(!query.is_empty());
+            if query.len() + extra + word.len() > 240 {
+                continue;
+            }
+            if !query.is_empty() {
+                query.push(' ');
+            }
+            query.push_str(word);
+        }
+    }
+    if query.is_empty() {
+        return Err(Error::invalid(
+            "This message has too little searchable text to find related messages",
+        ));
+    }
+    Ok(query)
 }
 fn envelope(messages: Vec<Value>, notice: &str, meta: Value) -> Value {
     json!({"messages":messages,"source":"parse-command-opensearch","notice":notice,"retrievedAt":now(),"meta":meta})
@@ -906,6 +1085,12 @@ pub struct ReadRequest {
     pub to: Option<String>,
     pub fact_id: Option<String>,
     pub passage_id: Option<String>,
+    #[serde(skip)]
+    pub relevance_fingerprint: String,
+    #[serde(skip)]
+    pub exclude_message_id: Option<String>,
+    #[serde(skip)]
+    pub similar_to: Option<Value>,
 }
 pub async fn read(
     State(app): State<Arc<App>>,

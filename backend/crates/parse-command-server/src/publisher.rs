@@ -83,7 +83,56 @@ impl Publisher {
         }
         serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())
     }
+    fn initialize_availability(&self) -> Result<()> {
+        if self.store.get("availability_log", "committed")?.is_some() {
+            return Ok(());
+        }
+        self.store.refresh()?;
+        let mut after = None;
+        let mut committed = Record::new(
+            "availability_log",
+            "committed",
+            json!({"entries":[],"next":0}),
+        );
+        loop {
+            let mut query = json!({"size":100,"query":{"bool":{"filter":[{"term":{"kind":"publication"}},{"term":{"category":"message"}},{"term":{"state":"published"}}]}},"sort":["key"]});
+            if let Some(cursor) = after {
+                query["search_after"] = cursor;
+            }
+            let response = self.store.search(query)?;
+            let hits = response["hits"]["hits"]
+                .as_array()
+                .ok_or_else(Error::unavailable)?;
+            for doc in parse_command_state::hits(&response)? {
+                let first = doc.record.payload["events"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|event| event["state"] == "publication_succeeded")
+                    .filter_map(|event| event["at"].as_str())
+                    .min()
+                    .or(doc.record.payload["published_at"].as_str())
+                    .ok_or_else(Error::unavailable)?;
+                let at = crate::private::timestamp(first)?;
+                committed = crate::briefing::append(
+                    Some(&committed),
+                    &doc.record.payload["document"],
+                    &at,
+                )?;
+            }
+            if hits.len() < 100 {
+                break;
+            }
+            after = hits.last().map(|h| h["sort"].clone());
+        }
+        order_backfill(&mut committed)?;
+        match self.store.put(&committed, None) {
+            Ok(_) | Err(parse_command_state::Error("state_conflict")) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
     fn bootstrap(&mut self) -> Result<()> {
+        self.initialize_availability()?;
         let health = self.request(reqwest::Method::GET, "/_cluster/health", json!({}))?;
         if !matches!(health["status"].as_str(), Some("green" | "yellow")) {
             return Err(Error::unavailable());
@@ -588,6 +637,11 @@ impl Publisher {
         } else {
             row.payload["last_error"] = json!(code);
         }
+        if success && row.category == "message" {
+            self.store.update("availability_log", "committed", |old| {
+                crate::briefing::append(old, &row.payload["document"], &at)
+            })?;
+        }
         self.store.put(&row, Some(doc))?;
         if success && row.category == "message" {
             self.store.update("projection", &row.source, |old| {
@@ -964,8 +1018,8 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
         templates.push((format!("parse-command-passages-{mode}-v2"),json!({"size":100,"timeout":"5s","track_total_hits":false,"_source":["id","message_id","revision","text","embedding_status"],"query":query}).to_string()));
     }
     templates.push(("parse-command-message-detail-v1".into(),json!({"size":2,"timeout":"5s","query":{"bool":{"filter":[{"term":{"id":"__ID__"}},{"term":{"revision":"__REV__"}}]}}}).to_string()));
-    templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
-    templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
+    templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags","casualty.serial","casualty.reporting_uic","casualty.category","casualty.report_type","casualty.eic","casualty.identifiers"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
+    templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags","casualty.serial","casualty.reporting_uic","casualty.category","casualty.report_type","casualty.eic","casualty.identifiers"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
     templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
     // Recurrences include unsupported/unanchored rules for review in every view;
     // their occurrences are bounded in Rust, never by issue/receipt time.
@@ -997,6 +1051,42 @@ pub async fn journal_counts(store: &parse_command_state::Store) -> Result<Value>
     let response=store.search(json!({"size":0,"query":{"term":{"kind":"publication"}},"aggs":{"states":{"multi_terms":{"terms":[{"field":"category"},{"field":"state"}],"size":32}}}})).await?;
     Ok(json!(response["aggregations"]["states"]["buckets"]))
 }
+
+fn order_backfill(row: &mut Record) -> Result<()> {
+    let entries = row.payload["entries"]
+        .as_array_mut()
+        .ok_or_else(Error::unavailable)?;
+    entries.sort_by(|a, b| {
+        a["availableAt"]
+            .as_str()
+            .cmp(&b["availableAt"].as_str())
+            .then(a["messageKey"].as_str().cmp(&b["messageKey"].as_str()))
+    });
+    for (index, entry) in entries.iter_mut().enumerate() {
+        entry["sequence"] = json!(index + 1);
+    }
+    let count = entries.len();
+    row.payload["next"] = json!(count);
+    Ok(())
+}
+#[cfg(test)]
+mod backfill_tests {
+    use super::*;
+    #[test]
+    fn upgrade_backfill_orders_publication_times_before_assigning_sequences() {
+        let mut row = Record::new(
+            "availability_log",
+            "committed",
+            json!({"entries":[{"messageKey":"body@new","availableAt":"2026-11-05T12:00:00.000Z","sequence":1},{"messageKey":"body@old","availableAt":"2026-11-05T11:00:00.000Z","sequence":2}],"next":2}),
+        );
+        order_backfill(&mut row).unwrap();
+        assert_eq!(row.payload["entries"][0]["messageKey"], "body@old");
+        assert_eq!(row.payload["entries"][0]["sequence"], 1);
+        assert_eq!(row.payload["entries"][1]["messageKey"], "body@new");
+        assert_eq!(row.payload["entries"][1]["sequence"], 2);
+    }
+}
+
 #[cfg(test)]
 mod recurrence_tests {
     use super::*;

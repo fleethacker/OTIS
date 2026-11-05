@@ -1,5 +1,8 @@
+import { sessionFetch } from "./session-access";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { readJson } from "./source-data";
+import { readJson, sourceScopeKey, isSourceObject } from "./source-data";
+
+import { useSession } from "./session";
 
 export interface WatchChange {
   id: string;
@@ -26,7 +29,12 @@ export interface ChangePage {
   watermark: number;
   since: string;
   until: string;
-  availability: { newRecords: string; amended: string; cancelled: string; reviewTransitions: string };
+  availability: {
+    newRecords: string;
+    amended: string;
+    cancelled: string;
+    reviewTransitions: string;
+  };
   scope: string;
 }
 export interface ChangeRequest {
@@ -36,26 +44,60 @@ export interface ChangeRequest {
   before?: number;
   watermark?: number;
 }
-export async function readChanges(request: ChangeRequest, signal?: AbortSignal): Promise<ChangePage> {
-  const payload = await readJson(await fetch("/api/v1/changes/list", {
-    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request), signal,
-  }));
+export async function readChanges(
+  request: ChangeRequest,
+  signal?: AbortSignal
+): Promise<ChangePage> {
+  const payload = await readJson(
+    await sessionFetch("/api/v1/changes/list", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal,
+    })
+  );
   const result = payload as unknown as ChangePage;
-  if (!Array.isArray(result.items) || !Array.isArray(result.unknownTime) || !result.availability ||
-      ![result.returnedNewCount, result.hiddenCount, result.unknownHiddenCount, result.watermark].every((v) => Number.isSafeInteger(v) && v >= 0) ||
-      result.items.length + result.hiddenCount !== result.returnedNewCount ||
-      !(result.nextBefore === null || (Number.isSafeInteger(result.nextBefore) && result.nextBefore > 0)) ||
-      result.items.some((row) => !row.issuedAt || !Number.isFinite(Date.parse(row.issuedAt)))) {
+  if (
+    !Array.isArray(result.items) ||
+    !Array.isArray(result.unknownTime) ||
+    !isSourceObject(result.availability) ||
+    ![
+      result.returnedNewCount,
+      result.hiddenCount,
+      result.unknownHiddenCount,
+      result.watermark,
+    ].every((v) => Number.isSafeInteger(v) && v >= 0) ||
+    result.items.length + result.hiddenCount !== result.returnedNewCount ||
+    !(
+      result.nextBefore === null ||
+      (Number.isSafeInteger(result.nextBefore) && result.nextBefore > 0)
+    ) ||
+    result.items.some(
+      (row) =>
+        row.issuedAt === null || row.issuedAt === "" || !Number.isFinite(Date.parse(row.issuedAt))
+    )
+  ) {
     throw new Error("Turnover response is invalid");
   }
   return result;
 }
 export function useChanges(request: ChangeRequest, enabled: boolean) {
+  const { session } = useSession();
   return useInfiniteQuery({
-    queryKey: ["watchdesk-changes", request],
+    queryKey: [
+      "watchdesk-changes",
+      request,
+      session?.user?.id ?? "anonymous",
+      sourceScopeKey(session),
+    ],
     initialPageParam: null as { before: number; watermark: number } | null,
     queryFn: ({ pageParam, signal }) => readChanges({ ...request, ...(pageParam ?? {}) }, signal),
-    getNextPageParam: (last) => last.nextBefore === null ? undefined : { before: last.nextBefore, watermark: last.watermark },
-    enabled, retry: false, staleTime: 15_000, gcTime: 60_000,
+    getNextPageParam: (last) =>
+      last.nextBefore === null ? undefined : { before: last.nextBefore, watermark: last.watermark },
+    enabled,
+    retry: false,
+    staleTime: 15_000,
+    gcTime: 60_000,
   });
 }

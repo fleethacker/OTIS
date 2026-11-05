@@ -6,14 +6,22 @@ import type { PageModule } from "./route-registry";
 
 import * as Page_Underscore_placeholder from "./pages/_placeholder";
 import * as Page_about from "./pages/about";
+import * as Page_account from "./pages/account";
 import * as Page_calendar from "./pages/calendar";
 import * as Page_messages from "./pages/messages";
 import * as Page_settings from "./pages/settings";
+import * as Page_shift from "./pages/shift";
+import * as Page_users from "./pages/users";
+import * as Page_watch_settings from "./pages/watch-settings";
 
 export const pageModules: Record<string, PageModule> = {
   "./pages/_placeholder.tsx": Page_Underscore_placeholder,
   "./pages/about.tsx": Page_about,
+  "./pages/account.tsx": Page_account,
   "./pages/calendar.tsx": Page_calendar,
   "./pages/messages.tsx": Page_messages,
   "./pages/settings.tsx": Page_settings,
+  "./pages/shift.tsx": Page_shift,
+  "./pages/users.tsx": Page_users,
+  "./pages/watch-settings.tsx": Page_watch_settings,
 };

@@ -40,6 +40,25 @@ pub async fn read(store: &parse_command_state::Store) -> Result<Metadata> {
     let docs = parse_command_state::hits(&value)?;
     from_projections(&docs)
 }
+/// Apply station scope before extracting any suggestions or source citations.
+pub async fn read_scoped(
+    store: &parse_command_state::Store,
+    scope: &crate::station::ResolvedScope,
+) -> Result<Metadata> {
+    let value = store.search(json!({"size":201,"query":{"bool":{"filter":[{"term":{"kind":"projection"}},{"term":{"state":"published"}}]}},
+        "sort":[{"order":"desc"},"key"]})).await?;
+    let docs = parse_command_state::hits(&value)?;
+    let limited = docs.len() > 200;
+    let mut visible = Vec::new();
+    for doc in docs.into_iter().take(200) {
+        if scope.matches(&doc.record.payload["core"])? {
+            visible.push(doc);
+        }
+    }
+    let mut metadata = from_projections(&visible)?;
+    metadata.limited |= limited;
+    Ok(metadata)
+}
 fn line(raw: &[u8], end: usize) -> u64 {
     1 + raw[..end].iter().filter(|b| **b == b'\n').count() as u64
 }
@@ -78,6 +97,9 @@ pub fn from_projections(docs: &[parse_command_state::Document]) -> Result<Metada
             continue;
         };
         let raw = raw.as_bytes();
+        if format!("sha256:{:x}", Sha256::digest(raw)) != id {
+            continue;
+        }
         for audit in audits.iter().filter(|a| {
             a["kind"] == "parse_completed"
                 && a["payload"]["profile"]

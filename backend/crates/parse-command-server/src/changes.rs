@@ -6,7 +6,11 @@ use axum::{Json, extract::State, http::HeaderMap};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+    time::Duration,
+};
 
 const PAGE: usize = 200;
 #[derive(Clone, Default, Deserialize)]
@@ -293,13 +297,69 @@ pub async fn read(store: &parse_command_state::Store, request: &Request) -> Resu
     let docs = parse_command_state::hits(&page)?;
     compute(&sources(&docs), high, request)
 }
+/// Scoped turnover evidence uses the immutable first-publication ledger while
+/// preserving the custody window, pagination and timestamp contract.
+pub fn read_entries(
+    entries: &[Value],
+    request: &Request,
+    scope: &crate::station::ResolvedScope,
+) -> Result<Value> {
+    let high = entries
+        .iter()
+        .filter_map(|e| e["sequence"].as_i64())
+        .max()
+        .unwrap_or(0);
+    let watermark = request.watermark.unwrap_or(high);
+    let mut bodies: BTreeMap<&str, &Value> = BTreeMap::new();
+    for entry in entries {
+        let sequence = entry["sequence"].as_i64().ok_or_else(Error::unavailable)?;
+        if sequence > watermark {
+            continue;
+        }
+        let id = entry["core"]["id"]
+            .as_str()
+            .ok_or_else(Error::unavailable)?;
+        let prior = bodies.entry(id).or_insert(entry);
+        if sequence < prior["sequence"].as_i64().ok_or_else(Error::unavailable)? {
+            *prior = entry;
+        }
+    }
+    let mut sources = Vec::new();
+    for entry in bodies.into_values() {
+        let core = &entry["core"];
+        if !scope.matches(core)? {
+            continue;
+        }
+        let ids = core["command_ids"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        sources.push(Source {
+            id: crate::private::text(core, "id").into(),
+            message_key: entry["messageKey"].as_str().map(str::to_owned),
+            receipt_id: entry["receiptId"].as_str().map(str::to_owned),
+            sequence: entry["sequence"].as_i64(),
+            recorded_at: entry["availableAt"].as_str().map(str::to_owned),
+            issued_at: core["issued_at"].as_str().map(str::to_owned),
+            title: core["subject"]
+                .as_str()
+                .or_else(|| core["type"].as_str())
+                .unwrap_or_default()
+                .into(),
+            command_ids: ids
+                .iter()
+                .map(|v| v.as_str().map(str::to_owned).ok_or_else(Error::unavailable))
+                .collect::<Result<Vec<_>>>()?,
+        });
+    }
+    compute(&sources, high, request)
+}
 static CHANGE_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
 pub async fn list(
     State(app): State<Arc<App>>,
     headers: HeaderMap,
     Json(request): Json<Request>,
 ) -> Result<Json<Value>> {
-    app.headers_identity(&headers).await?;
+    let identity = app.headers_identity(&headers).await?;
     let permit = CHANGE_READS.try_acquire().map_err(|_| {
         Error::new(
             "resource_exhausted",
@@ -308,7 +368,12 @@ pub async fn list(
     })?;
     let value = tokio::time::timeout(Duration::from_secs(7), async {
         let _permit = permit;
-        read(&app.custody, &request).await
+        let scope = crate::station::effective_scope(&app.private, &identity.owner).await?;
+        read_entries(
+            &crate::briefing::published(&app.custody).await?,
+            &request,
+            &scope,
+        )
     })
     .await
     .map_err(|_| Error::unavailable())??;

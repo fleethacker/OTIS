@@ -25,6 +25,9 @@ def inputs(config):
     common = shared['COMMON']
     server = shared['SERVER']
     intake = server['intake']
+    obsolete = {'sessionTtlSeconds', 'oidcPolicy', 'oidcPolicySecret', 'oidcKeySecret'}
+    if obsolete.intersection(server):
+        raise ValueError('obsolete Authservice settings: migrate to native OIDC inputs')
     network = ipaddress.ip_network(common['imapCidr'], strict=True)
     if network.prefixlen == 0 or network.is_multicast or network.is_unspecified:
         raise ValueError('mailbox egress must use a specific unicast network')
@@ -38,6 +41,21 @@ def inputs(config):
         raise ValueError('SQLite intake settings require snapshot migration before native-state deployment')
     if intake.get('opensearch_url') != 'http://opensearch:9200':
         raise ValueError('intake must use the protected same-namespace OpenSearch endpoint')
+    routing = intake.get('sourceRouting')
+    if routing is not None:
+        if not isinstance(routing, dict) or set(routing) != {'policyId', 'commandIds'}:
+            raise ValueError('sourceRouting requires only policyId and commandIds')
+        policy = routing['policyId']
+        commands = routing['commandIds']
+        if not isinstance(policy, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', policy):
+            raise ValueError('sourceRouting policyId must be a bounded versioned identifier')
+        if (not isinstance(commands, list) or not 1 <= len(commands) <= 32
+                or any(not isinstance(command, str) or not command
+                       or len(command.encode('utf-8')) > 256 or command.strip() != command
+                       or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in command)
+                       for command in commands)
+                or len(set(commands)) != len(commands)):
+            raise ValueError('sourceRouting requires 1–32 unique exact command IDs')
     state = server.get('stateIndex', '.parse-command-state-v1')
     custody = intake.get('custody_index', '.parse-command-custody-v1')
     if any(not isinstance(v, str) or not re.fullmatch(r'\.[a-z0-9][a-z0-9._-]{0,252}', v) for v in (state, custody)) or state == custody:
@@ -64,7 +82,7 @@ def inputs(config):
     port = common.get('idpPort', 8443)
     if type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('IdP egress port must be 1..65535')
-    for field in ('legacyStorage', 'requireStateMigration'):
+    for field in ('legacyStorage', 'requireStateMigration', 'requireStationAssignment'):
         if type(server.get(field, False)) is not bool:
             raise ValueError(field + ' must be a boolean')
     for name in (common.get('clientSecretName', 'parse-command-oidc-client'), server.get('ssoSecret', 'parse-command-sso')):
@@ -75,6 +93,13 @@ def inputs(config):
     }:
         raise ValueError('generated client Secret must not overwrite existing session or mailbox Secrets')
     return shared
+
+
+def required_secrets(shared):
+    server = shared.get('SERVER', {})
+    # Package.spec.sso generates the client Secret during installation.
+    return [(server.get('ssoSecret', 'parse-command-sso'), ['session-key', 'ca.pem']),
+            (server.get('imapSecret', 'parse-command-imap'), ['password', 'ca.crt'])]
 
 
 def main():
@@ -120,6 +145,9 @@ def main():
     environment = {v['name']: v.get('value') for v in server['spec']['template']['spec']['containers'][0]['env']}
     assert environment['PARSE_COMMAND_AUTH_MODE'] == 'oidc'
     assert environment['PARSE_COMMAND_DEPLOYMENT_PROFILE'] == 'uds'
+    assert environment['PARSE_COMMAND_SEARCH_SECURITY_POLICY'] == 'uds_mesh_mtls'
+    assert environment['PARSE_COMMAND_REQUIRE_STATION_ASSIGNMENT'] == str(shared['SERVER'].get('requireStationAssignment', False)).lower()
+    assert environment['PARSE_COMMAND_REQUIRE_STATE_MIGRATION'] == str(shared['SERVER'].get('requireStateMigration', False)).lower()
     assert set((environment['PARSE_COMMAND_ADMIN_GROUP'], environment['PARSE_COMMAND_VIEWER_GROUP'])) == set(sso['groups']['anyOf'])
     assert 'PARSE_COMMAND_PRIVATE_DB' not in environment
     pod = server['spec']['template']['spec']

@@ -13,6 +13,7 @@ import smtplib
 import ssl
 import time
 import urllib.request
+import urllib.parse
 import uuid
 
 
@@ -26,6 +27,26 @@ def read_session_cookie(path):
     if not cookie.startswith('parse_command_session=') or not cookie.partition('=')[2] or len(cookie) > 16384 or any(ord(c) < 33 or c == ';' for c in cookie):
         raise ValueError('one bounded native session cookie is required')
     return cookie
+
+
+def validate_origin(origin):
+    value = urllib.parse.urlsplit(origin)
+    if (value.scheme != 'https' or not value.hostname or value.username is not None
+            or value.password is not None or value.path not in ('', '/')
+            or value.query or value.fragment):
+        raise ValueError('use an exact HTTPS application origin without credentials, path or query')
+    return origin.rstrip('/')
+
+
+def validate_session(session):
+    if session.get('authenticated') is not True or session.get('authMode') != 'oidc':
+        raise RuntimeError('verified native OIDC application session missing')
+    user = session.get('user') or {}
+    if not isinstance(user.get('id'), str) or not user['id']:
+        raise RuntimeError('stable application user ID missing')
+    if session.get('stationAssignmentRequired') and not user.get('stationAssignment'):
+        raise RuntimeError('assign the test account to its approved station before sending synthetic mail')
+    return user['id']
 
 
 def main():
@@ -42,9 +63,10 @@ def main():
     p.add_argument('--body', type=Path, required=True, help='Operator-reviewed synthetic USMTF body; never real traffic')
     p.add_argument('--deadline', type=int, default=300)
     a = p.parse_args()
-    if not a.origin.startswith('https://') or not 1 <= a.deadline <= 900:
-        p.error('verified HTTPS and a 1..900 second deadline are required')
+    if not 1 <= a.deadline <= 900:
+        p.error('a 1..900 second deadline is required')
     try:
+        origin = validate_origin(a.origin)
         cookie = read_session_cookie(a.cookie_file)
     except ValueError as error:
         p.error(str(error))
@@ -52,15 +74,17 @@ def main():
         p.error('bounded synthetic body required')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=a.ca)), NoRedirect())
     def api(path, body):
-        req = urllib.request.Request(a.origin.rstrip('/') + path, data=None if body is None else json.dumps(body).encode(), headers={'Cookie': cookie, 'Origin': a.origin.rstrip('/'), 'Content-Type': 'application/json'})
+        req = urllib.request.Request(origin + path, data=None if body is None else json.dumps(body).encode(), headers={'Cookie': cookie, 'Origin': origin, 'Content-Type': 'application/json'})
         with opener.open(req, timeout=15) as response:
             payload = response.read(4_194_305)
             if len(payload) > 4_194_304:
                 raise RuntimeError('application response limit')
             return json.loads(payload)
+    session = api('/api/v1/auth/session', None)
+    validate_session(session)
     identity = api('/app.v1.AppService/GetIdentity', {})
-    if not identity.get('username', '').startswith('oidc:'):
-        raise RuntimeError('UDS verified subject missing')
+    if not session['user'].get('username') or identity.get('username') != session['user']['username']:
+        raise RuntimeError('application and RPC display identity disagree')
     marker = 'UDS SYNTHETIC ' + uuid.uuid4().hex
     message = EmailMessage()
     message['Subject'] = 'SUBJ: ' + marker
@@ -74,7 +98,7 @@ def main():
         smtp.send_message(message)
     deadline = time.monotonic() + a.deadline
     while time.monotonic() < deadline:
-        data = api('/api/v1/messages/list', {})
+        data = api('/api/v1/messages/search', {'query': marker, 'mode': 'keyword'})
         matches = [m for m in data.get('messages', []) if marker in json.dumps(m)]
         if matches:
             status = api('/api/v1/source/status', None)

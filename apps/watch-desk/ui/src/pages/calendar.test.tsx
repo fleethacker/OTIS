@@ -4,7 +4,7 @@ import { act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { renderWithProviders } from "../test-utils/render";
+import { renderWithProviders, testSession } from "../test-utils/render";
 import { ExtractedEventSchema, MessageRecordSchema } from "../gen/app/v1/models_pb";
 import { DayTimeline } from "../components/day-timeline";
 import {
@@ -16,7 +16,7 @@ import {
   weekBounds,
 } from "../components/calendar-time";
 import Calendar from "./calendar";
-import type { TimelineItem } from "../components/source-data";
+import { sourceScopeKey, type TimelineItem } from "../components/source-data";
 import { discover } from "../components/schedule-discovery";
 import {
   readShips,
@@ -149,14 +149,14 @@ test("calendar omits review disclosure while retaining timed events and failure 
     dataset: "canonical", query: "", mode: "hybrid",
     from: "2026-11-05T00:00:00.000Z", to: "2026-11-06T00:00:00.000Z", filters: {},
   };
-  client.setQueryData(["parse-command-source", "timeline", request], {
+  client.setQueryData(["parse-command-source", "timeline", request, testSession.user!.id, sourceScopeKey(testSession)], {
     messages: [create(MessageRecordSchema, { sourceMessageId: key })],
     meta: {
       reviewItems: [review], windowLimited: true,
       timelineItems: [{ ...review, key: `${key}#point`, factId: "point", title: "Fictional point", kind: "point", at: "2026-11-05T08:00:00Z" }],
     },
   });
-  client.setQueryData(["watchdesk-commands"], { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false });
+  client.setQueryData(["watchdesk-commands", testSession.user!.id, sourceScopeKey(testSession)], { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false });
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
     Response.json({ message: "Fictional source unavailable" }, { status: 503 })
   );
@@ -169,9 +169,9 @@ test("calendar omits review disclosure while retaining timed events and failure 
     expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
     expect(view.getByText(/Partial source results/)).toBeTruthy();
     await act(async () => { await client.invalidateQueries({ queryKey: ["parse-command-source"] }); });
-    await waitFor(() => expect(view.getByText(/Calendar could not be loaded/).textContent).toContain("Fictional source unavailable"));
+    await waitFor(() => expect(view.getByText(/Showing saved schedule/).textContent).toContain("Fictional source unavailable"));
     expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
-    expect(view.queryByRole("link", { name: "Fictional point, source record" })).toBeNull();
+    expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });
 

@@ -1,3 +1,4 @@
+import { CommandChips } from "./command-chips";
 import { AppButton } from "./ui";
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -28,7 +29,7 @@ import { calendarLocalizer } from "./calendar-localizer";
 import { messageHref } from "./calendar-links";
 import { useDisplayTime, civilDate, civilHour } from "./display-time";
 import moment from "moment-timezone";
-import { CommandChips, commandColor, commandKeys, commandName, type Command } from "./command-roster";
+import { commandColor, commandKeys, commandName, type Command } from "./command-roster";
 import { OptaskIcon } from "./optask-icons";
 import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";

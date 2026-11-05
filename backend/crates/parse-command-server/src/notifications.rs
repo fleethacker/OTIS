@@ -500,7 +500,221 @@ pub async fn handle(
     Json(request): Json<Request>,
 ) -> Result<Json<Value>> {
     let owner = app.headers_identity(&headers).await?.owner;
+    let scope = crate::station::effective_scope(&app.private, &owner).await?;
     Ok(Json(
-        execute(&app.private.state, &owner, &operation, request).await?,
+        execute_scoped(&app, &owner, &operation, request, &scope).await?,
     ))
+}
+/// Scope applies before grouped counts, membership and unread calculations. Read
+/// markers are separately owned by the exact station/profile fingerprint.
+pub async fn execute_scoped(
+    app: &App,
+    owner: &str,
+    operation: &str,
+    request: Request,
+    scope: &crate::station::ResolvedScope,
+) -> Result<Value> {
+    let scoped_owner = format!("{owner}:scope:{}", scope.fingerprint);
+    if scope.unrestricted() {
+        return execute(&app.private.state, &scoped_owner, operation, request).await;
+    }
+    let mut allowed = std::collections::BTreeSet::new();
+    for entry in crate::briefing::published(&app.custody).await? {
+        if scope.matches(&entry["core"])?
+            && let Some(key) = entry["messageKey"].as_str()
+        {
+            allowed.insert(key.to_owned());
+        }
+    }
+    let store = &app.private.state;
+    let mut visible = Vec::new();
+    let mut scanned = 0;
+    let mut after = None;
+    loop {
+        let mut query = json!({"size":100,"query":{"term":{"kind":"notification"}},"sort":[{"order":"desc"},"key"]});
+        if let Some(cursor) = after {
+            query["search_after"] = cursor;
+        }
+        let response = store.search(query).await?;
+        let hits = response["hits"]["hits"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        scanned += hits.len();
+        for doc in parse_command_state::hits(&response)? {
+            let keep_members =
+                operation == "members" && doc.record.payload["id"].as_i64() == request.id;
+            if let Some(row) = scope_notice(doc.record, &allowed, keep_members)? {
+                visible.push(row);
+            }
+        }
+        if hits.len() < 100 {
+            break;
+        }
+        if scanned > 5000 {
+            return Err(Error::new(
+                "resource_exhausted",
+                "Scoped inbox exceeds retained notification bound",
+            ));
+        }
+        after = hits.last().map(|h| h["sort"].clone());
+    }
+    visible.sort_by_key(|r| std::cmp::Reverse(r.order));
+    let watermark = visible.iter().map(|r| r.order).max().unwrap_or(0);
+    let read = store
+        .get("notification_reads", &scoped_owner)
+        .await?
+        .map(|d| d.record.payload)
+        .unwrap_or_else(|| json!({"through":0,"versions":{}}));
+    match operation {
+        "list" => {
+            let before = request
+                .before
+                .map(|v| positive(Some(v)))
+                .transpose()?
+                .unwrap_or(i64::MAX);
+            let unread = visible
+                .iter()
+                .filter(|r| {
+                    r.order
+                        > read["through"].as_i64().unwrap_or(0).max(
+                            read["versions"][r.payload["id"].to_string()]
+                                .as_i64()
+                                .unwrap_or(0),
+                        )
+                })
+                .count();
+            let mut rows = visible
+                .into_iter()
+                .filter(|r| r.order < before)
+                .collect::<Vec<_>>();
+            let more = rows.len() > PAGE;
+            rows.truncate(PAGE);
+            let next = more.then(|| rows.last().map(|r| r.order)).flatten();
+            let items = rows
+                .into_iter()
+                .map(|r| {
+                    let mut p = r.payload;
+                    let id = p["id"].to_string();
+                    p.as_object_mut().map(|p| p.remove("members"));
+                    p["version"] = json!(r.order);
+                    p["unread"] = json!(
+                        r.order
+                            > read["through"]
+                                .as_i64()
+                                .unwrap_or(0)
+                                .max(read["versions"][id].as_i64().unwrap_or(0))
+                    );
+                    p
+                })
+                .collect::<Vec<_>>();
+            let catching_up = store
+                .get("notification_status", "sync")
+                .await?
+                .is_none_or(|d| d.record.payload["catchingUp"] == true);
+            Ok(
+                json!({"items":items,"unread":unread,"watermark":watermark,"nextBefore":next,"catchingUp":catching_up}),
+            )
+        }
+        "members" => {
+            let id = positive(request.id)?;
+            let row = visible
+                .iter()
+                .find(|r| r.payload["id"] == id)
+                .ok_or_else(|| Error::invalid("Notification unavailable in this station scope"))?;
+            let before = request
+                .before
+                .map(|v| positive(Some(v)))
+                .transpose()?
+                .unwrap_or(i64::MAX);
+            let mut items = row.payload["members"]
+                .as_object()
+                .into_iter()
+                .flat_map(|v| v.values())
+                .filter(|v| v["version"].as_i64().is_some_and(|v| v < before))
+                .cloned()
+                .collect::<Vec<_>>();
+            items.sort_by_key(|v| std::cmp::Reverse(v["version"].as_i64().unwrap_or(0)));
+            let more = items.len() > PAGE;
+            items.truncate(PAGE);
+            let next = if more {
+                items.last().map(|v| v["version"].clone())
+            } else {
+                None
+            };
+            Ok(json!({"items":items,"nextBefore":next}))
+        }
+        "read" => {
+            if let Some(through) = request.through {
+                if through > watermark {
+                    return Err(Error::invalid("Invalid scope snapshot"));
+                }
+            } else {
+                let id = positive(request.id)?;
+                let version = positive(request.version)?;
+                if !visible
+                    .iter()
+                    .any(|r| r.payload["id"] == id && version <= r.order)
+                {
+                    return Err(Error::invalid(
+                        "Notification unavailable in this station scope",
+                    ));
+                }
+            }
+            execute(store, &scoped_owner, operation, request).await
+        }
+        _ => Err(Error::new("not_found", "Unknown notification operation")),
+    }
+}
+
+fn scope_notice(
+    mut row: Record,
+    allowed: &std::collections::BTreeSet<String>,
+    keep_members: bool,
+) -> Result<Option<Record>> {
+    if row.payload["kind"] == "traffic" {
+        let mut members = row.payload["members"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        members.retain(|_, v| {
+            v["messageKey"]
+                .as_str()
+                .is_some_and(|key| allowed.contains(key))
+        });
+        if members.is_empty() {
+            return Ok(None);
+        }
+        row.order = members
+            .values()
+            .filter_map(|v| v["version"].as_i64())
+            .max()
+            .ok_or_else(Error::unavailable)?;
+        row.payload["count"] = json!(members.len());
+        let latest = members
+            .values()
+            .max_by_key(|v| v["version"].as_i64().unwrap_or(0))
+            .ok_or_else(Error::unavailable)?;
+        row.payload["at"] = latest["at"].clone();
+        row.payload["context"] = if members.len() == 1 {
+            latest["context"].clone()
+        } else {
+            json!("")
+        };
+        row.payload["messageKey"] = if members.len() == 1 {
+            latest["messageKey"].clone()
+        } else {
+            json!("")
+        };
+        row.payload["members"] = if keep_members {
+            json!(members)
+        } else {
+            json!({})
+        };
+    } else if !row.payload["messageKey"]
+        .as_str()
+        .is_some_and(|key| allowed.contains(key))
+    {
+        return Ok(None);
+    }
+    Ok(Some(row))
 }

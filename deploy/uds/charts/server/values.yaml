@@ -16,6 +16,7 @@ config:
   ssoSecret: parse-command-sso
   stateIndex: .parse-command-state-v1
   requireStateMigration: false
+  requireStationAssignment: false
   legacyStorage: false
   imapSecret: parse-command-imap
   adminGroup: /Parse Command/Admin

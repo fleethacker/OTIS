@@ -152,6 +152,11 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
             </Notice>
           )}
           <ul className="menu menu-sm gap-0 px-1 py-1">
+            <li>
+              <Link to="/account" role="menuitem" onClick={() => setOpen(false)}>
+                Account & settings
+              </Link>
+            </li>
             {role !== "admin" && (
               <li>
                 <Link to="/settings" role="menuitem" onClick={() => setOpen(false)}>

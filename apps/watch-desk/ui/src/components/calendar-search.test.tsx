@@ -6,7 +6,7 @@ import { renderWithProviders } from "../test-utils/render";
 import Calendar from "../pages/calendar";
 import { messageSearchState } from "./message-search-state";
 
-test("Calendar keeps one hybrid search request and reports the executed mode as non-live text", async () => {
+test("Calendar keeps one hybrid search request without explanatory execution copy", async () => {
   for (const executedMode of ["hybrid", "keyword", undefined]) {
     const requests: { operation: string; body: Record<string, unknown> }[] = [];
     const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
@@ -19,9 +19,8 @@ test("Calendar keeps one hybrid search request and reports the executed mode as 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, { route: "/calendar?date=2026-11-05&q=communications" });
     try {
-      await waitFor(() => expect(view.getByText(new RegExp(`Executed search: ${executedMode ?? "not reported by server"}`))).toBeTruthy());
-      const mode = view.getByText(/Executed search:/);
-      expect(mode.closest('[role="status"], [aria-live]')).toBeNull();
+      await waitFor(() => expect(client.isFetching()).toBe(0));
+      expect(view.queryByText(/Executed search:/)).toBeNull();
       expect(view.queryByRole("combobox", { name: "Search mode" })).toBeNull();
       expect(view.queryByRole("link", { name: /Find related/ })).toBeNull();
       expect(requests.find((r) => r.operation === "timeline")?.body).toMatchObject({ query: "communications", mode: "hybrid" });

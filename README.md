@@ -33,6 +33,8 @@ https://github.com/user-attachments/assets/dbff970d-6c2c-439f-afee-a96526ad0685
   OpenSearch, with filters for command, message type, originator, and issue date.
 - **Build the watch picture:** browse day, week, and month schedules in Zulu or
   local time; keep incomplete times and unresolved facts visible for review.
+- **Plan the watch:** assign station and department responsibilities, narrow message
+  relevance by account, and review a frozen briefing of traffic available at login.
 - **Review the evidence:** inspect raw messages, structured source sets, extraction
   evidence, and processing history from the message reader.
 - **Prepare a response:** generate and privately save acknowledgement drafts for
@@ -64,8 +66,9 @@ Start the demo mailbox, build the application stack, and provision the local mod
 
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
-docker compose up --build -d --wait --wait-timeout 180
+docker compose up --build -d --wait --wait-timeout 180 opensearch
 /tmp/otis-search-venv/bin/python backend/search/deploy.py
+docker compose up --build -d --wait --wait-timeout 180 server web
 curl --fail http://localhost:8080/api/health
 ```
 
@@ -86,6 +89,8 @@ Messages are ingested automatically. For historical examples, navigate the
 calendar to the source message dates. See the [mail demo guide](demo/README.md)
 for mailbox details and the [test-data guide](test-data/README.md) for sample
 provenance and usage. Startup does not automatically send sample messages.
+Station assignment, responsibility scope, login briefings and explicit fictional
+demo setup are described in [watch planning](docs/integration/main3-sync.md).
 
 Stop the application with `docker compose down`, then stop the mailbox with
 `docker compose -f demo/docker-compose.yml down`. Both retain persistent volumes.

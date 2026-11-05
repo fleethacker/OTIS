@@ -22,8 +22,15 @@ fn demo_flag(value: &str, configured: bool) -> Result<bool> {
         )),
     }
 }
+fn configure_demo(intake: &mut parse_command_intake::config::Config, value: &str) -> Result<()> {
+    intake.demo_fixture_assignments = demo_flag(value, intake.demo_fixture_assignments)?;
+    intake
+        .validate()
+        .map_err(|_| Error::config("invalid intake configuration after demo override"))
+}
 impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
+        crate::station::required()?;
         let get = |key: &str, default: &str| std::env::var(key).unwrap_or_else(|_| default.into());
         let auth = crate::auth::Config::load()?;
         let profile = get("PARSE_COMMAND_DEPLOYMENT_PROFILE", "local");
@@ -53,10 +60,7 @@ impl Config {
         }
         let mut intake = parse_command_intake::config::Config::load(path)
             .map_err(|_| Error::config("invalid intake configuration"))?;
-        intake.demo_fixture_assignments = demo_flag(
-            &get("PARSE_COMMAND_WATCHDESK_DEMO", ""),
-            intake.demo_fixture_assignments,
-        )?;
+        configure_demo(&mut intake, &get("PARSE_COMMAND_WATCHDESK_DEMO", ""))?;
         validate_deployment_profile(
             &profile,
             &auth.mode,
@@ -209,5 +213,30 @@ mod tests {
         assert!(demo_flag("true", false).unwrap());
         assert!(!demo_flag("false", true).unwrap());
         assert!(demo_flag("typo", false).is_err());
+    }
+    #[test]
+    fn watchdesk_override_is_explicit_and_revalidates_intake() {
+        assert!(!demo_flag("", false).unwrap());
+        assert!(demo_flag("", true).unwrap());
+        assert!(demo_flag("true", false).unwrap());
+        assert!(!demo_flag("false", true).unwrap());
+        for value in ["TRUE", "1", " true", "typo"] {
+            assert!(demo_flag(value, false).is_err());
+        }
+        let path = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../config/demo-compose-intake.json"
+        ));
+        let mut intake = parse_command_intake::config::Config::load(path).unwrap();
+        configure_demo(&mut intake, "true").unwrap();
+        assert!(intake.demo_fixture_assignments);
+        configure_demo(&mut intake, "false").unwrap();
+        assert!(!intake.demo_fixture_assignments);
+        intake.source_routing = Some(parse_command_intake::config::SourceRouting {
+            policy_id: "policy-v1".into(),
+            command_ids: vec!["ship-a".into()],
+        });
+        intake.validate().unwrap();
+        assert!(configure_demo(&mut intake, "true").is_err());
     }
 }

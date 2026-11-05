@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
-from validate import inputs, load_config
+from validate import inputs, load_config, required_secrets
 
 
 def capture(*command, **kwargs):
@@ -88,8 +88,7 @@ def main():
         applications = {'parse-command-server', 'parse-command-search', 'parse-command-ui', 'parse-command-bootstrap'}
         if any(pod['metadata'].get('labels', {}).get('app') not in applications for pod in pods):
             raise SystemExit('Unrelated pods exist in the target namespace; choose a dedicated namespace')
-        server = shared.get('SERVER', {})
-        for secret, keys in [(server.get('ssoSecret', 'parse-command-sso'), ['session-key', 'ca.pem']), (server.get('imapSecret', 'parse-command-imap'), ['password', 'ca.crt'])]:
+        for secret, keys in required_secrets(shared):
             # Only key names and non-empty presence are checked. No values reach stdout.
             value = json.loads(capture('kubectl', '-n', namespace, 'get', 'secret', secret, '-o', 'json', env=env))
             try:

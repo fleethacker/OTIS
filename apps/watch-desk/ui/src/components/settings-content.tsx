@@ -93,6 +93,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
     setTurnovers(result.settings.turnoverUtc.join(", "));
     // Own ship marks come from the shared settings.
     void client.invalidateQueries({ queryKey: ["watchdesk-commands"] });
+    void client.invalidateQueries({ queryKey: ["watchdesk-context"] });
   }
   async function saveCommand() {
     load(await settingsRequest<SettingsReply>("update", { settings: form, revision }));

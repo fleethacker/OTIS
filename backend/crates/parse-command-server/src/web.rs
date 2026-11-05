@@ -108,7 +108,8 @@ pub async fn login_page(
 pub async fn login(State(app): State<Arc<App>>, Form(request): Form<Login>) -> Result<Response> {
     demo(&app)?;
     let token = app.private.create_session(&request.role).await?;
-    let mut response = Redirect::to(return_path(&request.return_to)).into_response();
+    crate::briefing::capture(&app, &token).await?;
+    let mut response = Redirect::to(&shift_return(&request.return_to)).into_response();
     set_cookie(
         &mut response,
         "parse_command_session",
@@ -169,7 +170,10 @@ pub async fn callback(
         .await;
     let mut response = match result {
         Ok((token, path)) => {
-            let mut response = Redirect::to(&path).into_response();
+            if let Err(error) = crate::briefing::capture(&app, &token).await {
+                return error.into_response();
+            }
+            let mut response = Redirect::to(&shift_return(&path)).into_response();
             if set_cookie(&mut response, "parse_command_session", &token, None, true).is_err() {
                 return Error::unavailable().into_response();
             }
@@ -201,6 +205,32 @@ pub async fn not_found() -> (StatusCode, Json<Value>) {
         StatusCode::NOT_FOUND,
         Json(json!({"code":"not_found","message":"Unknown API route"})),
     )
+}
+
+/// Successful native sign-in opens its captured briefing once; refresh preserves location.
+pub fn shift_return(value: &str) -> String {
+    let safe = return_path(value);
+    let path = safe.split('?').next().unwrap_or("");
+    let safe = if matches!(
+        path,
+        "/calendar"
+            | "/messages"
+            | "/account"
+            | "/users"
+            | "/settings"
+            | "/watch-settings"
+            | "/shift"
+    ) {
+        safe
+    } else {
+        "/calendar"
+    };
+    if path == "/shift" {
+        return "/shift".into();
+    }
+    let mut url = reqwest::Url::parse("https://local.invalid/shift").expect("static URL");
+    url.query_pairs_mut().append_pair("returnTo", safe);
+    format!("/shift?{}", url.query().unwrap_or(""))
 }
 
 pub async fn ready(State(app): State<Arc<App>>) -> (axum::http::StatusCode, Json<Value>) {

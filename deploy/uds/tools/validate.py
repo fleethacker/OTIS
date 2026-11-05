@@ -52,7 +52,7 @@ def main():
             documents += json.loads(output('uds', 'zarf', 'tools', 'yq', 'eval-all', '-o=json', '[.]', str(rendered)))
             if name == 'config':
                 continue
-            subprocess.run(['uds', 'zarf', 'dev', 'lint', str(HERE / 'packages' / name), '--architecture', 'arm64', '--set', 'VERSION=0.1.0-validation', '--set', key + '_IMAGE=' + fake, '--set', 'BOOTSTRAP_IMAGE=' + fake], check=True)
+            subprocess.run(['uds', 'zarf', 'dev', 'lint', str(HERE / 'packages' / name), '--architecture', 'arm64', '--set', 'VERSION=0.1.0-validation', '--set', 'NAMESPACE=' + shared['NAMESPACE'], '--set', key + '_IMAGE=' + fake, '--set', 'BOOTSTRAP_IMAGE=' + fake], check=True)
     documents = [d for d in documents if d]
     pvcs = [d for d in documents if d['kind'] == 'PersistentVolumeClaim']
     assert {p['metadata']['name'] for p in pvcs} == {'parse-command-search', 'parse-command-custody', 'parse-command-private'}
@@ -68,6 +68,11 @@ def main():
             assert security['allowPrivilegeEscalation'] is False and security['capabilities']['drop'] == ['ALL']
     package = next(d for d in documents if d['kind'] == 'Package')
     assert package['spec']['sso'][0]['enableAuthserviceSelector'] == {'app': 'parse-command-ui'}
+    server = next(w for w in workloads if w['metadata']['name'] == 'parse-command-server')
+    environment = {v['name']: v.get('value') for v in server['spec']['template']['spec']['containers'][0]['env']}
+    groups = json.loads(environment['PARSE_COMMAND_ALLOWED_GROUPS_JSON'])
+    assert isinstance(groups, list) and 1 <= len(groups) <= 32
+    assert groups == package['spec']['sso'][0]['groups']['anyOf']
     assert len(package['spec']['network']['expose']) == 1
     assert package['spec']['network']['expose'][0]['service'] == 'web'
     assert not any(r.get('remoteGenerated') == 'Anywhere' for r in package['spec']['network']['allow'])

@@ -41,6 +41,9 @@ def main():
     common = shared['COMMON']
     if common['imapHost'].endswith('.invalid'):
         p.error('replace the example mailbox endpoint before deployment')
+    lock = json.loads((bundle.parent / 'artifact-lock.json').read_text())
+    if lock.get('namespace') != shared['NAMESPACE']:
+        p.error('bundle namespace does not match configuration; rebuild with --namespace ' + shared['NAMESPACE'])
     checksums = bundle.parent / 'SHA256SUMS'
     lines = dict(line.split('  ', 1)[::-1] for line in checksums.read_text().splitlines())
     with bundle.open('rb') as stream:

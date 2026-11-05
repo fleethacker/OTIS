@@ -18,7 +18,10 @@ of the UDS application bundle.
 
 UDS Authservice handles interactive SSO; Rust independently verifies the ID
 token using an explicitly provisioned active RS256 public key, exact issuer and
-client audience. No mock-role session fallback exists in this mode. Private
+client audience and configured allowed-group membership on every REST/RPC
+request. The server group check is required even when the gateway accepts a
+valid JWT without an interactive login. No mock-role session fallback exists
+in this mode. Private
 ownership uses an issuer-scoped subject, preventing mutable names/email from
 reassigning drafts. A later decision must address multi-key/JWKS rotation, SSO
 logout behavior and any approved migration of legacy demo-owned private data.
@@ -58,3 +61,10 @@ remain part of the application profile.
 Primary references: [UDS Authservice integration](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/docs/how-to-guides/identity-and-authorization/protect-apps-with-authservice.mdx),
 [matching platform bundle](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/bundles/k3d-slim-dev/uds-bundle.yaml),
 [package requirements](https://docs.defenseunicorns.com/core/v1-16/concepts/configuration--packaging/package-requirements/).
+
+Local ARM64 slim-dev admission and synthetic workflow validation completed on
+2026-11-05; see `deploy/uds/VALIDATION.md` for measured resource use, recovery
+results and remaining production limits. The local client uses optional MFA at
+the user's request; the shared platform default flow is unchanged. Namespace
+is pinned at bundle build time because chart namespace metadata did not honor
+Zarf runtime-variable substitution in the tested toolchain.

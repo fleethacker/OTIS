@@ -82,6 +82,7 @@ spec:
             - {name: PARSE_COMMAND_OIDC_AUDIENCE, value: {{ .Values.common.clientId | quote }}}
             - {name: PARSE_COMMAND_PUBLIC_ORIGIN, value: {{ printf "https://%s.%s" .Values.common.host .Values.common.domain | quote }}}
             - {name: PARSE_COMMAND_ADMIN_GROUP, value: {{ .Values.config.adminGroup | quote }}}
+            - {name: PARSE_COMMAND_ALLOWED_GROUPS_JSON, value: {{ .Values.common.allowedGroups | toJson | quote }}}
             - {name: PARSE_COMMAND_OPENSEARCH_URL, value: "http://opensearch:9200"}
             - {name: TOKENIZERS_PARALLELISM, value: "false"}
             - {name: RAYON_NUM_THREADS, value: "1"}

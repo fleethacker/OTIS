@@ -57,7 +57,10 @@ block. No URL registration, remote connector or public model fetch is used.
 Model metadata/chunks persist in OpenSearch's data volume. Rerunning bootstrap
 checks the registered hash, redeploys when necessary and rejects a conflicting
 index/model/chunker generation. An interrupted registration resumes the same
-chunk numbers; it does not create another model silently.
+chunk numbers; it does not create another model silently. Explicit HTTP 429
+rejections retry the same request at most six times with bounded backoff, so
+transient heap pressure does not restart the complete upload. Connection
+failures and other HTTP errors are not automatically replayed.
 
 Bootstrap records local IDs in `state/deployment.json`. Rerun it after a node
 restart to establish semantic readiness; process/cluster health alone is not

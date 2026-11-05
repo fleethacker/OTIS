@@ -5,6 +5,7 @@
       "domain": "uds.dev",
       "host": "parse-command",
       "clientId": "parse-command",
+      "allowedGroups": ["/Parse Command/Users", "/Parse Command/Admin"],
       "imapHost": "mail.example.invalid",
       "imapPort": 993,
       "imapCidr": "192.0.2.25/32",

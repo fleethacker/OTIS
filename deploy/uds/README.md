@@ -63,7 +63,7 @@ From the repository root:
 ```sh
 python3 -m unittest discover -s deploy/uds/tools/tests -v
 python3 deploy/uds/tools/validate.py
-python3 deploy/uds/tools/build.py --version 0.1.0-dev.1 --prepare-assets
+python3 deploy/uds/tools/build.py --version 0.1.0-dev.1 --namespace parse-command --prepare-assets
 ```
 
 The builder verifies the model archive and the existing ARM64 native SHA lock,
@@ -108,7 +108,10 @@ it does not need the build registry or the source tree to install. Recheck
 
 Copy `uds-config.example.yaml` to ignored `uds-config.yaml`, then replace the
 example values. The example is JSON, which is valid YAML. `shared.NAMESPACE`
-selects one namespace consistently across all three packages; `shared.COMMON`
+must match the namespace embedded by `build.py --namespace` across all three
+packages. Namespace is a bundle-build input because the pinned Zarf CLI does
+not substitute runtime variables in chart metadata; preflight rejects mismatches.
+The other `shared` inputs remain configurable at deployment time; `shared.COMMON`
 sets domain, UI subdomain, SSO client ID, storage class and mailbox egress.
 `SEARCH`, `SERVER` and `UI` override each chart's `config` object, including
 resource requests/limits, PVC sizes/existing claims and secret references. Read
@@ -142,8 +145,8 @@ checked-in Secret manifests and command-output transcripts. Give files mode
 UDS registers the client and protects UI pods with Authservice. Grant users the
 `/Parse Command/Users` or `/Parse Command/Admin` group, or configure approved
 `common.allowedGroups`. A group mapper includes memberships in the ID token.
-Rust independently checks RS256 signature, issuer, audience, expiry and optional
-not-before. It derives private ownership from issuer + subject, and derives the
+Rust independently checks RS256 signature, issuer, audience, expiry, optional
+not-before and membership in the configured allowed groups. It derives private ownership from issuer + subject, and derives the
 administrator role from `SERVER.adminGroup`. Spoofed forwarded-user headers and
 local-demo cookies are insufficient. Mock role-picker/login/logout endpoints
 are disabled in UDS mode. Platform SSO logout UX remains a validation/follow-up
@@ -306,3 +309,33 @@ there is no host Rust installation. TLS tests create ephemeral test certificates
 with OpenSSL; no signing key is committed. The OIDC fixture contains only a
 public key and pre-signed synthetic tokens. See `VALIDATION.md` for actual evidence
 and remaining gates.
+
+The connected artifact builder requires Python 3.14 for standard-library Zstandard
+archive inspection. It checks the completed packages for concrete image digests
+and the requested chart namespace before assembling the bundle. Recheck a
+transferred release with `python3 deploy/uds/tools/verify_artifacts.py --release
+deploy/uds/.artifacts/<version>`. The bundled runtime uses its pinned Python image.
+
+## Local validation findings
+
+The tested slim-dev instance and measured limits are recorded in `VALIDATION.md`.
+The UDS search default uses a 1 GiB JVM heap inside its 3 GiB container limit.
+Bootstrap retries explicit HTTP 429 rejections with finite backoff on the same
+request; it does not restart the whole model upload for transient heap pressure.
+Do not disable circuit breakers to make provisioning pass.
+
+For an isolated local test, MFA can be made optional for one Keycloak client by
+copying the UDS browser authentication flow, changing the copied Conditional OTP
+subflow from Required to Conditional, and binding that copy only to the local
+client. Keep the password form, UDS group restriction and session limiter.
+The local validation used this user-requested exception; it is not part of the
+application chart or the shared platform's default policy. Provision the initial
+local platform administrator on first installation using the upstream documented
+admin-password-generation input if needed; do not redeploy the complete platform
+bundle over retained cluster data to change identity settings.
+
+The server receives `COMMON.allowedGroups` as
+`PARSE_COMMAND_ALLOWED_GROUPS_JSON` and requires membership in at least one
+configured path for every REST/RPC request. A valid signature and audience
+alone do not grant application access. UDS mode refuses a missing or empty
+allowed-group configuration.

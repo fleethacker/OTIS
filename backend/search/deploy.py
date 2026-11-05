@@ -28,11 +28,22 @@ def request(method, path, body=None, content_type='application/json'):
         body = json.dumps(body, allow_nan=False).encode()
     req = urllib.request.Request(BASE + path, data=body, method=method,
                                  headers={'Content-Type': content_type})
-    with OPENER.open(req, timeout=60) as response:
-        data = response.read(8_388_609)
-        if len(data) > 8_388_608:
-            raise RuntimeError('response_limit')
-        return json.loads(data)
+    # A rejected chunk must resume at the same deterministic number. Restarting
+    # the entire upload on transient heap pressure repeats already stored chunks.
+    # Retry only an explicit HTTP 429 rejection, never an ambiguous connection
+    # failure that may have committed a non-idempotent model/task request.
+    for attempt in range(6):
+        try:
+            with OPENER.open(req, timeout=60) as response:
+                data = response.read(8_388_609)
+                if len(data) > 8_388_608:
+                    raise RuntimeError('response_limit')
+                return json.loads(data)
+        except urllib.error.HTTPError as error:
+            if error.code != 429 or attempt == 5:
+                raise
+            error.close()
+            time.sleep(min(2 ** (attempt + 1), 16))
 
 
 def preflight():

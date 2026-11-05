@@ -13,6 +13,7 @@ pub struct Oidc {
     validation: Validation,
     pub origin: String,
     admin_group: String,
+    allowed_groups: Vec<String>,
 }
 #[derive(Clone, Deserialize)]
 struct Claims {
@@ -30,7 +31,16 @@ impl Oidc {
         audience: &str,
         origin: &str,
         admin_group: &str,
+        allowed_groups: &[String],
     ) -> Result<Self> {
+        if allowed_groups.is_empty()
+            || allowed_groups.len() > 32
+            || allowed_groups
+                .iter()
+                .any(|group| !group.starts_with('/') || group.len() > 256)
+        {
+            return Err(Error::config("OIDC requires 1..32 allowed group paths"));
+        }
         for value in [issuer, origin] {
             let url = reqwest::Url::parse(value).map_err(|_| Error::config("invalid OIDC URL"))?;
             if url.scheme() != "https"
@@ -77,6 +87,7 @@ impl Oidc {
             validation,
             origin: origin.into(),
             admin_group: admin_group.into(),
+            allowed_groups: allowed_groups.to_vec(),
         })
     }
     pub fn identity(&self, headers: &HeaderMap) -> Result<Identity> {
@@ -101,6 +112,10 @@ impl Oidc {
             || claims.email.len() > 320
             || claims.groups.len() > 128
             || claims.groups.iter().any(|s| s.len() > 256)
+            || !claims
+                .groups
+                .iter()
+                .any(|group| self.allowed_groups.contains(group))
         {
             return Err(denied());
         }
@@ -141,6 +156,7 @@ mod tests {
             "parse-command",
             "https://parse-command.uds.dev",
             "/Parse Command/Admin",
+            &["/Parse Command/Admin".into()],
         )
         .unwrap();
         std::fs::remove_file(path).unwrap();
@@ -161,6 +177,9 @@ mod tests {
         };
         let alice = oidc.identity(&headers("valid")).unwrap();
         assert_eq!(alice.role, "platform_admin");
+        let mut denied_group = oidc.clone();
+        denied_group.allowed_groups = vec!["/Unrelated/Users".into()];
+        assert!(denied_group.identity(&headers("valid")).is_err());
         assert_eq!(
             alice.username,
             oidc.identity(&headers("renamed")).unwrap().username

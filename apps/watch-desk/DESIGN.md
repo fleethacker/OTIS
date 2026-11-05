@@ -74,8 +74,8 @@ so title controls keep title-only text.
 Opening scroll uses the earlier of the first visible source time and now minus one
 hour, clamped to the current day's midnight. Pinned historical views use source time.
 It waits for source readiness and runs once per view/query, not on every poll; manual
-wheel/pointer/keyboard movement cancels pending opening scroll. Wheel zoom changes
-only the time scale, never source instants. Header/day-column alignment and dense
+wheel/pointer/keyboard movement cancels pending opening scroll. The wheel scrolls the
+grid; Ctrl/⌘+wheel or trackpad pinch zooms the time scale, never source instants. Header/day-column alignment and dense
 geometry require browser validation, not just unit tests.
 
 Month uses the standard seven-column grid, native date-heading buttons and show-more

@@ -129,6 +129,10 @@ export default function Calendar() {
             Month
           </button>
         </div>
+        {view === "day" && <div className="join" aria-label="Day ship layout">
+          <button className="btn btn-sm join-item" aria-pressed={params.get("shipLayout") !== "side"} onClick={() => update("shipLayout", "combined")}>Combined</button>
+          <button className="btn btn-sm join-item" aria-pressed={params.get("shipLayout") === "side"} onClick={() => update("shipLayout", "side")}>Side by side</button>
+        </div>}
         <button className="btn btn-sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
           ← Previous
         </button>
@@ -186,6 +190,8 @@ export default function Calendar() {
         </div>
         <DayTimeline
           commands={roster.isError ? [] : roster.data?.commands}
+          shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
+          selectedShips={ships}
           messages={result.isError || refreshing ? [] : messages}
           sourceItems={
             dataset === "canonical"

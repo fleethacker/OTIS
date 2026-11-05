@@ -9,7 +9,7 @@ artwork, runtime assets, and mascot usage rules.
 
 Use the compact mascot in navigation and sign-in, and reserve the full emblem
 for larger areas such as About OTIS. Preserve the artwork's aspect ratio and
-colors across all three appearances. This guide describes the application-owned
+colors across all appearances. This guide describes the application-owned
 implementation; `ark/` remains a read-only framework dependency. The application
 directory remains `apps/watch-desk/`.
 
@@ -22,39 +22,59 @@ layout and content hierarchy.
 
 | Appearance | Theme key | Surfaces | Text | Primary / trim |
 | --- | --- | --- | --- | --- |
-| Haze Gray | `app` | `#DFE4E6`, `#B4BFC6`, `#9CA6AD` | `#152630` | Naval blue `#193B50`; oxide trim `#803D32` |
+| Navy and white | `app` | `#FFFFFF`, `#F7F9FB`, `#DCE5EC` | Navy `#17364D` | Blue `#245FA6` |
 | Maritime Dark | `app-dark` | `#0B2C3A`, `#061E2A`, `#254956` | Parchment `#F5F0DF` | Brass `#E5CC88` |
 | Vice | `app-vice` | `#2B1042`, `#210A38`, `#593369` | `#FFF1FC` | Pink `#FF55C5`; cyan trim `#28E9E1` |
+| Windows Light | `app-windows` | `#FFFFFF`, `#F3F3F3`, `#D1D1D1` | `#202020` | Blue `#0067C0` |
+| Windows Dark | `app-windows-dark` | `#2B2B2B`, `#202020`, `#454545` | `#F5F5F5` | Blue `#60CDFF` |
 
-Haze Gray uses painted-steel gradients and dark seams. Maritime Dark uses deep
-navy and sea-green surfaces with brass trim. Vice adds violet gradients, neon
+Navy and white uses a near-white `#F7F9FB` canvas, white panels and header,
+navy text, and blue accents. Muted text uses `#4C6476`; selected rows use pale
+blue `#EAF1FA`. It replaces Haze Gray while retaining the `app` theme key and
+saved light-mode preferences. Maritime Dark uses deep navy and sea-green
+surfaces with brass trim. Vice adds violet gradients, neon
 accents, and a grid on the header. Decorative effects stay on the shell so
 messages, forms, and operational symbols remain readable.
 
-The top-right appearance control switches between light and dark with one
-click. Double-clicking it selects the hidden Vice appearance; Shift+Enter on
-the focused control provides the same keyboard action. A single click from
-Vice returns to Haze Gray. The selection is saved in browser local storage
-under `watch-desk.appearance` and synchronized between tabs. Until a selection
-is saved, the interface follows the system light/dark preference. When storage
-is unavailable, the control still works for the current page session.
-The existing storage key is retained for compatibility with saved preferences
-from before the OTIS rebrand.
+Settings → Preferences offers a browser-local **Interface style** choice between
+Maritime and Windows. It applies immediately, separately from the timezone Save
+action, and preserves the current light/dark mode. If no mode has been explicitly
+selected, changing style preserves live system light/dark behavior. Windows is a
+web appearance with neutral surfaces, blue accents, subtle borders, 4px control
+corners, and a `"Segoe UI Variable", "Segoe UI", system-ui, sans-serif` stack for
+body text and headings. It adds no native WPF dependencies or font downloads.
+Monospace text, ship names, hull numbers, and standard symbol colors retain their
+existing role tokens. Windows tokens and scoped styling live in
+[`ui/src/windows.css`](../ui/src/windows.css); Maritime and Vice tokens live in
+[`ui/src/brand.css`](../ui/src/brand.css).
+
+The top-right control switches between light and dark within the selected style.
+Double-clicking it selects hidden Vice; Shift+Enter provides the same keyboard
+action. A single click from Vice returns to the selected style's light mode.
+Changing the style in Preferences while Vice is active also exits to that style's
+light mode. Vice retains the selected base style across page reloads.
+
+Appearance is saved under `watch-desk.appearance`, with the base style saved under
+`watch-desk.appearance-style`. Changes synchronize across mounted controls and
+browser tabs. Existing `app`, `app-dark`, and `app-vice` selections remain valid;
+legacy Vice without a saved style returns to Navy and white. When storage is unavailable,
+controls share the selection in memory for the current page session. These are
+browser preferences, not server settings or account-wide preferences.
 
 ## Typography
 
 | Use | CSS font stack | Treatment |
 | --- | --- | --- |
-| Body and headings | `"Times New Roman", Times, serif` | Reading baseline: 16px with 1.5 line height; headings use size and weight for hierarchy |
+| Body and headings | `system-ui, -apple-system, "Segoe UI", sans-serif` | Reading baseline: 16px with 1.5 line height; headings use size and weight for hierarchy |
 | Raw message text, identifiers, times, and status labels | `"IBM Plex Mono", "Courier New", Courier, monospace` | Bundled regular/bold faces; preserve source spacing where required; tabular time displays |
 | Ship names | `Impact, Eurostile, "Arial Black", sans-serif` | Display face reserved for ship identity |
 | Supplied hull numbers | `"ITC Machine", "Machine ITC", "MachineITC", monospace` | White letters with `2px 2px 0 #11171D` shadow: a crisp offset, with no blur |
 
-The 16px reading baseline takes inspiration from the preferred 12-point Times
-New Roman guidance in the
-[SECNAV M-5216.5 correspondence manual](https://www.secnav.navy.mil/doni/SECNAV%20Manuals1/5216.5%20%20CH-1.pdf).
-This is a screen interface, not a claim that its layouts or generated content
-comply with the manual's correspondence-format requirements.
+Body text and headings restore the application's original system sans-serif
+stack in the maritime and Vice appearances. Windows retains its Segoe UI stack.
+The 16px reading baseline and 1.5 line height are screen typography choices;
+the interface does not claim correspondence-format compliance with SECNAV
+M-5216.5. Use the shared font roles rather than page-specific font declarations.
 
 IBM Plex Mono 2.5.0 is bundled locally under the SIL Open Font License, with
 regular and bold WOFF2 files. No external font service is required. The About
@@ -121,10 +141,12 @@ All paths below are relative to the application root.
 | Location | Reusable responsibility |
 | --- | --- |
 | `ui/src/brand.css` | Theme, font, spacing, shape, and semantic color tokens |
+| `ui/src/windows.css` | Optional Windows light/dark tokens and scoped web styling |
 | `ui/src/assets/otis/` | Approved runtime mascot, emblem, and favicon assets; follow the mascot and artwork guide |
 | `ui/src/index.css` | App-wide control styles, identity styles, shell, and feature layouts |
 | `ui/src/theme.ts` | Preference initialization, persistence, system appearance, and tab synchronization |
 | `ui/src/components/theme-control.tsx` | `ThemeControl` and its pointer/keyboard behavior |
+| `ui/src/components/appearance-preferences.tsx` | Immediate, browser-local Maritime/Windows style selection |
 | `ui/src/components/ui.tsx` | `AppButton`, `TextInput`, `SelectInput`, `TextArea`, `PageHeading`, `Notice`, `RecordStatus`, and `RevisionBadge` |
 | `ui/src/components/ship-name.tsx` | `ShipName` and `HullNumber` |
 | `ui/src/components/ship-symbol.tsx` | `ShipSymbol` and its bounded affiliation mapping |
@@ -136,7 +158,7 @@ New UI should reuse these components and the existing daisyUI/Ark primitives.
 Use semantic tokens such as `--color-base-content`, `--color-primary`,
 `--color-warning`, and `--brand-focus` instead of adding per-page color literals.
 Extend the common token definitions when a new reusable role is needed, and
-define it for all three appearances. Keep standard symbol colors and
+define it for every appearance. Keep standard symbol colors and
 calendar-series colors separate from decorative theme accents.
 
 Use the shared field and button shapes, focus treatment, typography, and spacing.

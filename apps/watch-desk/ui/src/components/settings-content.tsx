@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import moment from "moment-timezone";
 import { useIdentity } from "../hooks/useIdentity";
 import { AppButton, Notice, SelectInput, TextInput } from "./ui";
+import { AppearancePreferences } from "./appearance-preferences";
 import {
   settingsRequest,
   useSettings,
@@ -130,41 +131,44 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
         </Notice>
       )}
       {tab === "preferences" && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(async () => {
-              await settingsRequest("save-preferences", { timezone: zone });
-              client.setQueryData(["settings", "preferences"], { timezone: zone });
-            }, "Saved");
-          }}
-        >
-          <label>
-            Timezone
-            <SelectInput
-              className="select-sm"
-              value={zone}
-              onChange={(e) => {
-                setZone(e.target.value);
-                setNotice("");
-              }}
-            >
-              {["UTC", ...moment.tz.names().filter((v) => v !== "UTC")].map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </SelectInput>
-          </label>
-          <div className="settings-actions">
-            <AppButton
-              variant="primary"
-              size="sm"
-              type="submit"
-              disabled={pending || zone === timezone}
-            >
-              Save
-            </AppButton>
-          </div>
-        </form>
+        <>
+          <AppearancePreferences />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                await settingsRequest("save-preferences", { timezone: zone });
+                client.setQueryData(["settings", "preferences"], { timezone: zone });
+              }, "Saved");
+            }}
+          >
+            <label>
+              Timezone
+              <SelectInput
+                className="select-sm"
+                value={zone}
+                onChange={(e) => {
+                  setZone(e.target.value);
+                  setNotice("");
+                }}
+              >
+                {["UTC", ...moment.tz.names().filter((v) => v !== "UTC")].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </SelectInput>
+            </label>
+            <div className="settings-actions">
+              <AppButton
+                variant="primary"
+                size="sm"
+                type="submit"
+                disabled={pending || zone === timezone}
+              >
+                Save
+              </AppButton>
+            </div>
+          </form>
+        </>
       )}
       {tab === "command" && (
         <form

@@ -1,7 +1,8 @@
-/* Product components consume the three palettes and type roles in brand.css. */
+/* Product components consume shared appearance palettes and typography roles. */
 @import "react-big-calendar/lib/css/react-big-calendar.css";
 @import "tailwindcss";
 @import "./brand.css";
+@import "./windows.css";
 @import "./watchdesk-port.css";
 
 .structured-message { min-width: 0; overflow-wrap: anywhere; }

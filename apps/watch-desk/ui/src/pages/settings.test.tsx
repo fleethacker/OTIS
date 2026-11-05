@@ -6,6 +6,13 @@ import { AppService } from "../gen/app/v1/app_pb";
 import { renderWithProviders } from "../test-utils/render";
 import { SettingsContext, type SettingsReply } from "../components/settings-data";
 import Settings from "./settings";
+import {
+  initializeTheme,
+  STYLE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  themeName,
+  windowsThemeName,
+} from "../theme";
 import { WatchContextHeader } from "../components/watch-context-header";
 import { SettingsProvider } from "../components/SettingsProvider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -93,6 +100,30 @@ test("Admin settings save uses revision and a conflict keeps edits unsaved", asy
   } finally {
     view.unmount();
     fetch.mockRestore();
+  }
+});
+
+test("browser appearance applies immediately without submitting or dirtying timezone settings", () => {
+  localStorage.setItem(THEME_STORAGE_KEY, themeName);
+  localStorage.removeItem(STYLE_STORAGE_KEY);
+  initializeTheme();
+  const fetch = spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+  const view = mount("viewer");
+  try {
+    const style = view.getByRole("combobox", { name: "Interface style (this browser)" });
+    expect(style.closest("form")).toBeNull();
+    fireEvent.change(style, { target: { value: "windows" } });
+    expect(document.documentElement.getAttribute("data-theme")).toBe(windowsThemeName);
+    expect(view.getByLabelText("Timezone")).toHaveValue("UTC");
+    expect(view.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    expect(view.queryByText("Unsaved")).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    fetch.mockRestore();
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    localStorage.removeItem(STYLE_STORAGE_KEY);
+    initializeTheme();
   }
 });
 

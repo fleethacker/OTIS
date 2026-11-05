@@ -173,10 +173,21 @@ test("reader exposes an encoded similar link for a current source only", () => {
   const view = renderWithProviders(
     <MessageReader message={create(MessageRecordSchema, { sourceMessageId: "sha256:x/y?z" })} />
   );
-  expect(view.getByRole("link", { name: "Find similar messages" }).getAttribute("href")).toBe(
+  const action = view.getByRole("link", { name: "Find similar messages" });
+  expect(action.getAttribute("href")).toBe(
     "/messages?similarTo=sha256%3Ax%2Fy%3Fz"
   );
+  expect(action.classList.contains("btn-outline")).toBe(true);
+  expect(action.querySelector("svg[aria-hidden='true']")).toBeTruthy();
   view.unmount();
+  const withReturn = renderWithProviders(
+    <MessageReader message={create(MessageRecordSchema, { sourceMessageId: "sha256:x/y?z" })} />,
+    { route: "/messages?returnTo=%2Fcalendar%3Fview%3Dweek" }
+  );
+  expect(withReturn.getByRole("link", { name: "Find similar messages" }).getAttribute("href")).toBe(
+    "/messages?similarTo=sha256%3Ax%2Fy%3Fz&returnTo=%2Fcalendar%3Fview%3Dweek"
+  );
+  withReturn.unmount();
   const legacy = renderWithProviders(
     <MessageReader message={create(MessageRecordSchema, { sourceMessageId: "legacy:42" })} />
   );

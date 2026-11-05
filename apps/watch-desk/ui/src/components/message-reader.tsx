@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { TbSearch } from "react-icons/tb";
 import { DraftEditor } from "./draft-editor";
 import { StructuredMessage } from "./structured-message";
 import { messageTitle } from "./structured-message-format";
@@ -23,9 +24,10 @@ export function MessageReader({ message }: { message: MessageRecord }) {
           <h2>{messageTitle(message)}</h2>
           {message.sourceMessageId !== "" && !message.sourceMessageId.startsWith("legacy:") && (
             <Link
-              className="btn btn-ghost btn-sm"
+              className="btn btn-outline btn-sm message-similar-action"
               to={`/messages?${new URLSearchParams({ similarTo: message.sourceMessageId, ...(returnTo !== null ? { returnTo } : {}) })}`}
             >
+              <TbSearch aria-hidden="true" />
               Find similar messages
             </Link>
           )}

@@ -35,6 +35,7 @@ import { CalendarAccessibility } from "./calendar-accessibility";
 import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
 import { inShipColumns, shipResources, type ShipResource } from "./calendar-resources";
+import { calendarGridWidth, openingScrollTime, useOpeningScroll } from "./calendar-viewport";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -149,6 +150,7 @@ export function DayTimeline({
   commands = [],
   shipLayout = "combined",
   selectedShips,
+  ready = true,
 }: {
   messages: MessageRecord[];
   sourceItems?: TimelineItem[];
@@ -164,6 +166,7 @@ export function DayTimeline({
   commands?: Command[];
   shipLayout?: "combined" | "side";
   selectedShips?: Set<string>;
+  ready?: boolean;
 }) {
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
@@ -299,7 +302,12 @@ export function DayTimeline({
       },
     }));
   };
-  const midnight = civilHour(civilDate(new Date(from), zone), 0, zone);
+  const day = civilDate(new Date(from), zone);
+  const midnight = civilHour(day, 0, zone);
+  const axisStart = civilHour(day, startHour ?? 0, zone);
+  const axisEnd = civilHour(day, endHour ?? 24, zone);
+  const opening = openingScrollTime(from, to, displayed.map((row) => +row.start), Date.now(), view, zone);
+  useOpeningScroll(calendarRoot, `${view}:${from}:${to}:${shipLayout}:${returnTo}`, ready && view !== "month", (opening - axisStart) / (axisEnd - axisStart));
   if (side && resources.length === 0) {
     return <p className="calendar-result-limit">No valid ship calendars selected. Choose a ship or Unassigned.</p>;
   }
@@ -311,7 +319,7 @@ export function DayTimeline({
           view === "month"
             ? undefined
             : ({
-                "--calendar-grid-min-width": `${52 + (side ? resources.length : view === "week" ? 7 : 1) * Math.max(side ? 220 : 128, columns * 128)}px`,
+                "--calendar-grid-min-width": `${calendarGridWidth(view, side, resources.length, columns)}px`,
               } as CSSProperties)
         }
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}
@@ -362,7 +370,7 @@ export function DayTimeline({
                     : civilHour(civilDate(new Date(from), zone), endHour, zone) - 1
                 )
               }
-              scrollToTime={new Date(from)}
+              scrollToTime={new Date(opening)}
               getNow={() => new Date()}
               tooltipAccessor={() => ""}
               eventPropGetter={(row) => ({

@@ -429,9 +429,16 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .calendar-event-card .optask-icon { flex: none; width: 14px; height: 14px; }
 .calendar-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Day resources share the existing time grid; columns, not the page, may overflow. */
+/* Fit seven days/five demo ships before adding horizontal overflow on narrow screens. */
 .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
 .ship-calendar-resources .rbc-time-header-content { min-width: 0; }
+.ship-calendar.ship-calendar-week .rbc-timeslot-group { min-height: 44px; flex: 1 0 44px; }
+.calendar-page .week-fit .rbc-time-content { overflow-y: auto; }
+.week-fit .rbc-time-gutter .rbc-label { display: block; }
+.ship-calendar-week .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ship-calendar-week .command-chips { flex-wrap: nowrap; overflow: hidden; max-width: 100%; }
+.ship-calendar-week .command-chip { white-space: nowrap; flex: none; }
+@media (min-width: 1280px) { .calendar-page .ship-calendar-week { min-width: 0; } }
 
 /* Wheel zoom changes the time scale inside the fixed calendar viewport. */
 .calendar-scroll[data-time-zoom] .rbc-time-content { overflow-y: auto; overscroll-behavior: contain; }

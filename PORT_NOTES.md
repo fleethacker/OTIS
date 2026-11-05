@@ -132,3 +132,39 @@ Files: `day-timeline.tsx`, `calendar-layout.ts`, `command-roster.test.tsx`,
   desktop/mobile/zoom/collision screenshots. No builds/tests run locally.
 - **TODO / Parker:** confirm minimum column width and review placement; no resource
   layout is added to Week. No source timestamps/durations or counts are fabricated.
+
+## P3 visual/fixture follow-up — fit columns and open at useful times
+
+- **Observed:** the live `74a9413` screenshots show seven timed facts in the Week
+  index, but only Sunday/Monday horizontally and midnight at the top of Day.
+  Baseline `60ac735` already used `7 * collision_lanes * 128px` as Week minimum
+  width and `scrollToTime=from`; P2's sidebar further reduced available space.
+  P3 likewise multiplied every resource's width by the largest collision count.
+- **Fix:** Week minimum is now seven 112px days plus gutter, independent of lanes;
+  five demo resources fit at 168px minimum each and grow with available width.
+  At >=1280px, legacy Expanded minimum width no longer forces horizontal scroll.
+  Week keeps seven days, collision lanes, icons, hover/details and wheel zoom;
+  its time grid scrolls vertically, with compact ellipsized titles, not narrower type.
+  Opening scroll chooses the earlier of the first visible source time and now-1h
+  (within the shown dates); pinned historical days use source time. It waits for
+  source readiness and runs once per view/query, never fighting manual wheel/scroll.
+- **Fixture oracle:** six messages, four resolved intervals (Meridian 0800–0900Z,
+  Tern 1400–1600Z, Halyard 1500–1700Z, shared Tern+Halyard 1430–1530Z), three points
+  and two deliberately unresolved times, all resolved times on 5 Nov 2026.
+  Added fictional GENTEXT paragraphs to Meridian/Halyard/Tern/shared: handover,
+  replenishment rehearsal, logistics coordination and simulated EMCON/radio silence.
+  These are narrative search inputs, not additional extracted tasking.
+- **Config/data:** `watchdesk-demo-v2` updates exact LF/CRLF hashes for those four
+  files. Changed bodies are NEW message IDs, not amendments. Existing stored records
+  are untouched; re-sending into the same database retains old and new versions as
+  distinct messages. Use a separately isolated demo mailbox/database for a clean
+  six-record screenshot; never reset shared volumes or silently erase old evidence.
+- **Tests:** viewport width/scroll policy and one-shot/manual-scroll behavior; intake
+  parser oracle for 4 intervals / 3 points / 2 unresolved, exact shared timing and
+  the publisher's real narrative audit/span eligibility in four source bodies.
+  Existing hash tests cover both line endings. No parser/publisher behavior changed.
+- **Validation:** static JSON/hash and diff checks only. Claude must rerun UI/Rust,
+  inspect all seven days/five columns at 1280/1440px, and confirm four narrative
+  passage inputs become searchable after publication/local embedding. Useful queries:
+  “watch handover”, “replenishment approach”, “radio silence”. Model readiness alone
+  does not prove the new passages have been published/embedded.

@@ -1,6 +1,6 @@
 {
   "provenance": "FICTIONAL DEMO CONFIG — not an operational roster or tasking policy",
-  "version": "watchdesk-demo-v1",
+  "version": "watchdesk-demo-v2",
   "commands": [
     {"id":"demo-meridian","name":"USS Meridian","shortLabel":"MERIDIAN","group":"Fictional own ship","colorIndex":0,"isOwnShip":true},
     {"id":"demo-halyard","name":"USS Halyard","shortLabel":"HALYARD","group":"Fictional strike group","colorIndex":1,"isOwnShip":false},
@@ -8,11 +8,11 @@
     {"id":"demo-corvina","name":"USS Corvina","shortLabel":"CORVINA","group":"Other fictional ships","colorIndex":3,"isOwnShip":false}
   ],
   "fixtures": [
-    {"file":"meridian.txt","bodyHashes":["sha256:fbf665175c3334835c0fb57d2273ad5b59a76f7a2b3c074e9fa1d1bce04f632a","sha256:c9d0ff5b60ea2724e1d78d6d239891149ce40a1ebec1f44930c6a1e60e2382e5"],"commandIds":["demo-meridian"]},
+    {"file":"meridian.txt","bodyHashes":["sha256:27782f2eaee897f9191be71278bae66d8ac83341d61face0e6572f7abb140088","sha256:29a63a16d51a02e0f45fd8399d59f217eaa74e31c623178d0eaf2f8095d9978a"],"commandIds":["demo-meridian"]},
     {"file":"corvina.txt","bodyHashes":["sha256:2965a5834b92554524e139cd0e8c855427111bd53c47a438ee2b9af96ae26ebb","sha256:6fa00fda6f2f1f3c6bc763e92ee49f49c1be1811b8fdb4f3905f1211bb779cdd"],"commandIds":["demo-corvina"]},
-    {"file":"tern.txt","bodyHashes":["sha256:e6ed039b7eb4d28f5331a1f2b7ddb172c9cb78e96d1861ce316ddf4fcac28968","sha256:1b68690391d7a7356e67c8cedae2f25b7eece2ce958affb9397c9b3e5d5cb6fa"],"commandIds":["demo-tern"]},
-    {"file":"halyard.txt","bodyHashes":["sha256:447f0cdfb63677a1f3c0fc22bb116af64be4be672e9cb3bba12bb163b1edd57b","sha256:5dabea3eebddd9feaaac1ea664d08a2b9fd436ee3d2173483209887d565080da"],"commandIds":["demo-halyard"]},
-    {"file":"shared.txt","bodyHashes":["sha256:9d9189c6c124f32ab4f84a52e5ff3fa6576a3ea217b664a66455a943fa4000fe","sha256:0ebe15fb2a8b6ce215bcfaf429e008fd6bd70d563e71a53e9a72be6f1a562ba0"],"commandIds":["demo-tern","demo-halyard"]},
+    {"file":"tern.txt","bodyHashes":["sha256:91476a40402ff5908acae65c7f5a5c28b522a445160323977bb2a8dcd8782649","sha256:0a2a3b252ca488f81de5da6df54c7d6e9ddc01334fe6980448dec04eb16bc2f3"],"commandIds":["demo-tern"]},
+    {"file":"halyard.txt","bodyHashes":["sha256:7749519b5d738756e67cca814fe1b93654182c3c423fc89de044efddb9f03b4d","sha256:672419886cca23cbd256ec76d90120d283cfe90109db34c39fb536ef01ad287a"],"commandIds":["demo-halyard"]},
+    {"file":"shared.txt","bodyHashes":["sha256:64c11c4bc8b562c767b9789b3e511a8572361d933ec5388f261cc98e9e737b8d","sha256:057d95160c96eb2e01c7ba13516290921b021d5db19bc13dafafb193649279bb"],"commandIds":["demo-tern","demo-halyard"]},
     {"file":"unassigned.txt","bodyHashes":["sha256:b7a5321675b9108ed3286fc4330c1dc05f114627ce6647b473f4f8f6267ad8a8","sha256:911188f5ea18907c118f5e37a2f0c5b074f449dd3b2b83c74d3ecc9158ed6e08"],"commandIds":[]}
   ]
 }

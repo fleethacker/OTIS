@@ -1,3 +1,4 @@
 MSGID/OPTASK COMMS/MIL-STD-6040(SERIES)/B.1.01.12/FICTIONAL DEMO ORIGIN/5/20261105T160000Z/-/-/USA/UNCLASSIFIED//
 OPER/FICTIONAL SILVER CURRENT//
 COMPLAN/FICTIONAL SHARED WATCH/A/051430ZNOV2026/051530ZNOV2026/UHF:1//
+GENTEXT/FICTIONAL EMCON NOTE/The shared fictional watch practises an emission control discussion with quiet transmitters and simulated radio silence. Training acknowledgements remain unsent drafts. This illustrative paragraph does not authorize transmissions or operational restrictions.//

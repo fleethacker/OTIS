@@ -11,3 +11,10 @@ __pycache__/
 # Local model archives, tokenizers and provisioned search state.
 backend/search/assets/
 backend/search/state/
+
+# Disconnected deployment outputs, local configuration and credentials.
+deploy/uds/.work/
+deploy/uds/.artifacts/
+deploy/uds/uds-config.yaml
+deploy/uds/local-values.yaml
+deploy/uds/*.log

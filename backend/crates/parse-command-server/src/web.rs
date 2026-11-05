@@ -202,3 +202,10 @@ pub async fn not_found() -> (StatusCode, Json<Value>) {
         Json(json!({"code":"not_found","message":"Unknown API route"})),
     )
 }
+
+pub async fn ready(State(app): State<Arc<App>>) -> (axum::http::StatusCode, Json<Value>) {
+    use std::sync::atomic::Ordering;
+    let ready = app.status.ready.load(Ordering::Relaxed) && app.status.model.load(Ordering::Relaxed);
+    (if ready { axum::http::StatusCode::OK } else { axum::http::StatusCode::SERVICE_UNAVAILABLE },
+        Json(json!({"publicationReady": app.status.ready.load(Ordering::Relaxed), "modelReady": app.status.model.load(Ordering::Relaxed)})))
+}

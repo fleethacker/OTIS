@@ -1,0 +1,11 @@
+**
+!backend/
+!backend/search/
+!backend/search/deploy.py
+!backend/search/search_config.py
+!backend/search/model.json
+!backend/search/assets/
+!backend/search/assets/model.zip
+!docs/
+!docs/opensearch/
+!docs/opensearch/**

@@ -16,6 +16,16 @@ impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let get = |key: &str, default: &str| std::env::var(key).unwrap_or_else(|_| default.into());
         let auth = crate::auth::Config::load()?;
+        let profile = get("PARSE_COMMAND_DEPLOYMENT_PROFILE", "local");
+        if !matches!(profile.as_str(), "local" | "uds") {
+            return Err(Error::config("deployment profile must be local or uds"));
+        }
+        if profile == "uds"
+            && (auth.mode != "oidc"
+                || get("PARSE_COMMAND_SEARCH_SECURITY_POLICY", "") != "uds_mesh_mtls")
+        {
+            return Err(Error::config("UDS requires native OIDC and explicit uds_mesh_mtls search security policy"));
+        }
         let search = get("PARSE_COMMAND_OPENSEARCH_URL", "http://opensearch:9200");
         let url =
             reqwest::Url::parse(&search).map_err(|_| Error::config("invalid search endpoint"))?;
@@ -40,9 +50,13 @@ impl Config {
         ) {
             return Err(Error::config("invalid demo role"));
         }
+        let intake = parse_command_intake::config::Config::load(path)
+            .map_err(|_| Error::config("invalid intake configuration"))?;
+        if profile == "uds" && !matches!(intake.transport, parse_command_intake::config::Transport::Tls) {
+            return Err(Error::config("UDS deployment requires verified IMAP TLS"));
+        }
         Ok(Self {
-            intake: parse_command_intake::config::Config::load(path)
-                .map_err(|_| Error::config("invalid intake configuration"))?,
+            intake,
             search: search.trim_end_matches('/').into(),
             state_index: get(
                 "PARSE_COMMAND_STATE_INDEX",

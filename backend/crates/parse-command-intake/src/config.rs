@@ -1,6 +1,6 @@
 use crate::{IntakeError, Result};
 use serde::Deserialize;
-use std::io::Read;
+use std::{io::Read, path::PathBuf};
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -16,6 +16,8 @@ pub struct Config {
     pub opensearch_url: String,
     #[serde(default = "default_index")]
     pub custody_index: String,
+    #[serde(default)]
+    pub tls_ca: Option<PathBuf>,
     pub revision: String,
     pub poll_seconds: u64,
     pub retry_max_seconds: u64,
@@ -47,6 +49,8 @@ fn default_index() -> String {
 #[serde(rename_all = "snake_case")]
 pub enum Transport {
     PlaintextDemo,
+    /// Implicit TLS with certificate and hostname verification; never STARTTLS downgrade.
+    Tls,
 }
 #[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -81,8 +85,16 @@ impl Config {
         parse_command_types::validate_revision(&self.revision, "revision")
             .map_err(|_| IntakeError("revision"))?;
         // This explicit demo transport never sends credentials to a remote Exchange host.
-        if !matches!(self.host.as_str(), "127.0.0.1" | "::1" | "mailserver") {
+        if matches!(self.transport, Transport::PlaintextDemo)
+            && !matches!(self.host.as_str(), "127.0.0.1" | "::1" | "mailserver")
+        {
             return Err(IntakeError("demo_host_only"));
+        }
+        if self.host.is_empty()
+            || self.host.len() > 253
+            || self.host.contains(['/', '\\', '\r', '\n', '\0'])
+        {
+            return Err(IntakeError("imap_host"));
         }
         if self.port == 0
             || self.username.is_empty()
@@ -140,5 +152,24 @@ impl Config {
             return Err(IntakeError("parser_limits"));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+    #[test]
+    fn remote_mail_requires_tls_and_plaintext_demo_stays_restricted() {
+        let mut c = Config::load(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/demo-intake.json"),
+        )
+        .unwrap();
+        c.host = "mail.example.invalid".into();
+        assert_eq!(c.validate().unwrap_err().0, "demo_host_only");
+        c.transport = Transport::Tls;
+        c.port = 993;
+        assert!(c.validate().is_ok());
+        c.host = "mail.example.invalid/attacker".into();
+        assert!(c.validate().is_err());
     }
 }

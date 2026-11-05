@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: parse-command-ui}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata: {name: web}
+spec:
+  selector: {app: parse-command-ui}
+  ports: [{name: http-web, port: 8080, targetPort: 8080}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: parse-command-ui}
+data:
+  nginx.conf: |
+    worker_processes 1;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr warn;
+    events { worker_connections 128; }
+    http {
+      include /etc/nginx/mime.types;
+      default_type application/octet-stream;
+      access_log off;
+      client_body_temp_path /tmp/client;
+      proxy_temp_path /tmp/proxy;
+      client_max_body_size 128k;
+      server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Cache-Control no-store always;
+        location = /healthz { return 200 'ok'; }
+        location ~ ^/(api/|app\.v1\.|__ark/|logout) {
+          proxy_pass http://server:8081;
+          proxy_set_header Host $http_host;
+          # Forward the Authservice ID token; Rust independently verifies it.
+          proxy_set_header Authorization $http_authorization;
+          proxy_set_header X-Auth-Request-User "";
+          proxy_set_header X-Auth-Request-Email "";
+          proxy_set_header X-Auth-Request-Groups "";
+          proxy_set_header X-Forwarded-For "";
+          proxy_read_timeout 12s;
+          proxy_connect_timeout 2s;
+          proxy_buffering off;
+        }
+        location / { try_files $uri $uri/ /index.html; }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: parse-command-ui}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: parse-command-ui}
+  template:
+    metadata:
+      labels: {app: parse-command-ui}
+    spec:
+      serviceAccountName: parse-command-ui
+      automountServiceAccountToken: false
+      nodeSelector: {kubernetes.io/arch: arm64, kubernetes.io/os: linux}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: web
+          image: {{ .Values.image | quote }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          ports: [{containerPort: 8080}]
+          resources: {{ .Values.config.resources | toJson }}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8080}
+          volumeMounts:
+            - {name: nginx, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: nginx, configMap: {name: parse-command-ui}}
+        - {name: tmp, emptyDir: {sizeLimit: 16Mi}}

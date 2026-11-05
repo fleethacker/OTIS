@@ -1,0 +1,35 @@
+{
+  "kind": "ZarfPackageConfig",
+  "metadata": {
+    "name": "parse-command-ui",
+    "version": "###ZARF_PKG_TMPL_VERSION###",
+    "description": "Disconnected Linux ARM64 Parse Command ui"
+  },
+  "variables": [
+    {
+      "name": "NAMESPACE",
+      "default": "parse-command",
+      "description": "Namespace shared by the three packages"
+    }
+  ],
+  "components": [
+    {
+      "name": "ui",
+      "required": true,
+      "charts": [
+        {
+          "name": "parse-command-ui",
+          "version": "0.1.0",
+          "namespace": "###ZARF_VAR_NAMESPACE###",
+          "localPath": "../../charts/ui",
+          "valuesFiles": [
+            "images.yaml"
+          ]
+        }
+      ],
+      "images": [
+        "###ZARF_PKG_TMPL_UI_IMAGE###"
+      ]
+    }
+  ]
+}

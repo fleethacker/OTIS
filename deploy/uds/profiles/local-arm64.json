@@ -1,0 +1,14 @@
+{
+  "purpose": "Isolated local validation only; application bundle remains separate",
+  "platformBundle": "oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-demo:1.14.3",
+  "architecture": "arm64",
+  "clusterName": "parse-command-issue9",
+  "kubernetesImage": "ghcr.io/defenseunicorns/uds-k3d/k3s:v1.36.4-k3s1",
+  "udsCore": "1.14.3",
+  "udsK3d": "0.21.0-airgap",
+  "udsCli": "0.38.0",
+  "embeddedZarf": "0.86.0",
+  "minimumDockerCapacity": {"cpu": 8, "memoryGiB": 24, "freeDiskGiB": 50},
+  "domain": "uds.dev",
+  "warning": "The upstream platform bundle deletes a same-named cluster. Do not redeploy it over existing data. This repository does not run it automatically."
+}

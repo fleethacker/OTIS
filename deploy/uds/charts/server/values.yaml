@@ -1,0 +1,19 @@
+common:
+  domain: uds.dev
+  host: parse-command
+  clientId: parse-command
+  storageClass: ""
+  imapHost: ""
+  imapPort: 993
+image: "invalid.example/prepare-first:unbuilt"
+config:
+  oidcKeySecret: parse-command-oidc-verification
+  imapSecret: parse-command-imap
+  adminGroup: /Parse Command/Admin
+  custody: {size: 2Gi, existingClaim: ""}
+  private: {size: 1Gi, existingClaim: ""}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 384Mi}
+  # Complete bounded intake JSON supplied by deployment. No demo mailbox is created.
+  intake: {}

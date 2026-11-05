@@ -16,6 +16,10 @@ Hackathon Event**.
 [Documentation](docs/README.md) · [Architecture](docs/integration/architecture.md) ·
 [Operations](docs/integration/combined-stack.md) · [UDS deployment](#uds-deployment)
 
+
+https://github.com/user-attachments/assets/dbff970d-6c2c-439f-afee-a96526ad0685
+
+
 ## Capabilities
 
 - **Monitor an inbox:** continuously ingest SMTP-delivered messages over IMAP,

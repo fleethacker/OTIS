@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import moment from "moment-timezone";
 import { useIdentity } from "../hooks/useIdentity";
+import { AppButton, Notice, SelectInput, TextInput } from "./ui";
 import {
   settingsRequest,
   useSettings,
@@ -87,8 +88,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
     <div className="settings-content">
       <nav aria-label="Settings sections">
         {["preferences", "command", ...(admin ? ["ai", "users"] : [])].map((value) => (
-          <button
-            className="btn btn-sm"
+          <AppButton
+            size="sm"
             type="button"
             key={value}
             aria-pressed={tab === value}
@@ -99,16 +100,20 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             }}
           >
             {{ preferences: "Preferences", command: "Command", ai: "AI", users: "Users" }[value]}
-          </button>
+          </AppButton>
         ))}
-        {dirty && <span className="status-pill settings-unsaved">Unsaved</span>}
+        {dirty && <span className="badge badge-warning settings-unsaved">Unsaved</span>}
       </nav>
       {failure && (
-        <div role="alert" className="alert">
+        <Notice tone="error" role="alert">
           {failure}
-        </div>
+        </Notice>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && (
+        <Notice tone="success" role="status">
+          {notice}
+        </Notice>
+      )}
       {tab === "preferences" && (
         <form
           onSubmit={(e) => {
@@ -121,8 +126,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
         >
           <label>
             Timezone
-            <select
-              className="select select-sm"
+            <SelectInput
+              className="select-sm"
               value={zone}
               onChange={(e) => {
                 setZone(e.target.value);
@@ -132,12 +137,17 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
               {["UTC", ...moment.tz.names().filter((v) => v !== "UTC")].map((v) => (
                 <option key={v}>{v}</option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           <div className="settings-actions">
-            <button className="btn btn-primary btn-sm" disabled={pending || zone === timezone}>
+            <AppButton
+              variant="primary"
+              size="sm"
+              type="submit"
+              disabled={pending || zone === timezone}
+            >
               Save
-            </button>
+            </AppButton>
           </div>
         </form>
       )}
@@ -151,8 +161,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
           <fieldset disabled={!admin || pending}>
             <label>
               Ship
-              <input
-                className="input input-sm"
+              <TextInput
+                className="input-sm"
                 maxLength={120}
                 value={form.shipName}
                 onChange={(e) => update("shipName", e.target.value)}
@@ -160,8 +170,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             </label>
             <label>
               Unit
-              <input
-                className="input input-sm"
+              <TextInput
+                className="input-sm"
                 maxLength={120}
                 value={form.unitName}
                 onChange={(e) => update("unitName", e.target.value)}
@@ -169,8 +179,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             </label>
             <label>
               Outgoing command
-              <input
-                className="input input-sm"
+              <TextInput
+                className="input-sm"
                 maxLength={30}
                 value={form.outgoingCommand}
                 onChange={(e) => update("outgoingCommand", e.target.value.toUpperCase())}
@@ -178,8 +188,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             </label>
             <label>
               Action authority
-              <input
-                className="input input-sm"
+              <TextInput
+                className="input-sm"
                 maxLength={50}
                 value={form.actionAuthority}
                 onChange={(e) => update("actionAuthority", e.target.value.toUpperCase())}
@@ -187,8 +197,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
             </label>
             <label>
               Calendar commands
-              <select
-                className="select select-sm settings-commands"
+              <SelectInput
+                className="select-sm settings-commands"
                 multiple
                 value={form.commandIds}
                 onChange={(e) =>
@@ -201,17 +211,21 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                 {[...new Set([...(options.data?.commands ?? []), ...form.commandIds])].map((v) => (
                   <option key={v}>{v}</option>
                 ))}
-              </select>
+              </SelectInput>
             </label>
           </fieldset>
-          {options.isError && <p role="alert">Commands unavailable.</p>}
+          {options.isError && (
+            <Notice tone="error" role="alert">
+              Commands unavailable.
+            </Notice>
+          )}
           {admin && (
             <div className="settings-actions">
-              <button className="btn btn-primary btn-sm" disabled={pending}>
+              <AppButton variant="primary" size="sm" type="submit" disabled={pending}>
                 Save
-              </button>
-              <button
-                className="btn btn-sm"
+              </AppButton>
+              <AppButton
+                size="sm"
                 type="button"
                 disabled={pending}
                 onClick={() =>
@@ -224,7 +238,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                 }
               >
                 Reload
-              </button>
+              </AppButton>
             </div>
           )}
         </form>
@@ -238,8 +252,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
         >
           <label>
             Connection
-            <select
-              className="select select-sm"
+            <SelectInput
+              className="select-sm"
               value={form.ai?.endpoint ?? ""}
               onChange={(e) =>
                 update(
@@ -258,14 +272,14 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
               {options.data?.aiEndpoints.map((v) => (
                 <option key={v}>{v}</option>
               ))}
-            </select>
+            </SelectInput>
           </label>
           {form.ai && (
             <>
               <label>
                 Model
-                <input
-                  className="input input-sm"
+                <TextInput
+                  className="input-sm"
                   required
                   maxLength={128}
                   value={form.ai.model}
@@ -278,8 +292,8 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
               </label>
               <label>
                 Credential
-                <select
-                  className="select select-sm"
+                <SelectInput
+                  className="select-sm"
                   value={form.ai.secretRef}
                   onChange={(e) => {
                     if (form.ai) {
@@ -291,16 +305,16 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                   {options.data?.secretRefs.map((v) => (
                     <option key={v}>{v}</option>
                   ))}
-                </select>
+                </SelectInput>
               </label>
             </>
           )}
           <div className="settings-actions">
-            <button className="btn btn-primary btn-sm" disabled={pending}>
+            <AppButton variant="primary" size="sm" type="submit" disabled={pending}>
               Save
-            </button>
-            <button
-              className="btn btn-sm"
+            </AppButton>
+            <AppButton
+              size="sm"
               type="button"
               disabled={
                 pending || !form.ai || JSON.stringify(form) !== JSON.stringify(shared?.settings)
@@ -312,7 +326,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
               }
             >
               Test connection
-            </button>
+            </AppButton>
           </div>
         </form>
       )}
@@ -349,7 +363,11 @@ function UserSettings({ active }: { active: boolean }) {
   const { timezone } = useSettings();
   return (
     <section aria-label="Users">
-      {(failure || users.isError) && <p role="alert">{failure || "Users unavailable."}</p>}
+      {(failure || users.isError) && (
+        <Notice tone="error" role="alert">
+          {failure || "Users unavailable."}
+        </Notice>
+      )}
       {users.isPending ? (
         <p role="status">Loading…</p>
       ) : (
@@ -366,38 +384,33 @@ function UserSettings({ active }: { active: boolean }) {
                       : ""}
                   </small>
                 </div>
-                <span className="status-pill">{user.role === "admin" ? "Admin" : "Viewer"}</span>
-                <span className="status-pill">{user.enabled ? "Active" : "Disabled"}</span>
-                <button
-                  className="btn btn-sm"
+                <span className="badge badge-outline">
+                  {user.role === "admin" ? "Admin" : "Viewer"}
+                </span>
+                <span className="badge badge-outline">{user.enabled ? "Active" : "Disabled"}</span>
+                <AppButton
+                  size="sm"
                   disabled={pending}
                   onClick={() => void action(user, user.enabled ? "disable" : "enable")}
                 >
                   {user.enabled ? "Disable" : "Enable"}
-                </button>
-                <button
-                  className="btn btn-sm"
-                  disabled={pending}
-                  onClick={() => void action(user, "revoke")}
-                >
+                </AppButton>
+                <AppButton size="sm" disabled={pending} onClick={() => void action(user, "revoke")}>
                   Revoke sessions
-                </button>
+                </AppButton>
               </article>
             ))}
           </div>
           <div className="settings-actions">
             {after !== null && (
-              <button className="btn btn-sm" onClick={() => setAfter(null)}>
+              <AppButton size="sm" onClick={() => setAfter(null)}>
                 First page
-              </button>
+              </AppButton>
             )}
             {users.data?.nextAfter !== null && users.data?.nextAfter !== undefined && (
-              <button
-                className="btn btn-sm"
-                onClick={() => setAfter(users.data?.nextAfter ?? null)}
-              >
+              <AppButton size="sm" onClick={() => setAfter(users.data?.nextAfter ?? null)}>
                 Next
-              </button>
+              </AppButton>
             )}
           </div>
         </>

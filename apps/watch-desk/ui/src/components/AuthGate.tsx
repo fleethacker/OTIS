@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { beginSessionAccess } from "./session-access";
 import { SessionVisibility } from "./session-visibility";
 import otisIcon from "../assets/otis/otis-icon.webp";
+import { AppButton } from "./ui";
 interface Session {
   scope: string;
   expiresAt: number | null;
@@ -172,9 +173,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
               >
                 Sign in
               </a>
-              <button className="btn" onClick={() => void check(true)}>
-                Retry
-              </button>
+              <AppButton onClick={() => void check(true)}>Retry</AppButton>
             </>
           )}
         </main>

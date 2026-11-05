@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { AppButton } from "./ui";
 
 /** Small anchored popover with keyboard, focus and outside-click dismissal. */
 export function Popover({
@@ -59,10 +60,11 @@ export function Popover({
         }
       }}
     >
-      <button
+      <AppButton
         ref={button}
         type="button"
-        className="btn btn-ghost popover-trigger"
+        variant="ghost"
+        className="popover-trigger"
         aria-label={label}
         title={label}
         aria-haspopup="dialog"
@@ -71,7 +73,7 @@ export function Popover({
         onClick={() => setOpen((value) => !value)}
       >
         {trigger}
-      </button>
+      </AppButton>
       {open && (
         <div
           ref={panel}

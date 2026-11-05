@@ -5,6 +5,7 @@ import { StructuredMessage } from "./structured-message";
 import { messageTitle } from "./structured-message-format";
 import { MessageLifecycle } from "./message-lifecycle";
 import { MessageAcknowledgement } from "./message-acknowledgement";
+import { RecordStatus } from "./ui";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
 
 export function MessageReader({ message }: { message: MessageRecord }) {
@@ -19,8 +20,14 @@ export function MessageReader({ message }: { message: MessageRecord }) {
         <header>
           <h2>{messageTitle(message)}</h2>
           <div className="message-reader-status">
-            {needsReview && <span className="status-pill status-pill-review">needs review</span>}
-            {message.processingStatus === "parsed" && <span className="status-pill">Parsed</span>}
+            {needsReview && (
+              <RecordStatus value="needs_review" className="status-pill status-pill-review">
+                needs review
+              </RecordStatus>
+            )}
+            {message.processingStatus === "parsed" && (
+              <RecordStatus value="parsed" className="status-pill" />
+            )}
             <MessageAcknowledgement message={message} />
           </div>
         </header>

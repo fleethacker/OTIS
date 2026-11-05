@@ -1,3 +1,4 @@
+import { AppButton, Notice, SelectInput, TextInput } from "./ui";
 import { useDisplayTime } from "./display-time";
 import { useState } from "react";
 import { TbFilter, TbArrowsSort, TbChevronLeft, TbChevronRight, TbCheck } from "react-icons/tb";
@@ -44,8 +45,8 @@ function FilterForm({
     >
       <label>
         Message type
-        <select
-          className="select select-sm"
+        <SelectInput
+          className="select-sm"
           name="messageType"
           value={draft.messageType}
           onChange={(e) => setDraft({ ...draft, messageType: e.target.value })}
@@ -57,12 +58,12 @@ function FilterForm({
           {types.map((type) => (
             <option key={type}>{type}</option>
           ))}
-        </select>
+        </SelectInput>
       </label>
       <label>
         Sender
-        <select
-          className="select select-sm"
+        <SelectInput
+          className="select-sm"
           name="sender"
           title="MSGID originating command"
           value={draft.sender}
@@ -75,12 +76,12 @@ function FilterForm({
           {senders.map((sender) => (
             <option key={sender}>{sender}</option>
           ))}
-        </select>
+        </SelectInput>
       </label>
       <label>
         Issued from ({zone === "UTC" ? "Zulu" : zone})
-        <input
-          className="input input-sm"
+        <TextInput
+          className="input-sm"
           type="date"
           name="fromDate"
           value={draft.fromDate}
@@ -89,8 +90,8 @@ function FilterForm({
       </label>
       <label>
         Issued through ({zone === "UTC" ? "Zulu" : zone})
-        <input
-          className="input input-sm"
+        <TextInput
+          className="input-sm"
           type="date"
           name="throughDate"
           value={draft.throughDate}
@@ -99,24 +100,25 @@ function FilterForm({
       </label>
       {pending && <p role="status">Loading filter options…</p>}
       {failed && (
-        <p role="alert">
+        <Notice role="alert" tone="error">
           Filter options unavailable.{" "}
-          <button className="btn btn-ghost btn-xs" type="button" onClick={retry}>
+          <AppButton variant="ghost" size="xs" type="button" onClick={retry}>
             Retry options
-          </button>
-        </p>
+          </AppButton>
+        </Notice>
       )}
       <div className="message-filter-actions">
-        <button
-          className="btn btn-ghost btn-sm"
+        <AppButton
+          variant="ghost"
+          size="sm"
           type="button"
           onClick={() => onApply({ messageType: "", sender: "", fromDate: "", throughDate: "" })}
         >
           Clear filters
-        </button>
-        <button className="btn btn-primary btn-sm" type="submit">
+        </AppButton>
+        <AppButton variant="primary" size="sm" type="submit">
           Apply filters
-        </button>
+        </AppButton>
       </div>
     </form>
   );
@@ -180,9 +182,10 @@ export function MessageSearchControls({
                 ["issued_asc", "Issue time — oldest first"],
               ] as const
             ).map(([value, label]) => (
-              <button
+              <AppButton
                 key={value}
-                className="btn btn-ghost btn-sm"
+                variant="ghost"
+                size="sm"
                 role="menuitemradio"
                 aria-checked={value === sort}
                 disabled={value === "relevance" && query.trim() === ""}
@@ -193,7 +196,7 @@ export function MessageSearchControls({
               >
                 <span>{label}</span>
                 {value === sort && <TbCheck aria-hidden="true" />}
-              </button>
+              </AppButton>
             ))}
           </div>
         )}
@@ -227,8 +230,9 @@ export function MessagePagination({
             : `${total.toLocaleString()}${meta?.totalRelation === "gte" ? "+" : ""} ${meta?.countScope === "ranked_matches" ? "top matches" : "records"}`}
       </span>
       <nav aria-label="Message result pages">
-        <button
-          className="btn btn-ghost btn-xs"
+        <AppButton
+          variant="ghost"
+          size="xs"
           type="button"
           aria-label="Previous results page"
           disabled={pending || failed || (previous ?? "") === ""}
@@ -239,13 +243,14 @@ export function MessagePagination({
           }}
         >
           <TbChevronLeft aria-hidden="true" />
-        </button>
+        </AppButton>
         <span aria-label="Results page">
           {meta?.page ?? 1}
           {typeof meta?.totalPages === "number" ? ` / ${meta.totalPages}` : ""}
         </span>
-        <button
-          className="btn btn-ghost btn-xs"
+        <AppButton
+          variant="ghost"
+          size="xs"
           type="button"
           aria-label="Next results page"
           disabled={pending || failed || (next ?? "") === ""}
@@ -256,7 +261,7 @@ export function MessagePagination({
           }}
         >
           <TbChevronRight aria-hidden="true" />
-        </button>
+        </AppButton>
       </nav>
     </div>
   );

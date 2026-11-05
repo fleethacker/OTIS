@@ -1,8 +1,6 @@
 import type { IconType } from "react-icons";
 import {
   TbRadar,
-  TbShip,
-  TbSubmarine,
   TbRadio,
   TbMap2,
   TbWaveSine,
@@ -16,11 +14,10 @@ import {
   TbGasStation,
   TbFileText,
 } from "react-icons/tb";
+import { ShipSymbol } from "./ship-symbol";
 
 const OPTASK_ICONS: Partial<Record<string, { icon: IconType; name: string }>> = {
   "OPTASK AAW": { icon: TbRadar, name: "TbRadar" },
-  "OPTASK ASUW": { icon: TbShip, name: "TbShip" },
-  "OPTASK ASW": { icon: TbSubmarine, name: "TbSubmarine" },
   "OPTASK COMMS": { icon: TbRadio, name: "TbRadio" },
   "OPTASK COP-CTP": { icon: TbMap2, name: "TbMap2" },
   "OPTASK EW": { icon: TbWaveSine, name: "TbWaveSine" },
@@ -34,6 +31,10 @@ const OPTASK_ICONS: Partial<Record<string, { icon: IconType; name: string }>> = 
   "OPTASK RAS": { icon: TbGasStation, name: "TbGasStation" },
 };
 export function OptaskIcon({ type }: { type?: string }) {
+  // These are message categories, not verified vessel classes or affiliations.
+  if (type === "OPTASK ASUW" || type === "OPTASK ASW") {
+    return <ShipSymbol className="optask-icon" context={`${type} message category`} />;
+  }
   const Icon = OPTASK_ICONS[type ?? ""]?.icon ?? TbFileText;
   return (
     <Icon className="optask-icon" role="img" aria-label={type ?? "Message"} focusable="false" />

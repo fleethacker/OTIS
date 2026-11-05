@@ -1,3 +1,4 @@
+import { Notice } from "./ui";
 import { readJson } from "./source-data";
 import { sessionFetch } from "./session-access";
 import { useState } from "react";
@@ -31,7 +32,9 @@ export function AuditEvidence({ source }: { source: string }) {
         (result.isPending ? (
           <p role="status">Loading evidence…</p>
         ) : result.isError ? (
-          <p role="alert">{result.error.message}</p>
+          <Notice role="alert" tone="error">
+            {result.error.message}
+          </Notice>
         ) : (
           <pre className="audit-evidence">{JSON.stringify(result.data.records, null, 2)}</pre>
         ))}

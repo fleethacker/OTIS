@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SettingsContext, settingsRequest, type SettingsReply } from "./settings-data";
+import { AppButton, Notice } from "./ui";
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const shared = useQuery({
     queryKey: ["settings", "shared"],
@@ -14,18 +15,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   });
   if (shared.isError || preferences.isError) {
     return (
-      <div className="alert" role="alert">
+      <Notice tone="error" role="alert">
         Settings unavailable.{" "}
-        <button
-          className="btn btn-sm"
+        <AppButton
+          size="sm"
           onClick={() => {
             void shared.refetch();
             void preferences.refetch();
           }}
         >
           Retry
-        </button>
-      </div>
+        </AppButton>
+      </Notice>
     );
   }
   if (shared.isPending || preferences.isPending) {

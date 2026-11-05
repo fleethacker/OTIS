@@ -1,3 +1,4 @@
+import { AppButton } from "./ui";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
@@ -371,13 +372,14 @@ export function DayTimeline({
                 },
                 month: {
                   dateHeader: ({ date, label }) => (
-                    <button
-                      className="btn btn-ghost btn-xs"
+                    <AppButton
+                      variant="ghost"
+                      size="xs"
                       aria-label={`Open ${civilDate(date, zone)} in Day view`}
                       onClick={() => onDay?.(civilDate(date, zone))}
                     >
                       {label}
-                    </button>
+                    </AppButton>
                   ),
                 },
               }}
@@ -387,8 +389,9 @@ export function DayTimeline({
       </div>
       {view === "week" && rows.length > 0 && (
         <>
-          <button
-            className="btn btn-sm week-index"
+          <AppButton
+            size="sm"
+            className="week-index"
             onClick={() => {
               setShowIndex(true);
               setSelected(null);
@@ -396,11 +399,13 @@ export function DayTimeline({
             }}
           >
             Events in window ({rows.length}) · Browse details
-          </button>
+          </AppButton>
           <dialog ref={dialog} className="modal" aria-labelledby="week-detail-heading">
             <div className="modal-box week-details">
               <form method="dialog">
-                <button className="btn btn-sm float-right">Close details</button>
+                <AppButton type="submit" size="sm" className="float-right">
+                  Close details
+                </AppButton>
               </form>
               <h2 id="week-detail-heading">
                 {showIndex ? "Events in selected windows" : selected?.title}
@@ -409,8 +414,8 @@ export function DayTimeline({
                 <ul>
                   {rows.map((row) => (
                     <li key={String(row.event.id)}>
-                      <button
-                        className="btn btn-ghost"
+                      <AppButton
+                        variant="ghost"
                         onClick={() => {
                           setSelected(row);
                           setShowIndex(false);
@@ -418,7 +423,7 @@ export function DayTimeline({
                       >
                         {row.title} · <ShipMarker unit={row.event.unit} />
                         {row.event.isRevised ? " · Revised" : ""}
-                      </button>
+                      </AppButton>
                     </li>
                   ))}
                 </ul>

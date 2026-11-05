@@ -1,3 +1,4 @@
+import { AppButton, Notice, TextInput } from "../components/ui";
 import { useSettings } from "../components/settings-data";
 import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
@@ -85,8 +86,8 @@ export default function Calendar() {
       <section className="calendar-controls" aria-label="Calendar controls">
         <label className="schedule-search">
           Search schedule
-          <input
-            className="input input-sm"
+          <TextInput
+            className="input-sm"
             type="search"
             value={query}
             placeholder="Search"
@@ -94,41 +95,44 @@ export default function Calendar() {
           />
         </label>
         <div className="join" aria-label="Calendar view">
-          <button
-            className="btn btn-sm join-item"
+          <AppButton
+            size="sm"
+            className="join-item"
             aria-pressed={view === "day"}
             onClick={() => update("view", "day")}
           >
             Day
-          </button>
-          <button
-            className="btn btn-sm join-item"
+          </AppButton>
+          <AppButton
+            size="sm"
+            className="join-item"
             aria-pressed={week}
             onClick={() => update("view", "week")}
           >
             Week
-          </button>
-          <button
-            className="btn btn-sm join-item"
+          </AppButton>
+          <AppButton
+            size="sm"
+            className="join-item"
             aria-pressed={month}
             onClick={() => update("view", "month")}
           >
             Month
-          </button>
+          </AppButton>
         </div>
-        <button className="btn btn-sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
+        <AppButton size="sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
           ← Previous
-        </button>
-        <button className="btn btn-sm" onClick={() => update("date", today)}>
+        </AppButton>
+        <AppButton size="sm" onClick={() => update("date", today)}>
           Today
-        </button>
-        <button className="btn btn-sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
+        </AppButton>
+        <AppButton size="sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
           Next →
-        </button>
+        </AppButton>
         <label>
           {zone === "UTC" ? "UTC date" : "Date"}
-          <input
-            className="input input-sm"
+          <TextInput
+            className="input-sm"
             type="date"
             value={date}
             onChange={(event) => {
@@ -141,12 +145,12 @@ export default function Calendar() {
       </section>
       {(result.isPending || result.isFetching) && <p role="status">Loading schedule…</p>}
       {result.isError && (
-        <div className="alert" role="alert">
+        <Notice role="alert" tone="error">
           Calendar could not be loaded. {result.error.message}
-          <button className="btn btn-sm" onClick={() => void result.refetch()}>
+          <AppButton size="sm" onClick={() => void result.refetch()}>
             Retry
-          </button>
-        </div>
+          </AppButton>
+        </Notice>
       )}
       <section
         className={`timeline-section ${date === today ? "is-today" : ""}`}

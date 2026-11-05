@@ -63,7 +63,9 @@ export function useCalendarMeasurements(root: RefObject<HTMLDivElement | null>) 
         const title = card.querySelector<HTMLElement>(".calendar-event-title");
         const key = card.dataset.calendarEvent;
         if (key !== undefined && title !== null) {
-          titles.set(key, Math.max(28, Math.ceil(title.getBoundingClientRect().height) + 8));
+          // Badges are siblings of the title control, not part of its accessible text.
+          const copy = card.closest<HTMLElement>(".calendar-event-copy") ?? title;
+          titles.set(key, Math.max(28, Math.ceil(copy.getBoundingClientRect().height) + 8));
         }
       });
       setMetrics((previous) =>

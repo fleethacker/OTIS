@@ -99,10 +99,10 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const content = (
     <>
       <OptaskIcon type={row.sourceType} />
-      <span className="calendar-event-title"><CommandChips ids={row.commandIds} commands={row.commands} /> {row.title}</span>
+      <span className="calendar-event-title">{row.title}</span>
     </>
   );
-  return disclose ? (
+  const target = disclose ? (
     <button
       type="button"
       className="week-event calendar-event-card"
@@ -123,6 +123,12 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     >
       {content}
     </Link>
+  );
+  return (
+    <div className="calendar-event-copy">
+      <CommandChips ids={row.commandIds} commands={row.commands} />
+      {target}
+    </div>
   );
 }
 

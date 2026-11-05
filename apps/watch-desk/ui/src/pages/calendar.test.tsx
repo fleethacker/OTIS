@@ -245,8 +245,7 @@ test("compact cards keep exact times on hover and authoritative source links", (
     />
   );
   const card = view.getByRole("link", { name: "Short event, source record" });
-  expect(card.textContent).toContain("Short event");
-  expect(card.textContent).toContain("REVIEW");
+  expect(card.textContent).toBe("Short event");
   expect(card.getAttribute("title")).toContain("2026-11-04 08:15 UTC");
   expect(view.queryByRole("heading", { name: /Exact event details/ })).toBeNull();
   expect(view.container.querySelector(".calendar-details")).toBeNull();

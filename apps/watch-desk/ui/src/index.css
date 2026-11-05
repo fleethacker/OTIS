@@ -443,6 +443,9 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .calendar-scroll .rbc-day-slot .calendar-event-card .optask-icon { margin-top: 1px; }
 
 .calendar-event-card .calendar-event-title { flex: 1 1 auto; }
+/* Intrinsic copy height includes sibling badges without changing link/button text. */
+.calendar-event-copy { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: auto; }
+.ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }
 
 /* Two-row source headers for message search cards. */
 .record-entry { gap: 5px; padding: 12px 16px; }

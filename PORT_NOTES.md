@@ -100,3 +100,14 @@ Context is not acknowledgement authority or authorization.
 - Coordinate `api.rs` identity resolution, `web.rs`, `private.rs` sessions and identity
   response/cache invalidation before merging. No user-management endpoints/tables or
   lifecycle behavior are implemented by this port.
+
+## P2 follow-up — preserve Parker's title controls
+
+Container report for `1a3e36d`: Rust green, TypeScript green; UI 73 passed / 2 failed
+because REVIEW entered existing event controls' `textContent`. Badges now render as
+noninteractive siblings of the link/button; each control still contains only its
+original title/icon. Intrinsic collision-label measurements include sibling badges.
+Restored the original title-only assertion changed in P2, and added the sibling-badge
+assertion to the new command test. Parker's reported failing assertions remain intact.
+Files: `day-timeline.tsx`, `calendar-layout.ts`, `command-roster.test.tsx`,
+`pages/calendar.test.tsx`, `index.css`. Static diff check only; container rerun pending.

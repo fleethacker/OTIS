@@ -73,15 +73,129 @@ const observedPositions: Record<string, (number | undefined)[] | undefined> = {
   AUTOCAT: [1, 3, 4, undefined, undefined, 5],
   COMMS: [1, 2],
 };
-export function setFullName(set: string) {
+const moverepNames: Record<string, string> = {
+  AMPN: "AMPLIFICATION",
+  AREA: "AREA",
+  BDCT: "BROADCAST WATCH",
+  BDCTNUM: "BROADCAST NUMBER",
+  COMMS: "COMMUNICATIONS",
+  EPREQ: "ENVIRONMENTAL PRODUCT REQUEST",
+  FYPOS: "FRIENDLY FORCES POSITION",
+  LIMITS: "ENVIRONMENTAL LIMITS",
+  LQDSTAT: "SHIPBOARD LIQUIDS STATUS",
+  MARACT: "MARITIME ACTIVITY",
+  METEO: "METEOROLOGICAL INFORMATION (ABBREVIATED)",
+  POST: "MAIL (POST) DELIVERY",
+  REF: "REFERENCE",
+  SAIL: "SAILING INFORMATION",
+  SHORNAV: "SHORE NAVIGATIONAL LIGHTS AND BEACONS",
+  SOA: "SPEED OF ADVANCE",
+  TASKORG: "TASK ORGANIZATION",
+  ROUTE: "ROUTE",
+};
+const moverepFixedFields: Record<string, readonly (string | undefined)[]> = {
+  AMPN: ["Free text"],
+  FYPOS: ["Unit designation", "Friendly force position", "Position day-time", "Course and speed", "Flag", "Discrete identifier code"],
+  SAIL: ["Arrival time", "Sailing location", "Departure time"],
+  SOA: ["Surface speed in knots", "Dive speed in knots"],
+  EPREQ: ["Environmental prediction system product", "Start month date-time", "Stop month date-time"],
+  LIMITS: ["Head seas", "Abeam seas", "Following seas", "True windspeed in knots"],
+  POST: ["Delivery place name", "First day-month of delivery", "Last day-month of delivery"],
+  BDCTNUM: ["Last broadcast number received", "First broadcast number received"],
+  LQDSTAT: ["Unit", "Verified effective month date-time", "Fuel or water type", "Percentage of total capacity held", "Percentage consumed daily"],
+  SHORNAV: ["Activation day-time", "Name of navigation light", "Termination day-time"],
+  METEO: ["Wind direction in degrees", "Wind speed in knots", "Sea state", "Cloud cover in eighths"],
+  CANX: ["Cancelled message type", "Cancelled originator", "Cancelled reference time", "Cancelled serial", "Special notation"],
+};
+const moverepMappedSets = new Set([
+  ...Object.keys(moverepFixedFields),
+  "MSGID", "MARACT", "TASKORG", "ROUTE", "AREA", "REF", "BDCT", "COMMS",
+]);
+function isMoverep(
+  profile: string | undefined
+): profile is "usmtf-2003-moverep-v1" | "observed-moverep-b10112-v1" {
+  return profile === "usmtf-2003-moverep-v1" || profile === "observed-moverep-b10112-v1";
+}
+function moverepFieldLabel(
+  set: string,
+  position: number,
+  value: string,
+  profile: string
+): string | undefined {
+  const observed = profile === "observed-moverep-b10112-v1";
+  if (set === "MSGID") {
+    const labels = observed
+      ? ["Message text format identifier", "Format standard", "Format revision", "Originator", "Message serial", "Issue date-time", undefined, undefined, "Security policy", "Classification", "Release to"]
+      : ["Message text format identifier", "Originator", "Message serial"];
+    return labels[position - 1];
+  }
+  if (set === "MARACT") {
+    return ["MOVEREP activity action", "MOVEREP activity type", observed ? "Effective month date-time" : "Verified effective month date-time",
+      value.startsWith("NAME:") || value.startsWith("PLACE:") ? "Place name" : "Position or point",
+      "Operational control authority", "Operational command", "Tactical control authority", "Primary mission designator"][position - 1];
+  }
+  if (set === "TASKORG") {
+    return position >= 4
+      ? "Unit name"
+      : ["Task organization designator", "Task organization commander", "Unit commander embarked"][position - 1];
+  }
+  if (set === "ROUTE") {
+    return ["Time at route point", "Route point", "Method of route movement"][(position - 1) % 3];
+  }
+  if (set === "AREA") {
+    return "Area vertex or position";
+  }
+  if (set === "REF") {
+    const base = observed
+      ? ["Reference letter", "Referenced message type", undefined, "Reference originator", "Reference date-time", "Reference serial"]
+      : ["Reference letter", "Referenced message type", "Reference originator", "Reference date-time", "Reference serial"];
+    if (position <= base.length) {
+      return base[position - 1];
+    }
+    if (position === base.length + 1) {
+      return "Special notation";
+    }
+    return /^[A-Z]{3}$/.test(value) ? "SIC code" : "Filing number";
+  }
+  if (set === "BDCT") {
+    if (position % 2 === 1) {
+      return position === 1 ? "Set watch day-time" : "Shift watch day-time";
+    }
+    if (value.startsWith("BCS:")) {
+      return "Broadcast call sign";
+    }
+    if (/^\d{3}$/.test(value)) {
+      return "Naval/Amphibious communications net line number";
+    }
+    return "Broadcast designator";
+  }
+  if (set === "COMMS") {
+    if (position === 1) {
+      return value.startsWith("UD:") ? "Specific unit designator" : "Unit";
+    }
+    if (position === 2) {
+      return "Specific call sign";
+    }
+    return ["Specific radio frequency or channel", "Communication priority", "Transmission mode"][(position - 3) % 3];
+  }
+  return moverepFixedFields[set]?.[position - 1];
+}
+export function setFullName(set: string, profile?: string) {
+  if (isMoverep(profile) && Object.prototype.hasOwnProperty.call(moverepNames, set)) {
+    return moverepNames[set];
+  }
   return setCatalog[set]?.name;
 }
 export function setFieldLabel(
   set: string,
   position: number,
   examples: boolean | undefined,
-  value = ""
+  value = "",
+  profile?: string
 ): string | undefined {
+  if (isMoverep(profile) && moverepMappedSets.has(set)) {
+    return moverepFieldLabel(set, position, value, profile) ?? (value === "-" ? "Omitted field" : undefined);
+  }
   if (examples === undefined) {
     return;
   }

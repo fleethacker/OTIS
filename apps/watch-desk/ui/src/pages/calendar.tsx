@@ -21,6 +21,10 @@ import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "../components/sh
 import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
 import { useCommands } from "../components/command-roster";
 import { ShipsSidebar } from "../components/ships-sidebar";
+import { Link } from "react-router-dom";
+import { messageHref } from "../components/calendar-links";
+import { reviewTime } from "../components/review-time";
+import { commandKeys } from "../components/command-roster";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
@@ -62,6 +66,9 @@ function CalendarPage() {
   const awaitingSearch = query !== debounced;
   const visibleData = awaitingSearch ? undefined : result.data;
   const messages = visibleData?.messages ?? [];
+  const reviewItems = (visibleData?.meta.reviewItems ?? []).filter((item) =>
+    ships === undefined || commandKeys(item.placementIds ?? item.commandIds).some((key) => ships.has(key))
+  );
   const refreshing = !noShips && (result.isPending || result.isFetching || awaitingSearch);
   const hasSnapshot = visibleData !== undefined;
   const canonical = new URLSearchParams(params);
@@ -257,6 +264,15 @@ function CalendarPage() {
             next.set("view", "day");
           })}
         />}
+        {dataset === "canonical" && reviewItems.length > 0 && <details className="calendar-review-list">
+          <summary>Source candidates needing review ({reviewItems.length})</summary>
+          <ul>{reviewItems.map((item) => <li key={item.key}>
+            {item.movementAction && <span className="movement-action-badge">{item.movementAction}</span>}
+            <Link to={messageHref(item.messageKey, returnTo)}>{item.title}</Link>
+            <span className="movement-review-badge">Review</span>
+            <p>{reviewTime(item)}{item.unitMatchReview === true ? " · Ship name needs matching review" : ""}</p>
+          </li>)}</ul>
+        </details>}
       </section>
       </div>
     </div>

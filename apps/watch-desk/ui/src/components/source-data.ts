@@ -30,6 +30,12 @@ export interface SourceRequest {
     casualtyUics?: string[];
     casualtyCategories?: string[];
     casualtyReportTypes?: string[];
+    movementActions?: string[];
+    movementActivities?: string[];
+    movementUnits?: string[];
+    movementLocations?: string[];
+    movementFrom?: string;
+    movementTo?: string;
     originators?: string[];
     classifications?: string[];
     issuedFrom?: string;
@@ -53,6 +59,13 @@ export interface TimelineItem {
   };
   /** Explicit message-level applicability from the canonical source, never event.unit. */
   commandIds?: string[];
+  /** Calendar placement from structured TASKORG; never a message access grant. */
+  placementIds?: string[];
+  unitMatchReview?: boolean;
+  unitNames?: string[];
+  movementAction?: "REQUEST" | "INTEND" | "ORDER" | "APPROVE" | "REPORT";
+  movementActivity?: string;
+  location?: string;
   sourceType?: string;
   title: string;
   kind: "point" | "interval" | "unresolved";

@@ -201,6 +201,16 @@ impl Publisher {
                     self.request(reqwest::Method::PUT, &format!("/{name}/_mapping"), update)?;
                 }
             }
+            if matches!(name, MESSAGES | PASSAGES) {
+                let expected: Value =
+                    serde_json::from_str(body).map_err(|_| Error::config("Index definition"))?;
+                if let Some(update) = movement_mapping_update(
+                    &document[name]["mappings"],
+                    &expected["mappings"]["properties"]["movements"],
+                )? {
+                    self.request(reqwest::Method::PUT, &format!("/{name}/_mapping"), update)?;
+                }
+            }
             let uuid = document[name]["settings"]["index"]["uuid"]
                 .as_str()
                 .ok_or_else(Error::unavailable)?;
@@ -479,19 +489,11 @@ impl Publisher {
                         .as_str()
                         .map(str::to_owned);
                 }
-                if matches!(
-                    audit["kind"].as_str(),
-                    Some("record_interpreted" | "fact_interpreted")
-                ) && matches!(
-                    audit["payload"]["set_id"].as_str(),
-                    Some("GENTEXT" | "NARR" | "AMPN")
-                ) || (core["type"] == "CASREP"
+                let source_set = audit["payload"]["set_id"].as_str();
+                let shared_passage = matches!(source_set, Some("GENTEXT" | "NARR" | "AMPN"));
+                let casualty_passage = core["type"] == "CASREP"
                     && matches!(
-                        audit["kind"].as_str(),
-                        Some("record_interpreted" | "fact_interpreted")
-                    )
-                    && matches!(
-                        audit["payload"]["set_id"].as_str(),
+                        source_set,
                         Some(
                             "CASLTY"
                                 | "ESTIMATE"
@@ -502,7 +504,25 @@ impl Publisher {
                                 | "RCPTDATA"
                                 | "CORRSTAT"
                         )
-                    ))
+                    );
+                let movement_passage = core["type"] == "MOVEREP"
+                    && matches!(
+                        source_set,
+                        Some(
+                            "REF"
+                                | "MARACT"
+                                | "TASKORG"
+                                | "SAIL"
+                                | "CANX"
+                                | "FYPOS"
+                                | "ROUTE"
+                                | "AREA"
+                        )
+                    );
+                if matches!(
+                    audit["kind"].as_str(),
+                    Some("record_interpreted" | "fact_interpreted")
+                ) && (shared_passage || casualty_passage || movement_passage)
                 {
                     records.insert(
                         audit["payload"]["record_sequence"]
@@ -545,6 +565,37 @@ impl Publisher {
                         )
                     );
                     let mut passage = json!({"id":pid,"message_id":id,"revision":revision,"ordinal":ordinal,"text":text,"embedding_status":"pending","mentioned_units":[]});
+                    if let Some(movements) = core["movements"].as_array() {
+                        passage["movements"] = json!(
+                            movements
+                                .iter()
+                                .map(|movement| {
+                                    let fields = [
+                                        "id",
+                                        "kind",
+                                        "action",
+                                        "activity",
+                                        "unit_names",
+                                        "location",
+                                        "effective_at",
+                                        "sail_arrival_at",
+                                        "sail_location",
+                                        "sail_departure_at",
+                                    ];
+                                    Value::Object(
+                                        fields
+                                            .into_iter()
+                                            .filter_map(|field| {
+                                                movement
+                                                    .get(field)
+                                                    .map(|value| (field.to_owned(), value.clone()))
+                                            })
+                                            .collect(),
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                        );
+                    }
                     if let Some(casualty) = core.get("casualty") {
                         let metadata: serde_json::Map<String, Value> = [
                             "serial",
@@ -978,7 +1029,7 @@ fn recurrence_mapping_update(mapping: &Value, expected: &Value) -> Result<Option
         ));
     }
     let version = mapping["_meta"]["icd_version"].as_str();
-    if !matches!(version, Some("1.1.0" | "1.2.0" | "1.3.0")) {
+    if !matches!(version, Some("1.1.0" | "1.2.0" | "1.3.0" | "1.4.0")) {
         return Err(Error::config(
             "Verify canonical message schema before recurrence mapping upgrade",
         ));
@@ -994,6 +1045,31 @@ fn recurrence_mapping_update(mapping: &Value, expected: &Value) -> Result<Option
     );
     Ok(Some(
         json!({"properties":{"recurrences":expected},"_meta":metadata}),
+    ))
+}
+fn movement_mapping_update(mapping: &Value, expected: &Value) -> Result<Option<Value>> {
+    let current = &mapping["properties"]["movements"];
+    if !current.is_null() && current != expected {
+        return Err(Error::config(
+            "Existing MOVEREP mapping is incompatible; operator migration required",
+        ));
+    }
+    let version = mapping["_meta"]["icd_version"].as_str();
+    if !matches!(version, Some("1.1.0" | "1.2.0" | "1.3.0" | "1.4.0")) {
+        return Err(Error::config(
+            "Verify canonical message schema before MOVEREP mapping upgrade",
+        ));
+    }
+    if !current.is_null() && version == Some(parse_command_types::ICD_VERSION) {
+        return Ok(None);
+    }
+    let mut metadata = mapping["_meta"].as_object().cloned().unwrap_or_default();
+    metadata.insert(
+        "icd_version".into(),
+        json!(parse_command_types::ICD_VERSION),
+    );
+    Ok(Some(
+        json!({"properties":{"movements":expected},"_meta":metadata}),
     ))
 }
 fn templates(model: Option<&str>) -> Vec<(String, String)> {
@@ -1023,7 +1099,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
     templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
     // Recurrences include unsupported/unanchored rules for review in every view;
     // their occurrences are bounded in Rust, never by issue/receipt time.
-    templates.push((TIMELINE_TEMPLATE.into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","should":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}},{"nested":{"path":"recurrences","query":{"match_all":{}}}}],"minimum_should_match":1}},"sort":["id","revision"]}).to_string()));
+    templates.push((TIMELINE_TEMPLATE.into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","should":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}},{"nested":{"path":"recurrences","query":{"match_all":{}}}},{"nested":{"path":"movements","query":{"bool":{"should":[{"range":{"movements.effective_at":{"gte":"__FROM__","lt":"__TO__"}}},{"range":{"movements.sail_arrival_at":{"gte":"__FROM__","lt":"__TO__"}}},{"range":{"movements.sail_departure_at":{"gte":"__FROM__","lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"movements.effective_at"}}}}],"minimum_should_match":1}}}}],"minimum_should_match":1}},"sort":["id","revision"]}).to_string()));
     templates.push(("parse-command-evidence-list-v1".into(),json!({"size":65,"timeout":"5s","query":{"bool":{"filter":"__FILTERS__"}},"sort":["id"],"search_after":"__AFTER__"}).to_string()));
     templates.push(("parse-command-source-status-v1".into(),json!({"size":0,"track_total_hits":true,"aggs":{"embedding_states":{"terms":{"field":"embedding_status","size":3}}}}).to_string()));
     templates
@@ -1042,6 +1118,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
                 .replace("\"__REV__\"", "\"{{revision}}\"")
                 .replace("\"__AFTER__\"", "{{#toJson}}after{{/toJson}}")
                 .replace("\"__PIT__\"", "\"{{pit_id}}\"")
+                .replace("\"__FROM__\"", "\"{{from}}\"")
                 .replace("\"__TO__\"", "\"{{to}}\""),
             )
         })

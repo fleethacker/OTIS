@@ -138,7 +138,7 @@ async function withCalendar(route: string, assertions: (view: ReturnType<typeof 
     expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 }
-test("calendar omits review disclosure while retaining timed events and failure handling", async () => {
+test("calendar links unresolved review candidates alongside timed events and failure handling", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const key = `sha256:${"a".repeat(64)}@fictional-r1`;
   const review: TimelineItem = {
@@ -164,13 +164,13 @@ test("calendar omits review disclosure while retaining timed events and failure 
     route: "/calendar?date=2026-11-05",
   });
   try {
-    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
-    expect(view.queryByText(review.title)).toBeNull();
+    expect(view.getByText("Source candidates needing review (1)")).toBeTruthy();
+    expect(view.getByRole("link", { name: review.title })).toBeTruthy();
     expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
     expect(view.getByText(/Partial source results/)).toBeTruthy();
     await act(async () => { await client.invalidateQueries({ queryKey: ["parse-command-source"] }); });
     await waitFor(() => expect(view.getByText(/Showing saved schedule/).textContent).toContain("Fictional source unavailable"));
-    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+    expect(view.getByRole("link", { name: review.title })).toBeTruthy();
     expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });

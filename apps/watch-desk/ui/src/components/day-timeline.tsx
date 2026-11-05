@@ -51,6 +51,9 @@ interface ScheduleEntry {
   reviewRequired?: boolean;
   sourceType?: string;
   commandIds?: string[];
+  placementIds?: string[];
+  movementAction?: TimelineItem["movementAction"];
+  unitMatchReview?: boolean;
   recurrence?: TimelineItem["recurrence"];
   commands: Command[];
   resourceId?: string;
@@ -88,11 +91,14 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const information = [
     row.title,
     row.sourceType,
+    row.movementAction ? `MOVEREP action: ${row.movementAction}` : undefined,
     row.recurrence ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}` : undefined,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
     `Applicability: ${commandKeys(row.commandIds).map((key) => commandName(key, row.commands)).join(", ")}`,
+    row.placementIds ? `Calendar placement: ${commandKeys(row.placementIds).map((key) => commandName(key, row.commands)).join(", ")}` : undefined,
+    row.unitMatchReview ? "Ship name needs matching review" : undefined,
     (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
     row.reviewRequired === true ? "Requires review" : undefined,
     row.event.isRevised ? "Revised" : undefined,
@@ -105,6 +111,8 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     <>
       {row.recurrence && <span aria-hidden="true" title="Recurring source fact">↻</span>}
       <OptaskIcon type={row.sourceType} />
+      {row.movementAction && <span className="movement-action-badge">{row.movementAction}</span>}
+      {row.sourceType === "MOVEREP" && row.reviewRequired && <span className="movement-review-badge">Review</span>}
       <span className="calendar-event-title">{row.title}</span>
     </>
   );
@@ -132,7 +140,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   );
   return (
     <div className="calendar-event-copy">
-      {row.resourceId === undefined && <CommandChips ids={row.commandIds} commands={row.commands} />}
+      {row.resourceId === undefined && !(row.sourceType === "MOVEREP" && row.reviewRequired && !row.commandIds?.length) && <CommandChips ids={row.commandIds} commands={row.commands} />}
       {target}
     </div>
   );
@@ -224,7 +232,7 @@ export function DayTimeline({
     )
     .sort((a, b) => +a.start - +b.start);
   const parents = new Map(messages.map((message) => [message.sourceMessageId, message]));
-  const rows: ScheduleEntry[] =
+  const rows: ScheduleEntry[] = (
     sourceItems === undefined
       ? legacyRows
       : sourceItems
@@ -264,12 +272,16 @@ export function DayTimeline({
                 reviewRequired: item.reviewRequired,
                 sourceType: item.sourceType,
                 commandIds: item.commandIds ?? [],
+                placementIds: item.placementIds,
+                movementAction: item.movementAction,
+                unitMatchReview: item.unitMatchReview,
                 recurrence: item.recurrence,
                 commands,
               },
             ];
           })
-          .sort((a, b) => +a.start - +b.start);
+          .sort((a, b) => +a.start - +b.start)
+  ).filter((row) => selectedShips === undefined || commandKeys(row.placementIds ?? row.commandIds).some((key) => selectedShips.has(key)));
   const side = view === "day" && shipLayout === "side";
   const resources = shipResources(commands, rows, selectedShips);
   const displayed = side ? inShipColumns(rows, resources) : rows;
@@ -404,8 +416,8 @@ export function DayTimeline({
                   .filter(Boolean)
                   .join(" "),
                 style: {
-                  "--ship-color": commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands),
-                  borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}`,
+                  "--ship-color": commandColor(row.resourceId ?? commandKeys(row.placementIds ?? row.commandIds)[0], commands),
+                  borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.placementIds ?? row.commandIds)[0], commands)}`,
                 } as CSSProperties,
               })}
               formats={{

@@ -96,7 +96,12 @@ impl App {
         Ok(())
     }
     pub async fn execute(&self, op: &str, mut request: ReadRequest, owner: &str) -> Result<Value> {
-        let mut filters = request.filters.validate()?;
+        let mut filters = if op == "timeline" && request.dataset == Dataset::Canonical {
+            let roster = crate::commands::catalog(self.config.intake.demo_fixture_assignments)?;
+            request.filters.timeline_validate(&roster.commands)?
+        } else {
+            request.filters.validate()?
+        };
         let effective = crate::station::effective_scope(self.store()?, owner).await?;
         if request.dataset == Dataset::Legacy {
             if effective.assigned_commands.is_some()
@@ -732,15 +737,21 @@ impl App {
         let mut search_limited = false;
         let mut executed_mode = json!("browse");
         if !request.query.trim().is_empty() {
+            let mut search_filters = request.filters.timeline_base();
+            let mut candidate_filters = search_filters.validate()?;
+            candidate_filters
+                .as_array_mut()
+                .ok_or_else(Error::unavailable)?
+                .extend(effective.search_filters()?);
             let search_request = ReadRequest {
                 query: request.query.clone(),
                 mode: request.mode.clone(),
-                filters: request.filters.clone(),
+                filters: std::mem::take(&mut search_filters),
                 relevance_fingerprint: request.relevance_fingerprint.clone(),
                 ..ReadRequest::default()
             };
             let results = self
-                .search_messages(search_request, filters.clone(), owner, effective)
+                .search_messages(search_request, candidate_filters, owner, effective)
                 .await?;
             // Forward execution metadata only; preserve the existing ranking/filter path.
             executed_mode = results["meta"]["executedMode"].clone();
@@ -782,18 +793,20 @@ impl App {
         let mut items = Vec::new();
         let mut review = Vec::new();
         let mut messages = Vec::new();
+        let roster = crate::commands::catalog(self.config.intake.demo_fixture_assignments)?;
         {
             let store = self.store()?;
             for hit in hits.iter().take(100) {
                 let core = &hit["_source"];
-                if !effective.matches(core)? || !request.filters.matches(core)? {
+                if !effective.matches(core)? || !request.filters.timeline_base().matches(core)? {
                     return Err(Error::unavailable());
                 }
-                let (mut dated, mut unresolved) = presentation::timeline_with_limit(
+                let (mut dated, mut unresolved) = presentation::timeline_with_roster(
                     core,
                     &from,
                     &to,
                     2048usize.saturating_sub(items.len() + review.len()),
+                    &roster.commands,
                 )?;
                 items.append(&mut dated);
                 review.append(&mut unresolved);
@@ -920,8 +933,48 @@ pub struct Filters {
     pub casualty_report_types: Vec<String>,
     pub casualty_eics: Vec<String>,
     pub casualty_identifiers: Vec<String>,
+    pub movement_actions: Vec<String>,
+    pub movement_activities: Vec<String>,
+    pub movement_units: Vec<String>,
+    pub movement_locations: Vec<String>,
+    pub movement_from: Option<String>,
+    pub movement_to: Option<String>,
 }
 impl Filters {
+    fn timeline_base(&self) -> Self {
+        let mut base = self.clone();
+        base.command_ids.clear();
+        base.unassigned_only = false;
+        base
+    }
+    fn timeline_validate(&self, roster: &[parse_command_intake::demo::Command]) -> Result<Value> {
+        // Ship selection is presentation relevance. Station scope is applied separately.
+        self.validate()?;
+        let mut filters = self.timeline_base().validate()?;
+        if self.command_ids.is_empty() && !self.unassigned_only {
+            return Ok(filters);
+        }
+        let mut should = Vec::new();
+        if !self.command_ids.is_empty() {
+            should.push(json!({"terms":{"command_ids":self.command_ids}}));
+            let names = roster
+                .iter()
+                .filter(|command| self.command_ids.contains(&command.id))
+                .flat_map(|command| [command.name.as_str(), command.short_label.as_str()]);
+            let clauses = names.map(|name| json!({"term":{"movements.unit_names":{"value":name,"case_insensitive":true}}})).collect::<Vec<_>>();
+            if !clauses.is_empty() {
+                should.push(json!({"nested":{"path":"movements","query":{"bool":{"should":clauses,"minimum_should_match":1}}}}));
+            }
+        }
+        if self.unassigned_only {
+            should.push(json!({"bool":{"must_not":[{"exists":{"field":"command_ids"}}]}}));
+        }
+        filters
+            .as_array_mut()
+            .ok_or_else(Error::unavailable)?
+            .push(json!({"bool":{"should":should,"minimum_should_match":1}}));
+        Ok(filters)
+    }
     pub fn validate(&self) -> Result<Value> {
         let mut filters = Vec::new();
         for (name, values) in [
@@ -946,6 +999,48 @@ impl Filters {
                     filters.push(json!({"terms":{name:values}}));
                 }
             }
+        }
+        let mut movement = Vec::new();
+        for (name, values) in [
+            ("action", &self.movement_actions),
+            ("activity", &self.movement_activities),
+            ("unit_names", &self.movement_units),
+            ("location", &self.movement_locations),
+        ] {
+            if values.len() > 32 || values.iter().any(|v| v.trim().is_empty() || v.len() > 256) {
+                return Err(Error::invalid("Invalid movement filter bounds"));
+            }
+            if !values.is_empty() {
+                let clauses = values.iter().map(|value| json!({"term":{format!("movements.{name}"):{"value":value,"case_insensitive":true}}})).collect::<Vec<_>>();
+                movement.push(json!({"bool":{"should":clauses,"minimum_should_match":1}}));
+            }
+        }
+        let movement_from = self.movement_from.as_deref().map(timestamp).transpose()?;
+        let movement_to = self.movement_to.as_deref().map(timestamp).transpose()?;
+        if movement_from
+            .as_ref()
+            .zip(movement_to.as_ref())
+            .is_some_and(|(a, b)| a >= b)
+        {
+            return Err(Error::invalid("Movement-time interval order"));
+        }
+        if movement_from.is_some() || movement_to.is_some() {
+            let mut range = serde_json::Map::new();
+            if let Some(from) = movement_from {
+                range.insert("gte".into(), json!(from));
+            }
+            if let Some(to) = movement_to {
+                range.insert("lt".into(), json!(to));
+            }
+            movement.push(json!({"bool":{"should":[
+                {"range":{"movements.effective_at":range}},
+                {"range":{"movements.sail_arrival_at":range}},
+                {"range":{"movements.sail_departure_at":range}}
+            ],"minimum_should_match":1}}));
+        }
+        if !movement.is_empty() {
+            filters
+                .push(json!({"nested":{"path":"movements","query":{"bool":{"filter":movement}}}}));
         }
         if self.no_commands {
             filters.push(json!({"match_none":{}}));
@@ -1027,6 +1122,53 @@ impl Filters {
                 })
         {
             return Ok(false);
+        }
+        if !self.movement_actions.is_empty()
+            || !self.movement_activities.is_empty()
+            || !self.movement_units.is_empty()
+            || !self.movement_locations.is_empty()
+            || self.movement_from.is_some()
+            || self.movement_to.is_some()
+        {
+            let from = self.movement_from.as_deref().map(timestamp).transpose()?;
+            let to = self.movement_to.as_deref().map(timestamp).transpose()?;
+            let found = core["movements"].as_array().is_some_and(|facts| {
+                facts.iter().any(|fact| {
+                    let selected = |field: &str, values: &[String]| {
+                        values.is_empty()
+                            || fact[field].as_str().is_some_and(|v| {
+                                values.iter().any(|needle| v.eq_ignore_ascii_case(needle))
+                            })
+                    };
+                    let unit = self.movement_units.is_empty()
+                        || fact["unit_names"].as_array().is_some_and(|units| {
+                            units.iter().any(|name| {
+                                name.as_str().is_some_and(|name| {
+                                    self.movement_units
+                                        .iter()
+                                        .any(|needle| name.eq_ignore_ascii_case(needle))
+                                })
+                            })
+                        });
+                    let time = (from.is_none() && to.is_none())
+                        || ["effective_at", "sail_arrival_at", "sail_departure_at"]
+                            .iter()
+                            .any(|field| {
+                                fact[*field].as_str().is_some_and(|at| {
+                                    from.as_ref().is_none_or(|from| at >= from.as_str())
+                                        && to.as_ref().is_none_or(|to| at < to.as_str())
+                                })
+                            });
+                    selected("action", &self.movement_actions)
+                        && selected("activity", &self.movement_activities)
+                        && selected("location", &self.movement_locations)
+                        && unit
+                        && time
+                })
+            });
+            if !found {
+                return Ok(false);
+            }
         }
         if let Some(from) = &self.issued_from {
             let Some(at) = core["issued_at"].as_str() else {

@@ -1,5 +1,10 @@
 # UI fixture index mappings
 
+ICD 1.4 adds nested MOVEREP facts to messages and compact movement search
+projections to passages. The Rust publisher installs those mappings additively
+on compatible 1.1–1.4 indices. Existing vectors, custody and volumes remain in
+place; incompatible movement mappings require operator migration.
+
 The 1.2 extension adds nested `recurrences` to messages. The Rust publisher checks
 an existing 1.1/1.2 message mapping before an additive upgrade; it does not delete or
 recreate the index, change other properties, or reset volumes. An incompatible
@@ -8,7 +13,7 @@ Timeline candidate reads include recurrence-only and unanchored records; exact
 window expansion and unsupported-rule review happen in Rust under the shared fact
 bound. This is a bounded candidate read, not an unbounded/global recurrence total.
 
-These index-creation bodies implement the compact [ICD 1.2.0](../ICD.md) shape for an isolated UI test dataset. They contain no sample messages. Raw and parsed fixtures remain outside Git at `../OPTASK_Messages/parsed` relative to the repository.
+These index-creation bodies implement the compact [ICD 1.4.0](../ICD.md) shape for an isolated UI test dataset. They contain no sample messages. Raw and parsed fixtures remain outside Git at `../OPTASK_Messages/parsed` relative to the repository.
 
 | Creation body | Suggested backing index | Alias |
 | --- | --- | --- |

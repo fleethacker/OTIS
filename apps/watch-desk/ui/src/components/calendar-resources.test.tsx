@@ -66,3 +66,26 @@ test("Day resource links duplicate shared points; Combined and Week remain dedup
   expect(none.queryByRole("link")).toBeNull();
   expect(none.getByText(/No valid ship calendars selected/)).toBeTruthy();
 });
+
+test("MOVEREP action badge and ship placement stay separate from message applicability", () => {
+  const candidate: TimelineItem = {
+    key: `${key}#m1`, messageKey: key, factId: "m1", sourceFactId: "m1",
+    title: "REPORT DEPART · NORFOLK", kind: "point", at: "2026-11-05T08:00:00Z",
+    commandIds: ["demo-tern"], placementIds: ["demo-halyard"], movementAction: "REPORT",
+    reviewRequired: true, sourceType: "MOVEREP",
+  };
+  const common = { commands, messages: [create(MessageRecordSchema, { sourceMessageId: key })], sourceItems: [candidate],
+    interval: 60, from: Date.parse("2026-11-05T00:00:00Z"), to: Date.parse("2026-11-06T00:00:00Z"),
+    returnTo: "/calendar?date=2026-11-05", shipLayout: "side" as const };
+  const halyard = renderWithProviders(<DayTimeline {...common} selectedShips={new Set(["unit:demo-halyard"])} />);
+  const link = halyard.getByRole("link", { name: `${candidate.title}, source record` });
+  expect(link.querySelector(".movement-action-badge")?.textContent).toBe("REPORT");
+  expect(link.querySelector(".movement-review-badge")?.textContent).toBe("Review");
+  expect(link.title).toContain("Applicability: USNS Tern");
+  expect(link.title).toContain("Calendar placement: USS Halyard");
+  expect(link.title).toContain("Requires review");
+  halyard.unmount();
+  const tern = renderWithProviders(<DayTimeline {...common} selectedShips={new Set(["unit:demo-tern"])} />);
+  expect(tern.queryByRole("link", { name: `${candidate.title}, source record` })).toBeNull();
+  tern.unmount();
+});

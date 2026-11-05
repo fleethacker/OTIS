@@ -1,4 +1,5 @@
 //! Transport-independent contribution interface. No filesystem, network, clock, or storage clients.
+pub mod coordinate;
 mod output;
 mod scanner;
 pub use output::*;
@@ -63,6 +64,7 @@ pub enum FactCategory {
     Contact,
     Location,
     Casualty,
+    Movement,
     Recurrence,
 }
 #[derive(Debug)]

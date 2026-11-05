@@ -1,6 +1,6 @@
 # Parse Command backend
 
-The Rust parser, intake worker and application server live here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the React UI and retained Go reference source live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration guide](../docs/integration/ark-export.md). SDK version 0.2.0 implements ICD 1.3.0 as local, compiled crates; nothing is published to a package registry.
+The Rust parser, intake worker and application server live here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the React UI and retained Go reference source live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration guide](../docs/integration/ark-export.md). SDK version 0.2.0 implements ICD 1.4.0 as local, compiled crates; nothing is published to a package registry.
 
 The root [`compose.intake.yml`](../compose.intake.yml) overlay runs this worker
 with Watch Desk, OpenSearch and the demo mail server in one Compose project.
@@ -14,6 +14,7 @@ standalone intake deployment in `compose.intake.yaml` remains supported.
 | `parse-command-core` | Explicit registry/allowlist, profile selection, host metadata, core/audit separation and validated results |
 | `parse-command-intake` | Demo mailbox monitor, custody journal, bounded MIME decoding and parser staging |
 | `parse-command-optask` | Profile-specific OPTASK interpretation with rule provenance and external sample regression coverage |
+| `parse-command-moverep` | Exact MOVEREP profiles, source-linked movement and cancellation candidates |
 | `examples/reference-parser` | Independent synthetic contributor crate exercised through the host; no production enablement |
 
 This milestone provides a synchronous library host and OPTASK contribution. The [intake worker](INTAKE.md) adds read-only IMAP polling, MIME framing, hidden OpenSearch custody and durable outbox staging. The Rust application server supplies continuous OpenSearch delivery, passage construction, embeddings and HTTP. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed accepted email remains in the custody journal with an explicit state.
@@ -102,3 +103,14 @@ The compiled `parse-command-casrep` crate adds exact CASREP dispatch independent
 of OPTASK and GENADMIN. Demo intake enables it explicitly. See the
 [CASREP integration guide](../docs/integration/casrep.md) for supported profiles,
 ICD 1.3.0, immutable reports, derived history, search and acceptance tests.
+
+
+## MOVEREP contribution
+
+The compiled `parse-command-moverep` crate adds exact MOVEREP dispatch and
+ICD 1.4.0 movement facts. It preserves MARACT action, TASKORG field-4 unit
+names, optional SAIL milestones, REF and CANX evidence. The calendar presents
+source candidates requiring review; configured ship-name matches affect
+placement only. Full message access continues to use the existing station scope.
+Coordinate-shaped MOVEREP fields produce validated source-linked map points;
+route and area positions remain separate until their geometry is reviewed.

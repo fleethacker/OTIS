@@ -1,6 +1,6 @@
 # Parse Command design and knowledge
 
-Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.3.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; the application server continuously publishes messages, passages and audit batches to OpenSearch. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
+Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.4.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; the application server continuously publishes messages, passages and audit batches to OpenSearch. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
 The [architecture overview](integration/architecture.md) shows the tech stack,
 data flows and bottom-up relationship between Kubernetes, UDS Core and OTIS,
@@ -23,7 +23,7 @@ Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMA
 
 | Document | Purpose |
 | --- | --- |
-| [Parsed-message ICD 1.3.0](ICD.md) | Normative compact message/passage/audit contract and parser contribution rules |
+| [Parsed-message ICD 1.4.0](ICD.md) | Normative compact message/passage/audit contract and parser contribution rules |
 | [JSON Schemas](schemas/README.md) | Locally resolvable validation resources for the approved wire shape |
 | [Stored search templates and frontend contract](opensearch/search-contract.md) | Local CPU narrative embeddings, typed filters and keyword/semantic/hybrid requests |
 | [UI test mappings](opensearch/README.md) | Isolated lexical test index definitions; fixtures stay outside Git |

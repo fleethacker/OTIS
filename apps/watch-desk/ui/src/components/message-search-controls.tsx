@@ -41,7 +41,7 @@ function FilterForm({
           fromDate: text("fromDate"),
           throughDate: text("throughDate"),
           ...Object.fromEntries(
-            ["casualtySerial", "casualtyUic", "casualtyCategory", "casualtyReportType"]
+            ["casualtySerial", "casualtyUic", "casualtyCategory", "casualtyReportType", "movementAction", "movementActivity", "movementUnit", "movementLocation", "movementFromDate", "movementThroughDate"]
               .filter((key) => text(key) !== "")
               .map((key) => [key, text(key)])
           ),
@@ -150,6 +150,33 @@ function FilterForm({
               <option key={v}>{v}</option>
             ))}
           </SelectInput>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>MOVEREP</legend>
+        <label>Movement action
+          <SelectInput className="select-sm" name="movementAction" defaultValue={initial.movementAction ?? ""}>
+            <option value="">All actions</option>
+            {["REQUEST", "INTEND", "ORDER", "APPROVE", "REPORT"].map((value) => <option key={value}>{value}</option>)}
+          </SelectInput>
+        </label>
+        <label>Activity
+          <SelectInput className="select-sm" name="movementActivity" defaultValue={initial.movementActivity ?? ""}>
+            <option value="">All activities</option>
+            {["ANCHOR", "ARRIVE", "CHOP", "DETACH", "JOIN", "MODIN", "MODOUT", "DEPART", "MOOR", "OPCMD", "OTR", "TRANSIT", "MODLOC", "RNDZV", "NAVPIM"].map((value) => <option key={value}>{value}</option>)}
+          </SelectInput>
+        </label>
+        <label>Unit name in TASKORG
+          <TextInput className="input-sm" name="movementUnit" defaultValue={initial.movementUnit ?? ""} maxLength={100} placeholder="USS Meridian" />
+        </label>
+        <label>Location
+          <TextInput className="input-sm" name="movementLocation" defaultValue={initial.movementLocation ?? ""} maxLength={100} placeholder="NAME:NORFOLK" />
+        </label>
+        <label>Effective from ({zone === "UTC" ? "Zulu" : zone})
+          <TextInput className="input-sm" type="date" name="movementFromDate" defaultValue={initial.movementFromDate ?? ""} />
+        </label>
+        <label>Effective through ({zone === "UTC" ? "Zulu" : zone})
+          <TextInput className="input-sm" type="date" name="movementThroughDate" defaultValue={initial.movementThroughDate ?? ""} />
         </label>
       </fieldset>
       {pending && <p role="status">Loading filter options…</p>}

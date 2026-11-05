@@ -38,6 +38,19 @@
 .ships-sidebar :is(button, input):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .command-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: baseline; }
 .command-chip { color: white; font-size: 10px; font-weight: 600; line-height: 1.4; padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
+.movement-action-badge { display: inline-flex; align-items: center; flex: none; padding: 1px 5px; border: 1px solid currentColor; border-radius: 3px; background: var(--color-primary); color: var(--color-primary-content); font-size: 10px; font-weight: 800; letter-spacing: .04em; line-height: 1.4; white-space: nowrap; }
+.movement-review-badge { display: inline-flex; align-items: center; flex: none; padding: 1px 5px; border: 1px solid var(--color-primary); border-radius: 3px; color: var(--color-primary); background: var(--color-base-100); font-size: 10px; font-weight: 800; letter-spacing: .04em; line-height: 1.4; white-space: nowrap; text-transform: uppercase; }
+/* Calendar events already use primary as their fill, so invert the badge there. */
+.ship-calendar .rbc-event .movement-action-badge,
+.rbc-overlay .rbc-event .movement-action-badge { background: var(--color-primary-content); color: var(--color-primary); }
+.ship-calendar .rbc-event .movement-review-badge,
+.rbc-overlay .rbc-event .movement-review-badge { background: transparent; border-color: var(--color-primary-content); color: var(--color-primary-content); }
+.calendar-review-list { margin: 8px 0; padding: 8px 12px; border: 1px solid var(--color-base-300); border-radius: 4px; background: var(--color-base-100); font-size: 12px; }
+.calendar-review-list summary { cursor: pointer; font-weight: 700; }
+.calendar-review-list ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 240px; overflow: auto; }
+.calendar-review-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-top: 1px solid var(--color-base-300); padding: 7px 0; }
+.calendar-review-list li p { flex-basis: 100%; margin: 0; color: var(--color-bc-muted); }
+.calendar-review-list a { color: var(--color-primary); text-decoration: underline; }
 @media (max-width: 900px) {
   .calendar-page.calendar-with-ships,
   .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
@@ -69,6 +82,8 @@
 .calendar-with-ships .ship-calendar-resources .rbc-time-header-content { min-width: 0; }
 .resource-ship-chip { display: inline-block; margin: 3px; padding: 2px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: 650; }
 .calendar-with-ships .ship-calendar-resources .rbc-event { background: color-mix(in srgb, var(--ship-color) 14%, var(--color-base-100)); color: var(--color-base-content); }
+.calendar-with-ships .ship-calendar-resources .rbc-event .movement-action-badge { background: var(--color-primary); color: var(--color-primary-content); }
+.calendar-with-ships .ship-calendar-resources .rbc-event .movement-review-badge { background: var(--color-base-100); border-color: var(--color-primary); color: var(--color-primary); }
 .calendar-with-ships .ship-calendar-resources .rbc-event.calendar-revised { border-color: var(--color-warning); }
 /* Applicability amber is only the explicitly Unassigned review resource; named ships never use it. */
 /* Match zoom specificity so Parker's later data-time-zoom rule still wins. */

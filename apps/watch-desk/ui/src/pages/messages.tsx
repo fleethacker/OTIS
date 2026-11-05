@@ -39,6 +39,12 @@ function MessageSearch() {
       "casualtyUic",
       "casualtyCategory",
       "casualtyReportType",
+      "movementAction",
+      "movementActivity",
+      "movementUnit",
+      "movementLocation",
+      "movementFromDate",
+      "movementThroughDate",
     ].map((key) => params.get(key)),
     session?.user?.id,
     sourceScopeKey(session),
@@ -98,6 +104,12 @@ function MessageSearch() {
       "casualtyUic",
       "casualtyCategory",
       "casualtyReportType",
+      "movementAction",
+      "movementActivity",
+      "movementUnit",
+      "movementLocation",
+      "movementFromDate",
+      "movementThroughDate",
     ] as const) {
       const value = fields[key] ?? "";
       if (value === "") {

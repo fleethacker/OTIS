@@ -10,11 +10,17 @@ export interface MessageFilters {
   casualtyUic?: string;
   casualtyCategory?: string;
   casualtyReportType?: string;
+  movementAction?: string;
+  movementActivity?: string;
+  movementUnit?: string;
+  movementLocation?: string;
+  movementFromDate?: string;
+  movementThroughDate?: string;
 }
 export function messageFilters(params: URLSearchParams): MessageFilters {
   return {
     ...Object.fromEntries(
-      ["casualtySerial", "casualtyUic", "casualtyCategory", "casualtyReportType"]
+      ["casualtySerial", "casualtyUic", "casualtyCategory", "casualtyReportType", "movementAction", "movementActivity", "movementUnit", "movementLocation", "movementFromDate", "movementThroughDate"]
         .filter((key) => params.has(key))
         .map((key) => [key, params.get(key) ?? ""])
     ),
@@ -40,6 +46,10 @@ export function messageSearchState(
   const fields = messageFilters(params);
   const from = fields.fromDate === "" ? undefined : dateStart(fields.fromDate, zone);
   const through = fields.throughDate === "" ? undefined : dateStart(fields.throughDate, zone);
+  const movementFrom = fields.movementFromDate === undefined || fields.movementFromDate === ""
+    ? undefined : dateStart(fields.movementFromDate, zone);
+  const movementThrough = fields.movementThroughDate === undefined || fields.movementThroughDate === ""
+    ? undefined : dateStart(fields.movementThroughDate, zone);
   let error: string | undefined;
   if (
     (fields.fromDate !== "" && from === undefined) ||
@@ -49,6 +59,12 @@ export function messageSearchState(
     error = "Choose valid issue dates.";
   } else if (from !== undefined && through !== undefined && from > through) {
     error = "The issue-date end must be on or after its start.";
+  } else if ((fields.movementFromDate !== undefined && fields.movementFromDate !== "" && movementFrom === undefined) ||
+    (fields.movementThroughDate !== undefined && fields.movementThroughDate !== "" && movementThrough === undefined) ||
+    (movementThrough !== undefined && movementThrough + 86400000 > 253402300799999)) {
+    error = "Choose valid movement dates.";
+  } else if (movementFrom !== undefined && movementThrough !== undefined && movementFrom > movementThrough) {
+    error = "The movement-date end must be on or after its start.";
   }
   const selected = params.get("sort");
   const sort: MessageSort =
@@ -82,6 +98,24 @@ export function messageSearchState(
   if (fields.casualtyReportType !== undefined && fields.casualtyReportType !== "") {
     filters.casualtyReportTypes = [fields.casualtyReportType];
   }
+  if (fields.movementAction !== undefined && fields.movementAction !== "") {
+    filters.movementActions = [fields.movementAction];
+  }
+  if (fields.movementActivity !== undefined && fields.movementActivity !== "") {
+    filters.movementActivities = [fields.movementActivity];
+  }
+  if (fields.movementUnit !== undefined && fields.movementUnit !== "") {
+    filters.movementUnits = [fields.movementUnit];
+  }
+  if (fields.movementLocation !== undefined && fields.movementLocation !== "") {
+    filters.movementLocations = [fields.movementLocation];
+  }
+  if (movementFrom !== undefined) {
+    filters.movementFrom = new Date(movementFrom).toISOString();
+  }
+  if (movementThrough !== undefined && error === undefined) {
+    filters.movementTo = moment.tz(movementThrough, zone).add(1, "day").toISOString();
+  }
   const request: SourceRequest = {
     query,
     mode: "hybrid",
@@ -102,6 +136,12 @@ export function messageSearchState(
       fields.casualtyUic ?? "",
       fields.casualtyCategory ?? "",
       fields.casualtyReportType ?? "",
+      fields.movementAction ?? "",
+      fields.movementActivity ?? "",
+      fields.movementUnit ?? "",
+      fields.movementLocation ?? "",
+      fields.movementFromDate !== undefined && fields.movementFromDate !== "" ||
+      fields.movementThroughDate !== undefined && fields.movementThroughDate !== "" ? "movement-date" : "",
       fields.fromDate !== "" || fields.throughDate !== "" ? "date" : "",
     ].filter((v) => v !== "").length,
   };

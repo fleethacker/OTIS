@@ -1,9 +1,10 @@
 name: parse-command-intake
 services:
-  intake:
-    image: parse-command-intake:local
+  server:
+    image: parse-command-server:local
     build:
-      context: .
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     init: true
     stop_grace_period: 20s
@@ -11,14 +12,17 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     cpus: 1
-    mem_limit: 128m
-    pids_limit: 64
+    mem_limit: 256m
+    pids_limit: 128
     environment:
+      PARSE_COMMAND_AUTH_MODE: local_demo
+      PARSE_COMMAND_OPENSEARCH_URL: http://opensearch:9200
       # Public demo credential; never substitute production credentials in this file.
       PARSE_COMMAND_IMAP_PASSWORD: ${PARSE_COMMAND_IMAP_PASSWORD:-ParseCommandDemoOnly123!}
     volumes:
       - ./config/demo-compose-intake.json:/etc/parse-command/config.json:ro
       - custody:/var/lib/parse-command
+      - private-state:/var/lib/parse-command-private
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
     networks:
@@ -34,3 +38,4 @@ networks:
     name: parse-command-demo_mail
 volumes:
   custody:
+  private-state:

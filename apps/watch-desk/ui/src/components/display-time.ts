@@ -1,41 +1,14 @@
-import { createContext, createElement, useContext, useState, type ReactNode } from "react";
+import { createContext, createElement, useContext, type ReactNode } from "react";
 import moment from "moment-timezone";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { utc } from "./message-format";
 
 export type TimeMode = "utc" | "local";
 export const TIME_MODE_KEY = "watch-desk-display-time";
-const DisplayTime = createContext<{ mode: TimeMode; setMode: (mode: TimeMode) => void }>({
-  mode: "utc",
-  setMode: () => {
-    /* Default for isolated render checks. */
-  },
-});
+const DisplayTime = createContext<TimeMode>("utc");
 export function DisplayTimeProvider({ children }: { children: ReactNode }) {
-  const [mode, change] = useState<TimeMode>(() => {
-    try {
-      return localStorage.getItem(TIME_MODE_KEY) === "local" ? "local" : "utc";
-    } catch {
-      return "utc";
-    }
-  });
-  return createElement(
-    DisplayTime.Provider,
-    {
-      value: {
-        mode,
-        setMode: (next: TimeMode) => {
-          change(next);
-          try {
-            localStorage.setItem(TIME_MODE_KEY, next);
-          } catch {
-            /* In-memory preference remains usable. */
-          }
-        },
-      },
-    },
-    children
-  );
+  // UTC is fixed until the display preference moves into application settings.
+  return createElement(DisplayTime.Provider, { value: "utc" }, children);
 }
 export function deviceZone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -62,12 +35,12 @@ export function displayTimestamp(value: Timestamp | undefined, mode: TimeMode, z
     : "Unavailable";
 }
 export function useDisplayTime() {
-  const preference = useContext(DisplayTime);
-  const zone = zoneFor(preference.mode);
+  const mode = useContext(DisplayTime);
+  const zone = zoneFor(mode);
   return {
-    ...preference,
+    mode,
     zone,
-    label: preference.mode === "utc" ? "Zulu / UTC" : `Local · ${zone}`,
-    format: (value?: Timestamp) => displayTimestamp(value, preference.mode, zone),
+    label: mode === "utc" ? "Zulu / UTC" : `Local · ${zone}`,
+    format: (value?: Timestamp) => displayTimestamp(value, mode, zone),
   };
 }

@@ -1,21 +1,43 @@
 services:
+  server:
+    extends:
+      file: ./backend/compose.intake.yaml
+      service: server
+    image: parse-command-server:local
+    container_name: parse-command-server
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      TOKENIZERS_PARALLELISM: "false"
+      RAYON_NUM_THREADS: "1"
+      PARSE_COMMAND_AUTH_MODE: local_demo
+      PARSE_COMMAND_DEMO_AUTO_ROLE: "${ARK_MOCK_AUTH_AS:-user}"
+      PARSE_COMMAND_OPENSEARCH_URL: http://opensearch:9200
+      PARSE_COMMAND_PRIVATE_DB: /var/lib/parse-command-private/ui.sqlite
+      PARSE_COMMAND_LEGACY_DB: "${PARSE_COMMAND_LEGACY_DB:-}"
+      PARSE_COMMAND_ALLOW_FIXTURES: "true"
+    mem_limit: 256m
+    pids_limit: 128
+    volumes:
+      - ./backend/config/demo-compose-intake.json:/etc/parse-command/config.json:ro
+      - private-state:/var/lib/parse-command-private
+      - watch-desk-data:/legacy:ro
+    networks: !override
+      - demo-mail
+      - application
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
   web:
     image: parse-command/watch-desk:local
     build:
       context: ./apps/watch-desk
     restart: unless-stopped
     init: true
-    environment:
-      PORT: "8080"
-      ARK_DB_PATH: /data/watch-desk.db
-      ARK_DATA_DIR: /data
-      # Isolated local development; use a verified JWT ingress for shared use.
-      ARK_MOCK_AUTH: "${ARK_MOCK_AUTH:-1}"
-      ARK_MOCK_AUTH_AS: "${ARK_MOCK_AUTH_AS:-user}"
     ports:
       - "127.0.0.1:${WATCH_DESK_PORT:-8080}:8080"
-    volumes:
-      - watch-desk-data:/data
     networks:
       - application
     read_only: true
@@ -25,21 +47,29 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    # Startup ordering only. The imported ScheduleSource still reads SQLite;
-    # it does not query OpenSearch until the documented adapter is implemented.
+    mem_limit: 32m
+    pids_limit: 32
     depends_on:
-      opensearch:
+      server:
         condition: service_healthy
 
   opensearch:
-    image: opensearchproject/opensearch:3.9.0
+    image: parse-command-opensearch:local
+    build:
+      context: ./backend/search
+      dockerfile: opensearch/Dockerfile
     restart: unless-stopped
     environment:
       cluster.name: parse-command
       node.name: opensearch
       discovery.type: single-node
       bootstrap.memory_lock: "true"
-      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m -Dai.djl.offline=true -Dai.djl.onnxruntime.num_interop_threads=1 -Dai.djl.onnxruntime.num_intraop_threads=1 -Dai.djl.pytorch.num_interop_threads=1 -Dai.djl.pytorch.num_threads=1"
+      # Native inference/tokenizer libraries are bundled in the pinned image.
+      DJL_OFFLINE: "true"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
       # Local development only; the HTTP endpoint is bound to loopback.
       DISABLE_INSTALL_DEMO_CONFIG: "true"
       DISABLE_SECURITY_PLUGIN: "true"
@@ -66,10 +96,16 @@ services:
       start_period: 30s
 
 volumes:
+  custody:
+    name: ${PARSE_COMMAND_CUSTODY_VOLUME:-parse-command_custody}
+  private-state:
   watch-desk-data:
   opensearch-data:
 
 networks:
+  demo-mail:
+    external: true
+    name: parse-command-demo_mail
   application:
     # Ordinary bridge permits the loopback host ports above. Runtime assets are
     # bundled; enforce an operational enclave's egress policy at its boundary.

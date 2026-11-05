@@ -1,3 +1,4 @@
+import { AuditEvidence } from "./audit-evidence";
 import { useId, useState } from "react";
 import { DraftEditor, PrivateComposer, PrivateTracking } from "./draft-editor";
 import { recordStatus } from "./message-format";
@@ -186,6 +187,9 @@ export function MessageReader({ message }: { message: MessageRecord }) {
                   </p>
                   {message.structuredPayloadJson !== undefined && (
                     <StructuredMessage message={message} />
+                  )}
+                  {message.sourceMessageId.startsWith("sha256:") && (
+                    <AuditEvidence source={message.sourceMessageId} />
                   )}
                   {message.events.length === 0 && <p>Extracted events unavailable.</p>}
                   {message.events.map((e) => (

@@ -7,3 +7,7 @@ apps/watch-desk/ui/tests/journey/fixtures/present-extensible-structured-message-
 !.env.example
 .DS_Store
 __pycache__/
+
+# Local model archives, tokenizers and provisioned search state.
+backend/search/assets/
+backend/search/state/

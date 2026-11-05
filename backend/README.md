@@ -33,7 +33,7 @@ Without a host Rust toolchain, run the workspace tests in the pinned build image
 from the repository root:
 
 ```sh
-docker build --target test -t parse-command-intake-tests:local backend
+docker build --target test -f backend/Dockerfile -t parse-command-backend-tests:local .
 ```
 
 This target includes the demo configs needed by the synthetic custody tests.
@@ -89,3 +89,7 @@ The host hashes the exact decoded UTF-8 body, derives expiry as 365 elapsed days
 The bounded sink checks fields, unique IDs, fact counts, serialized bytes and audit structure; a failed emission stays failed even if a contributor ignores the error. The host rechecks final envelope bytes and fact-to-audit links before returning either result stream. No partial result is returned after failure. Errors carry static codes and offsets, not message text; callers must also avoid logging source or output objects.
 
 Compiled contributors are trusted code with process authority. Cooperative cancellation cannot preempt a loop that never checks its budget, and output limits cannot prevent allocations inside arbitrary contributor code. Dependency review, malformed-input tests and future process/container limits remain necessary. This interface does not establish durability, performance capacity or operational authorization.
+
+## Application server
+
+`parse-command-server` combines durable intake, continuous batched OpenSearch publication, typed read APIs, generated ConnectRPC services and owner-scoped private SQLite state. The parser SDK remains transport independent. See the [combined stack](../docs/integration/combined-stack.md) and [application API](../docs/integration/rust-application-api.md). Building the server requires Rust 1.97.1 in the pinned Docker build; the parser foundation retains its declared minimum. The root build context supplies the original application proto files and canonical index definitions.

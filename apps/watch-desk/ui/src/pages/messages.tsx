@@ -1,38 +1,45 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { TbX } from "react-icons/tb";
 import type { RouteMeta } from "../route-registry";
 import { calendarReturn } from "../components/calendar-links";
-import { useQuery } from "@defense-unicorns/ark-ui";
-import { readSchedules } from "../gen/app/v1/source_data-SourceDataService_connectquery";
+import { useSource, useDebounced } from "../components/source-data";
 import { MessageReader } from "../components/message-reader";
-import { recordStatus } from "../components/message-format";
-import { useDisplayTime } from "../components/display-time";
-import { messageTitle, structuredIdentifiers } from "../components/structured-message-format";
+import { MessageSearchCard } from "../components/message-search-card";
 
 export const route: RouteMeta = { path: "/messages", label: "Message records", order: 1 };
 
 export default function Messages() {
-  const { format: utc } = useDisplayTime();
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
   const [query, setQuery] = useState(params.get("q") ?? "");
-  const result = useQuery(readSchedules, {});
-  const messages = result.data?.messages ?? [];
-  const matches = messages.filter((m) =>
-    [
-      m.sourceMessageId,
-      m.subject,
-      m.rawText,
-      m.structuredPayloadJson,
-      ...m.events.map((e) => e.title),
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(query.toLowerCase())
+  const debounced = useDebounced(query);
+  const [pageToken, setPageToken] = useState<string>();
+  const result = useSource(debounced.trim() ? "search" : "list", {
+    query: debounced,
+    mode: "hybrid",
+    dataset: "canonical",
+    pageToken,
+  });
+  const matches = result.data?.messages ?? [];
+  const messages = matches;
+  const detail = useSource(
+    "detail",
+    { key: record, dataset: record.startsWith("legacy:") ? "legacy" : "canonical" },
+    !!record
   );
-  const selected = record ? messages.find((m) => m.sourceMessageId === record) : undefined;
+  const selected = detail.data?.messages[0];
+  const cardList = useRef<HTMLElement>(null);
+  function closeMessage() {
+    const card = cardList.current?.querySelector<HTMLButtonElement>(
+      '.record-entry[aria-pressed="true"]'
+    );
+    (card ?? cardList.current)?.focus();
+    update("record", "");
+  }
   function update(key: string, value: string) {
     if (key === "q") {
+      setPageToken(undefined);
       setQuery(value);
       return;
     }
@@ -51,12 +58,6 @@ export default function Messages() {
   }
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h1>Message records</h1>
-          <p>Source evidence, separate from the schedule.</p>
-        </div>
-      </div>
       <Link className="back-link" to={calendarReturn(params.get("returnTo"))}>
         <span aria-hidden="true">← </span>Return to Calendar
       </Link>
@@ -78,16 +79,13 @@ export default function Messages() {
         <p role="status">Loading Message records…</p>
       ) : result.isError ? (
         <div role="alert" className="alert">
-          Message records could not be loaded. No schedule data is confirmed.
+          Message records could not be loaded. {result.error.message} No schedule data is confirmed.
           <button className="btn btn-sm" onClick={() => void result.refetch()}>
             Retry
           </button>
         </div>
       ) : (
         <>
-          <p className="feature-note">
-            {result.data.notice} · {result.data.source} · Read at {utc(result.data.retrievedAt)}
-          </p>
           {messages.length === 0 && (
             <div className="unfinished">
               <h2>No Message records available</h2>
@@ -97,56 +95,78 @@ export default function Messages() {
               </button>
             </div>
           )}
-          <div className="messages-workspace">
-            <section aria-label="Message record list" className="record-list">
-              <h2>{matches.length} matching records</h2>
+          <div className="messages-workspace" data-reader-open={record.length > 0}>
+            <section
+              ref={cardList}
+              tabIndex={-1}
+              aria-label="Message record list"
+              className="record-list"
+            >
+              <h2>{matches.length} records in this result window</h2>
+              {result.data.meta.windowLimited === true && (
+                <p>Search candidate limit reached. Narrow your search.</p>
+              )}
+              {(pageToken ?? "") !== "" && (
+                <button className="btn btn-sm" onClick={() => setPageToken(undefined)}>
+                  First page
+                </button>
+              )}
+              {(result.data.meta.nextPageToken ?? "") !== "" && (
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setPageToken(result.data.meta.nextPageToken)}
+                >
+                  Next page
+                </button>
+              )}
               {matches.length === 0 && messages.length > 0 && (
                 <p>No search matches. Clear search to restore all records.</p>
               )}
               {matches.map((m) => (
-                <button
-                  key={String(m.id)}
-                  className="record-entry"
-                  aria-pressed={record === m.sourceMessageId}
-                  onClick={() => update("record", m.sourceMessageId)}
-                >
-                  <span className="record-id">{m.sourceMessageId}</span>
-                  <strong>{messageTitle(m)}</strong>
-                  {m.structuredPayloadJson !== undefined && (
-                    <span className="review-cue">{structuredIdentifiers(m)}</span>
-                  )}
-                  <span>Received: {utc(m.receivedAt)}</span>
-                  <span className={m.processingStatus === "parsed" ? "" : "review-cue"}>
-                    {recordStatus(m.processingStatus)}
-                  </span>
-                  {m.events.length > 0 ? (
-                    m.events.map((e) => (
-                      <span key={String(e.id)}>
-                        {e.title}: {utc(e.startAt)} → {utc(e.endAt)}
-                      </span>
-                    ))
-                  ) : (
-                    <span>Extracted schedule unavailable</span>
-                  )}
-                </button>
+                <MessageSearchCard
+                  key={m.sourceMessageId}
+                  message={m}
+                  header={result.data.meta.messageHeaders?.[m.sourceMessageId]}
+                  selected={record === m.sourceMessageId}
+                  onSelect={() => update("record", m.sourceMessageId)}
+                />
               ))}
             </section>
-            {selected ? (
-              <MessageReader key={selected.sourceMessageId} message={selected} />
-            ) : (
-              <section className="reader-empty">
-                <h2>{record ? "Message record not found" : "Select a Message record"}</h2>
-                <p>
-                  {record
-                    ? `The requested record ${record} is unavailable. No other record has been substituted.`
-                    : "Choose a source to inspect its raw message and extracted fields."}
-                </p>
-                {record && (
-                  <button className="btn btn-sm" onClick={() => void result.refetch()}>
-                    Retry
-                  </button>
-                )}
-              </section>
+            {record.length > 0 && (
+              <div className="message-viewer">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs message-viewer-close"
+                  aria-label="Close message"
+                  title="Close message"
+                  onClick={closeMessage}
+                >
+                  <TbX aria-hidden="true" focusable="false" />
+                </button>
+                {record && detail.isPending ? (
+                  <p role="status">Loading selected message…</p>
+                ) : record && detail.isError ? (
+                  <div role="alert">
+                    Selected message could not be loaded: {detail.error.message}
+                    <button className="btn btn-sm" onClick={() => void detail.refetch()}>
+                      Retry selected message
+                    </button>
+                  </div>
+                ) : selected ? (
+                  <MessageReader key={selected.sourceMessageId} message={selected} />
+                ) : record ? (
+                  <section className="reader-empty">
+                    <h2>Message record not found</h2>
+                    <p>
+                      The requested record {record} is unavailable. No other record has been
+                      substituted.
+                    </p>
+                    <button className="btn btn-sm" onClick={() => void result.refetch()}>
+                      Retry
+                    </button>
+                  </section>
+                ) : null}
+              </div>
             )}
           </div>
         </>

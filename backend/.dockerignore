@@ -2,3 +2,7 @@ target
 state
 *.sqlite*
 .env*
+
+search/assets/
+search/state/
+__pycache__/

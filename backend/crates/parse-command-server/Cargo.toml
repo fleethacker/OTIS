@@ -1,0 +1,33 @@
+[package]
+name = "parse-command-server"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.88"
+publish.workspace = true
+
+[dependencies]
+parse-command-intake = { path = "../parse-command-intake" }
+parse-command-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+chrono.workspace = true
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+connectrpc = { version = "=0.9.1", default-features = false, features = ["server", "axum", "json"] }
+buffa = { version = "=0.9.1", features = ["json"] }
+buffa-types = { version = "=0.9.1", features = ["json"] }
+axum = "=0.8.6"
+tokio = { version = "=1.48.0", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+reqwest = { version = "=0.12.24", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+tokenizers = { version = "=0.20.3", default-features = false, features = ["onig"] }
+unicode-general-category = "=1.1.0"
+
+[build-dependencies]
+connectrpc-build = "=0.9.0"
+protoc-bin-vendored = "=3.2.0"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tower = { version = "=0.5.3", features = ["util"] }

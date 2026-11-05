@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
+FROM node:24.11.1-bookworm-slim AS node-tools
 FROM oven/bun:1.4.2 AS ui
+COPY --from=node-tools /usr/local/bin/node /usr/local/bin/node
+ENV PATH="/opt/ark-toolchain/node_modules/.bin:${PATH}"
 WORKDIR /src
 COPY package.json bun.lock bunfig.toml ./
 COPY ark/ui/package.json ./ark/ui/package.json
@@ -42,16 +45,10 @@ RUN bun --no-env-file --config=/src/ark/pipeline/bunfig.toml \
     --tsconfig-override=/src/ark/pipeline/tsconfig.json test \
     --preload ./ark/pipeline/test-setup.ts ./ui/src/
 
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
-WORKDIR /app
-COPY --from=go /out/watch-desk /app/watch-desk
-COPY --from=go /out/healthcheck /app/healthcheck
-COPY --from=go --chown=65532:65532 /out/data /data
-COPY LICENSE /app/LICENSE
-COPY --chown=65532:65532 internal/data/seed_data.json /app/internal/data/seed_data.json
-ENV PORT=8080 ARK_DB_PATH=/data/watch-desk.db ARK_DATA_DIR=/data
+FROM nginx:1.28.0-alpine AS runtime
+COPY --from=ui /src/ui/build /usr/share/nginx/html
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
 USER 65532:65532
 EXPOSE 8080
-HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
-    CMD ["/app/healthcheck"]
-ENTRYPOINT ["/app/watch-desk"]
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=6 CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+ENTRYPOINT ["nginx", "-g", "daemon off;"]

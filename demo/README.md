@@ -44,8 +44,8 @@ here as explicitly permitted for v1.
 This standalone Compose project is independent of the root UI/OpenSearch project.
 The backend's standalone intake configuration joins its external network
 `parse-command-demo_mail` and uses the internal endpoints above. The root
-`compose.intake.yml` overlay instead creates a project-local mail network for the
-combined workflow. Choose one mail deployment to avoid conflicting host ports.
+`docker-compose.yml` server joins this same external network; the demo mailbox
+remains in its own environment.
 Use IMAP account identity, mailbox, UIDVALIDITY and UID for intake cursors, and
 `BODY.PEEK[]` for reads. Do not use message sequence numbers as durable cursors or
 delete upstream mail as part of polling.

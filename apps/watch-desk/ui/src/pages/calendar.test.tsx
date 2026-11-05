@@ -120,14 +120,14 @@ test("calendar mounts controls and truthful loading", () => {
     route: "/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch",
   });
   expect(view.getByLabelText("UTC date")).toHaveValue("2026-11-04");
-  expect(view.getByLabelText("Grid interval")).toHaveValue("30");
+  expect(view.queryByLabelText("Grid interval")).toBeNull();
   expect(view.getByRole("searchbox", { name: "Search schedule" })).toHaveValue("watch");
   const search = view.getByRole("searchbox", { name: "Search schedule" });
   expect(search.closest("section")?.getAttribute("aria-label")).toBe("Calendar controls");
-  expect(search).toHaveAttribute("aria-describedby", "schedule-search-hint");
-  expect(view.container.querySelector("#schedule-search-hint")?.textContent).toContain(
-    "not just this period"
-  );
+  expect(search).not.toHaveAttribute("aria-describedby");
+  expect(view.queryByText(/Ship schedule/)).toBeNull();
+  expect(view.queryByText(/Hybrid keyword/)).toBeNull();
+  expect(view.container.querySelector(".view-label")).toBeNull();
   expect(view.getByRole("status").textContent).toContain("Loading schedule");
 });
 test("week is an accessible URL-owned view with civil DST/year boundaries", () => {
@@ -139,8 +139,8 @@ test("week is an accessible URL-owned view with civil DST/year boundaries", () =
     "true"
   );
   expect(view.getByRole("button", { name: "Previous week" })).toBeTruthy();
-  expect(view.getByLabelText("Grid interval")).not.toBeDisabled();
-  expect(view.getByLabelText("Visible hours (UTC)")).toHaveValue("6-12");
+  expect(view.queryByLabelText("Grid interval")).toBeNull();
+  expect(view.queryByLabelText("Visible hours (UTC)")).toBeNull();
   expect(
     (weekBounds("2026-11-04", "America/New_York").to -
       weekBounds("2026-11-04", "America/New_York").from) /
@@ -222,7 +222,7 @@ test("continuous geometry clips without rounding and excludes invalid intervals"
   expect(geometry(event, midnight + 8.5 * HOUR, midnight + 9 * HOUR)).toBeNull();
   expect(utcDate("2026-02-30", "2026-11-04")).toBe("2026-11-04");
 });
-test("timeline keeps exact labels and authoritative source links", () => {
+test("compact cards keep exact times on hover and authoritative source links", () => {
   const message = create(MessageRecordSchema, { sourceMessageId: "SOURCE-1", events: [event] });
   const view = renderWithProviders(
     <DayTimeline
@@ -233,7 +233,9 @@ test("timeline keeps exact labels and authoritative source links", () => {
       returnTo="/calendar?date=2026-11-04&q=watch"
     />
   );
-  expect(view.getAllByText(/2026-11-04 08:15 UTC/).length).toBeGreaterThan(0);
+  const card = view.getByRole("link", { name: "Short event, source record" });
+  expect(card.textContent).toBe("Short event");
+  expect(card.getAttribute("title")).toContain("2026-11-04 08:15 UTC");
   expect(view.queryByRole("heading", { name: /Exact event details/ })).toBeNull();
   expect(view.container.querySelector(".calendar-details")).toBeNull();
   expect(
@@ -266,14 +268,33 @@ test("Day source links and Week detail buttons are the only interactive event ta
     const wrapper = target.closest(".rbc-event")!;
     expect(wrapper.hasAttribute("tabindex")).toBe(false);
     expect(wrapper.querySelectorAll('a, button, [tabindex="0"]').length).toBe(1);
-    expect(wrapper.textContent).toContain("Revised");
+    expect(target.getAttribute("title")).toContain("Revised");
+    expect(target.textContent).toBe("Short event");
     if (mode === "week") {
       expect(target.tagName).toBe("BUTTON");
       expect(wrapper.querySelector("a")).toBeNull();
     } else {
       expect(target.getAttribute("href")).toContain("record=SOURCE-1");
-      expect(wrapper.textContent).toContain("2026-11-04 08:15 UTC");
+      expect(target.getAttribute("title")).toContain("2026-11-04 08:15 UTC");
     }
     view.unmount();
   }
 });
+
+for (const calendarView of ["day", "week", "month"] as const) {
+  test(`calendar page retains the full ${calendarView} grid while source data is empty or loading`, () => {
+    const view = renderWithProviders(<Calendar />, {
+      route: `/calendar?date=2008-11-04&view=${calendarView}`,
+    });
+    expect(view.getByRole("region", { name: "Zulu UTC calendar, scrollable" })).toBeTruthy();
+    expect(view.queryByRole("heading", { name: "Calendar", exact: true })).toBeNull();
+    expect(
+      view.container.querySelector(calendarView === "month" ? ".rbc-month-view" : ".rbc-time-view")
+    ).toBeTruthy();
+    expect(view.queryByText(/No timed events/)).toBeNull();
+    expect(view.queryByText(/Ship schedule/)).toBeNull();
+    if (calendarView === "month") {
+      expect(view.container.querySelectorAll(".rbc-day-bg").length).toBeGreaterThanOrEqual(28);
+    }
+  });
+}

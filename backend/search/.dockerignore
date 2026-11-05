@@ -1,0 +1,9 @@
+*
+!opensearch/
+!opensearch/**
+!assets/
+!assets/native/
+!assets/native/*/
+!assets/native/*/cache/
+!assets/native/*/cache/**
+!assets/tokenizer.json

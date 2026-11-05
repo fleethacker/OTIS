@@ -1,3 +1,5 @@
+> Historical import validation. The deployed Rust replacement is covered by [Rust integration validation](rust-integration-validation.md).
+
 # Ark integration validation
 
 Run date: 2026-11-04. Host: macOS arm64. Linux containers: arm64.

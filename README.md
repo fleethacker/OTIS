@@ -20,30 +20,34 @@ A tool that seamlessly converts mock USMTF raw text into a synchronized 24-hour 
 ## Local application stack
 
 The imported **Watch Desk** app lives in [`apps/watch-desk/`](apps/watch-desk/).
-Its Go service serves the React UI and persists private drafts/preparations in
-SQLite. The Rust parser and durable IMAP worker live in [`backend/`](backend/README.md).
-The [integration analysis](docs/integration/ark-export.md) covers all 346 exported
-files, both sets of context, contract differences, build portability and remaining
-work. [ADR 0001](docs/decisions/0001-retain-watch-desk-go-service.md) records the
-decision to keep Go for now for later team review.
+Rust serves the application API, private drafts/preparations and continuous
+IMAP-to-OpenSearch publication. A lightweight static/proxy web container serves
+React. The Go implementation remains as reference source. See the
+[combined-stack runbook](docs/integration/combined-stack.md) and
+[frontend API and search templates](docs/integration/rust-application-api.md).
 
-Build and start Watch Desk plus OpenSearch (Docker with Compose required):
+Prepare the local model/native assets first using the
+[search preparation runbook](backend/search/README.md#connected-preparation).
+The committed native dependency lock is validated on Linux ARM64. Runtime images
+and the model archive can then be transferred to an offline host.
+
+Build and start Watch Desk, `parse-command-server` and OpenSearch (Docker Compose 2.24.4+ required):
 
 ```sh
+docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
 docker compose up --build -d --wait
 curl http://localhost:8080/api/health
 curl http://localhost:9200
 ```
 
-Open [Watch Desk](http://localhost:8080). This is an isolated local development
-profile with a mock role picker and clearly fictional USS Meridian schedules.
-**The UI still reads SQLite; an OpenSearch-backed schedule adapter is subsequent
-work.** The Rust intake worker stages parsed messages and audit work in its own
-SQLite custody journal. Continuous OpenSearch delivery and the Rust read API
-remain follow-up work. A healthy Compose stack does not imply a completed
-parser-to-UI pipeline.
+Open [Watch Desk](http://localhost:8080). This local-demo profile reads parsed
+OpenSearch messages through Rust. Search combines BM25 and local MiniLM semantic
+retrieval using OpenSearch reciprocal rank fusion. Full structured/raw content
+and audit evidence load on demand. Existing legacy records and private history
+are preserved by the optional migration; they are not substituted for indexed
+messages. The SMTP/IMAP demo remains a separate environment.
 
-OpenSearch 3.9.0 runs at `http://localhost:9200` with a 512 MB JVM heap and a
+The prepared OpenSearch 3.9.0 image runs at `http://localhost:9200` with a 512 MB JVM heap and a
 persistent Docker volume. Authentication and TLS are disabled for local development;
 both published service ports bind to `127.0.0.1`. Containers share a private bridge
 network; assets are bundled for runtime use without external CDNs. Optional port
@@ -53,49 +57,45 @@ Allocate at least 4 GB of memory to Docker. On Linux, set `vm.max_map_count` to 
 least `262144` on the Docker host, as described in the
 [OpenSearch Docker setup guide](https://docs.opensearch.org/latest/install-and-configure/install-opensearch/docker/).
 
-Stop with `docker compose down`; both indexed data and private app state remain
+Stop with `docker compose down`; indexed data, custody and private app state remain
 in separate volumes. Run only the search service with
 `docker compose up -d --wait opensearch`.
 
 ### Demo email inbox
 
-To include the mail server and Rust intake worker in the same Compose project,
-use the optional overlay (Docker Compose 2.24.4+):
-
-```sh
-docker compose -f docker-compose.yml -f compose.intake.yml up --build -d --wait --wait-timeout 180
-docker compose -f docker-compose.yml -f compose.intake.yml exec intake parse-command-intake status /etc/parse-command/config.json
-```
-
-This reuses the services from PR #2 and creates a project-local mail network;
-it needs no separately started demo stack. SMTP/IMAP bind to loopback ports 1025
-and 1143. Do not run the standalone mail stack on the same ports simultaneously.
-The UI still shows its separate fictional dataset. See the
-[combined-stack guide](docs/integration/combined-stack.md) for data boundaries,
-verification, persistent state and offline preparation.
-
-The original standalone mail workflow remains available. See
-[demo/README.md](demo/README.md) for credentials, external message delivery and
-the Exchange production boundary:
+The demo SMTP/IMAP mailbox is a separate environment under `demo/`.
+The root Compose stack contains only the UI (`web`), OpenSearch and Rust server
+(`server`, container `parse-command-server`). Start the demo environment first:
 
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
-python3 demo/mail.py check
+docker compose up --build -d --wait --wait-timeout 180
+docker compose exec -T server parse-command-intake status /etc/parse-command/config.json
+python3 demo/mail.py send ../OPTASK_Messages/*.txt
 ```
+
+The server connects to `mailserver:143` on the demo environment's external
+`parse-command-demo_mail` network. SMTP/IMAP bind to loopback ports 1025 and 1143.
+Its custody volume and resource limits belong to the application stack. The
+executable/crate remains `parse-command-intake`; its deployed image is
+`parse-command-server:local`. Stop the standalone worker before adopting its
+custody volume through the override in [`.env.example`](.env.example).
+See the [stack guide](docs/integration/combined-stack.md).
+`compose.intake.yml` is an empty compatibility file; no overlay is needed.
 
 ## Architecture
 
 | Location | Responsibility |
 | --- | --- |
-| `apps/watch-desk/` | React UI, Go presentation API, private SQLite state, bundled Ark dependencies and original handoff guidance |
+| `apps/watch-desk/` | React UI, static/proxy runtime, original Go reference source, bundled Ark dependencies and handoff guidance |
 | `backend/` | Rust parser SDK, OPTASK contribution, durable IMAP intake, types and tests |
 | `demo/` | SMTP/IMAP demo server and local mail helper |
 | `test-data/` | Shared naval message collections on Thomas-Branch, with provenance and explicit-use guidance |
 | `docs/` | Canonical ICD/schemas/mappings, original engineering planning, integration analysis and decisions |
 | `.pdlc-docs/` | Larger-project product context |
 | `apps/watch-desk/.ark-handoff/` | Original approved UI context and export provenance |
-| `docker-compose.yml` | Local stack, service health, persistent volumes and private network |
-| `compose.intake.yml` | Optional combined mail-server and Rust intake services |
+| `docker-compose.yml` | Unified UI, server and OpenSearch stack with persistent volumes |
+| `compose.intake.yml` | Compatibility overlay; server is now in the root stack |
 
 See [container operation and offline preparation](docs/integration/ark-export.md#docker-compose-operation)
 and [validation results](docs/integration/validation.md). Follow root
@@ -117,22 +117,22 @@ test inputs; startup does not load or send them automatically.
 
 The Rust implementation is in [`backend/`](backend/README.md). The following exact message identifiers have end-to-end regression coverage against the supplied examples and their approved parsed documents:
 
-| Message | Tested declared version |
-| --- | --- |
-| OPTASK AAW | B.1.01.13 |
-| OPTASK ASUW | B.1.01.12 |
-| OPTASK ASW | B.1.01.12 |
-| OPTASK COMMS | B.1.01.12 |
-| OPTASK COP-CTP | B.1.01.03 |
-| OPTASK EW | B.1.01.12 |
-| OPTASK GENERAL | B.1.01.12 |
-| OPTASK IM | B.1.01.12 |
-| OPTASK LINK | B.1.02.04 |
-| OPTASK LINK ID SUPP | B.1.01.12 |
-| OPTASK MCM | B.1.01.12 |
-| OPTASK MINING | B.1.01.12 |
-| OPTASK NUC | B.1.01.12 |
-| OPTASK RAS | B.1.01.12 |
+| Message | Tested declared version | Tabler calendar icon (`react-icons/tb`) |
+| --- | --- | --- |
+| OPTASK AAW | B.1.01.13 | `TbRadar` |
+| OPTASK ASUW | B.1.01.12 | `TbShip` |
+| OPTASK ASW | B.1.01.12 | `TbSubmarine` |
+| OPTASK COMMS | B.1.01.12 | `TbRadio` |
+| OPTASK COP-CTP | B.1.01.03 | `TbMap2` |
+| OPTASK EW | B.1.01.12 | `TbWaveSine` |
+| OPTASK GENERAL | B.1.01.12 | `TbClipboardList` |
+| OPTASK IM | B.1.01.12 | `TbDatabase` |
+| OPTASK LINK | B.1.02.04 | `TbLink` |
+| OPTASK LINK ID SUPP | B.1.01.12 | `TbIdBadge2` |
+| OPTASK MCM | B.1.01.12 | `TbShieldCheck` |
+| OPTASK MINING | B.1.01.12 | `TbBomb` |
+| OPTASK NUC | B.1.01.12 | `TbRadioactive` |
+| OPTASK RAS | B.1.01.12 | `TbGasStation` |
 
 This coverage reproduces all approved example facts: 13 periods, 27 frequencies, 25 activities and 8 contacts. Extraction includes frequency plans, crypto changeover points, communications windows/checks, replenishment rendezvous, explicit task records, reporting requirements and source POCs where present. Detailed evidence stays in separate audit documents.
 

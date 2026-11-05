@@ -3,7 +3,7 @@
 .preparation legend { font-weight: 600; }
 .preparation label { display: block; }
 .preparation .input, .preparation .select, .preparation .textarea { width: 100%; min-width: 0; max-width: 100%; }
-.preparation .textarea { white-space: pre-wrap; font-family: monospace; }
+.preparation .textarea { white-space: pre-wrap; font-family: var(--font-mono); }
 .preparation .checkbox { margin-inline-end: 0.5rem; }
 .preparation-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .preparation .btn { white-space: normal; height: auto; min-height: 2.75rem; }

@@ -36,3 +36,24 @@ test("invalid or reversed dates block search and default sorting follows query c
   expect(messageSearchState(new URLSearchParams(), "").sort).toBe("issued_desc");
   expect(messageSearchState(new URLSearchParams(), "comms").sort).toBe("relevance");
 });
+
+test("CASREP filters survive URL state and become exact metadata filters", () => {
+  const state = messageSearchState(
+    new URLSearchParams({
+      messageType: "CASREP",
+      casualtySerial: "2026001",
+      casualtyUic: "N54321",
+      casualtyCategory: "2",
+      casualtyReportType: "UPDATE",
+    }),
+    "radar"
+  );
+  expect(state.activeFilters).toBe(5);
+  expect(state.request.filters).toEqual({
+    messageTypes: ["CASREP"],
+    casualtySerials: ["2026001"],
+    casualtyUics: ["N54321"],
+    casualtyCategories: ["2"],
+    casualtyReportTypes: ["UPDATE"],
+  });
+});

@@ -62,6 +62,7 @@ pub enum FactCategory {
     Activity,
     Contact,
     Location,
+    Casualty,
     Recurrence,
 }
 #[derive(Debug)]

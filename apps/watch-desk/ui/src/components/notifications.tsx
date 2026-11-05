@@ -1,5 +1,6 @@
 import { useSession } from "./session";
 import { sourceScopeKey } from "./source-data";
+import { AppButton, Notice } from "./ui";
 import { useDisplayTime } from "./display-time";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -118,10 +119,11 @@ export function NotificationPanel({ identity }: { identity: string }) {
         }
       }}
     >
-      <button
+      <AppButton
         ref={trigger}
         type="button"
-        className="btn btn-ghost notification-bell"
+        variant="ghost"
+        className="notification-bell"
         aria-label={
           feed.isError
             ? "Notifications, unavailable"
@@ -141,7 +143,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
             {unread > 99 ? "99+" : unread}
           </span>
         )}
-      </button>
+      </AppButton>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {feed.isError
           ? "Notifications unavailable"
@@ -158,15 +160,16 @@ export function NotificationPanel({ identity }: { identity: string }) {
         >
           <div className="notification-heading">
             {selected && (
-              <button
+              <AppButton
                 type="button"
-                className="btn btn-ghost notification-icon-button"
+                variant="ghost"
+                className="notification-icon-button"
                 aria-label="Back to notifications"
                 title="Back to notifications"
                 onClick={() => setSelected(null)}
               >
                 <TbArrowLeft aria-hidden="true" />
-              </button>
+              </AppButton>
             )}
             <h2 id={`${panelId}-title`} ref={heading} tabIndex={-1}>
               Notifications
@@ -175,51 +178,55 @@ export function NotificationPanel({ identity }: { identity: string }) {
               <span className="notification-unread-total">{unread}</span>
             )}
             <div className="notification-heading-actions">
-              <button
+              <AppButton
                 type="button"
-                className="btn btn-ghost notification-icon-button"
+                variant="ghost"
+                className="notification-icon-button"
                 aria-label="Mark all as read"
                 title="Mark all as read"
                 disabled={unread === 0 || mark.isPending || feed.isError || !first}
                 onClick={() => first && mark.mutate({ through: first.watermark })}
               >
                 <TbChecks aria-hidden="true" />
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 type="button"
-                className="btn btn-ghost notification-icon-button"
+                variant="ghost"
+                className="notification-icon-button"
                 aria-label="Close notifications"
                 title="Close notifications"
                 onClick={close}
               >
                 <TbX aria-hidden="true" />
-              </button>
+              </AppButton>
             </div>
           </div>
           {mark.isError && (
-            <div role="alert" className="notification-error">
+            <Notice role="alert" className="notification-error" tone="error">
               Couldn't mark as read.{" "}
-              <button
+              <AppButton
                 type="button"
-                className="btn btn-ghost btn-xs"
+                variant="ghost"
+                size="xs"
                 onClick={() => mark.mutate(mark.variables)}
               >
                 Retry
-              </button>
-            </div>
+              </AppButton>
+            </Notice>
           )}
           <div className="notification-scroll">
             {feed.isError ? (
-              <div role="alert" className="notification-empty">
+              <Notice role="alert" className="notification-empty" tone="error">
                 Unable to load notifications{" "}
-                <button
+                <AppButton
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => void feed.refetch()}
                 >
                   Retry
-                </button>
-              </div>
+                </AppButton>
+              </Notice>
             ) : feed.isPending ? (
               <p role="status" className="notification-empty">
                 Loading…
@@ -234,15 +241,12 @@ export function NotificationPanel({ identity }: { identity: string }) {
                 <time dateTime={detail.at}>{notificationTime(detail.at, zone)}</time>
                 {detail.kind === "traffic" ? (
                   members.isError ? (
-                    <div role="alert">
+                    <Notice role="alert" tone="error">
                       Unable to load messages{" "}
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => void members.refetch()}
-                      >
+                      <AppButton variant="ghost" size="sm" onClick={() => void members.refetch()}>
                         Retry
-                      </button>
-                    </div>
+                      </AppButton>
+                    </Notice>
                   ) : members.isPending ? (
                     <p role="status">Loading…</p>
                   ) : (
@@ -264,13 +268,15 @@ export function NotificationPanel({ identity }: { identity: string }) {
                         ))}
                       </ul>
                       {members.hasNextPage && (
-                        <button
-                          className="btn btn-ghost btn-sm notification-more"
+                        <AppButton
+                          variant="ghost"
+                          size="sm"
+                          className="notification-more"
                           disabled={members.isFetchingNextPage}
                           onClick={() => void members.fetchNextPage()}
                         >
                           Show more
-                        </button>
+                        </AppButton>
                       )}
                     </>
                   )
@@ -340,9 +346,10 @@ export function NotificationPanel({ identity }: { identity: string }) {
                           </span>
                         </button>
                         {item.unread && (
-                          <button
+                          <AppButton
                             type="button"
-                            className="btn btn-ghost notification-mark"
+                            variant="ghost"
+                            className="notification-mark"
                             disabled={mark.isPending}
                             aria-label={`Mark as read: ${title}`}
                             title="Mark as read"
@@ -350,21 +357,23 @@ export function NotificationPanel({ identity }: { identity: string }) {
                           >
                             <span className="notification-dot" aria-hidden="true" />
                             <TbCheck aria-hidden="true" />
-                          </button>
+                          </AppButton>
                         )}
                       </li>
                     );
                   })}
                 </ul>
                 {feed.hasNextPage && (
-                  <button
+                  <AppButton
                     type="button"
-                    className="btn btn-ghost btn-sm notification-more"
+                    variant="ghost"
+                    size="sm"
+                    className="notification-more"
                     disabled={feed.isFetchingNextPage}
                     onClick={() => void feed.fetchNextPage()}
                   >
                     Show more
-                  </button>
+                  </AppButton>
                 )}
                 {first?.catchingUp === true && (
                   <p role="status" className="notification-sync">

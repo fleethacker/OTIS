@@ -1870,6 +1870,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "parse-command-casrep"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "parse-command-core",
+ "parse-command-parser-api",
+ "parse-command-types",
+ "serde_json",
+]
+
+[[package]]
 name = "parse-command-core"
 version = "0.2.0"
 dependencies = [
@@ -1890,6 +1901,7 @@ dependencies = [
  "imap-proto",
  "mailparse",
  "nom",
+ "parse-command-casrep",
  "parse-command-core",
  "parse-command-optask",
  "parse-command-parser-api",

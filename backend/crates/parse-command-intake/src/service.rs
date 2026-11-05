@@ -25,8 +25,11 @@ impl Service {
         } else {
             Box::new(parse_command_optask::OptaskParser)
         };
-        let registry = Registry::new(vec![parser], config.enabled_types.iter().cloned().collect())
-            .map_err(|_| IntakeError("parser_registry"))?;
+        let registry = Registry::new(
+            vec![parser, Box::new(parse_command_casrep::CasrepParser)],
+            config.enabled_types.iter().cloned().collect(),
+        )
+        .map_err(|_| IntakeError("parser_registry"))?;
         let host =
             ParserHost::new(registry, config.parser).map_err(|_| IntakeError("parser_config"))?;
         let journal = Journal::open(&config)?;

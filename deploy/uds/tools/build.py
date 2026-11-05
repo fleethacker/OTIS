@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import urllib.request
+from verify_artifacts import verify_packages
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
@@ -38,8 +39,11 @@ def source_hash():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version', required=True)
+    parser.add_argument('--namespace', default='parse-command', help='Target namespace embedded in the versioned bundle')
     parser.add_argument('--prepare-assets', action='store_true', help='Explicit connected download of pinned model/native assets')
     args = parser.parse_args()
+    if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', args.namespace):
+        parser.error('namespace must be a Kubernetes DNS label')
     if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?', args.version):
         parser.error('version must be a semantic version')
     if output('uds', 'version') != 'v' + PINS['uds_cli'] or output('uds', 'zarf', 'version') != 'v' + PINS['embedded_zarf']:
@@ -90,12 +94,19 @@ def main():
     source = work / 'source'
     shutil.copytree(HERE / 'charts', source / 'charts', dirs_exist_ok=True)
     shutil.copytree(HERE / 'packages', source / 'packages', dirs_exist_ok=True)
+    # Create-time tokens are not substituted inside referenced chart values files.
+    for name, key in [('opensearch', 'SEARCH'), ('server', 'SERVER'), ('ui', 'UI')]:
+        values = {'image': images[key + '_IMAGE']}
+        if name == 'opensearch':
+            values['bootstrapImage'] = images['BOOTSTRAP_IMAGE']
+        (source / 'packages' / name / 'images.yaml').write_text(json.dumps(values, indent=2) + '\n')
     packages = destination / 'packages'
     packages.mkdir(exist_ok=True)
     for name in ['opensearch', 'server', 'ui']:
-        command = ['uds', 'zarf', 'package', 'create', str(source / 'packages' / name), '--confirm', '--architecture', 'arm64', '--plain-http', '--output', str(packages), '--set', 'VERSION=' + args.version]
+        command = ['uds', 'zarf', 'package', 'create', str(source / 'packages' / name), '--confirm', '--architecture', 'arm64', '--plain-http', '--output', str(packages), '--set', 'VERSION=' + args.version, '--set', 'NAMESPACE=' + args.namespace]
         command += [part for k, v in images.items() for part in ['--set', k + '=' + v]]
         run(*command)
+    verify_packages(packages, args.version, args.namespace, images)
     bundle = destination / 'bundle'
     bundle.mkdir(exist_ok=True)
     spec = json.loads((HERE / 'bundle/uds-bundle.yaml').read_text())
@@ -106,7 +117,7 @@ def main():
     run('uds', 'create', str(bundle), '--confirm', '--architecture', 'arm64', '--output', str(destination))
     if source_hash() != source_digest:
         raise SystemExit('Source changed during the build; retry before issuing this release')
-    manifest = {'sourceTreeSha256': source_digest, 'version': args.version, 'gitCommit': output('git', '-C', str(ROOT), 'rev-parse', 'HEAD'), 'dirty': bool(output('git', '-C', str(ROOT), 'status', '--porcelain')), 'pins': PINS, 'images': images}
+    manifest = {'sourceTreeSha256': source_digest, 'version': args.version, 'namespace': args.namespace, 'gitCommit': output('git', '-C', str(ROOT), 'rev-parse', 'HEAD'), 'dirty': bool(output('git', '-C', str(ROOT), 'status', '--porcelain')), 'pins': PINS, 'images': images}
     (destination / 'artifact-lock.json').write_text(json.dumps(manifest, indent=2) + '\n')
     checksums = []
     for path in sorted(destination.rglob('*')):

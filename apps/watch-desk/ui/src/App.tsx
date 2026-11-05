@@ -17,15 +17,12 @@ import { ShiftLanding } from "./components/shift-landing";
  * 2. React-router BrowserRouter (URL → page)
  * 3. Routes auto-discovered from `ui/src/pages/*.tsx`
  *
- * No persistent chrome by default. App Shell decides whether the app
- * has a layout wrapper — a sidebar/navbar/three-pane shell, naked
- * pages, or some routes wrapped and others not. If a wrapper fits,
- * App Shell adds `<Route element={<AppLayout />}>` around `routes.map`
- * here and ships the actual layout in `ui/src/components/app-layout.tsx`.
+ * AppLayout supplies the persistent header, navigation, appearance control,
+ * display-time context, and footer around every discovered page.
  *
  * Theming: app-owned CSS follows the browser color preference by default.
- * An explicit app setting can select a scheme with `<html data-theme="...">`.
- * App.tsx does not need a theme provider.
+ * main.tsx restores saved appearance before mounting. ThemeControl owns live
+ * system-preference and cross-tab updates through the app-owned theme hook.
  *
  * Feature stories add pages by dropping a new file under `ui/src/pages/`
  * with `export const route` + `export default function`. The route

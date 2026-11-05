@@ -1,10 +1,12 @@
 import { Link, useLocation } from "react-router-dom";
 import { calendarReturn } from "./calendar-links";
 import { useCommands } from "./command-roster";
+import { ownShip, useSettings } from "./settings-data";
 import { useWatchContext } from "./watch-context";
 
 export function WatchContextHeader() {
-  const context = useWatchContext();
+  const { shared } = useSettings();
+  const context = useWatchContext(false, shared === undefined);
   const roster = useCommands();
   const location = useLocation();
   const returnTo =
@@ -12,6 +14,14 @@ export function WatchContextHeader() {
       ? location.pathname + location.search
       : calendarReturn(new URLSearchParams(location.search).get("returnTo"));
   const href = `/watch-settings?${new URLSearchParams({ returnTo })}`;
+  if (shared) {
+    const settings = shared.settings;
+    const own = ownShip(settings);
+    const ship = settings.shipName || (own && (roster.data?.commands.find((c) => c.id === own)?.name ?? own)) || "Own ship not set";
+    return <small><Link to={href} title="Watch settings">
+      {ship} · {settings.operationName || "Operation not set"}{settings.groupCommand ? ` · ${settings.groupCommand}` : ""}
+    </Link></small>;
+  }
   if (context.isError) {
     return (
       <small>

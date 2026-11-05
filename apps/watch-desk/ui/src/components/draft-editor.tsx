@@ -1,3 +1,4 @@
+import { AppButton, Notice, TextArea } from "./ui";
 import { useContext, useEffect, useState, type ReactNode } from "react";
 import { Preparation } from "./preparation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -89,12 +90,12 @@ function VerifiedEditor({ source, children }: { source: string; children?: React
         {identity.isPending ? (
           <p role="status">Loading draft… Verifying current account.</p>
         ) : (
-          <div role="alert">
+          <Notice role="alert" tone="error">
             Account could not be verified. Private drafts are hidden.
-            <button className="btn btn-sm" onClick={() => void identity.refetch()}>
+            <AppButton size="sm" onClick={() => void identity.refetch()}>
               Retry account verification
-            </button>
-          </div>
+            </AppButton>
+          </Notice>
         )}
       </section>
     );
@@ -185,18 +186,18 @@ function Editor({ source }: { source: string }) {
       {read.isPending ? (
         <p role="status">Loading draft…</p>
       ) : read.isError ? (
-        <div role="alert">
+        <Notice role="alert" tone="error">
           Draft could not be loaded. Your saved text has not been replaced.
-          <button className="btn btn-sm" onClick={() => void read.refetch()}>
+          <AppButton size="sm" onClick={() => void read.refetch()}>
             Retry loading draft
-          </button>
-        </div>
+          </AppButton>
+        </Notice>
       ) : (
         <>
           <label htmlFor="draft-text">Acknowledgement text</label>
-          <textarea
+          <TextArea
             id="draft-text"
-            className="textarea draft-text"
+            className="draft-text"
             rows={8}
             value={value}
             onChange={(e) => {
@@ -213,24 +214,30 @@ function Editor({ source }: { source: string }) {
                   ? "Saved · Unsent"
                   : "No saved draft · Unsent"}
           </p>
-          {failed && <p role="alert">Save failed. Text is retained; retry Save draft.</p>}
-          <button
-            className="btn btn-primary btn-sm"
+          {failed && (
+            <Notice role="alert" tone="error">
+              Save failed. Text is retained; retry Save draft.
+            </Notice>
+          )}
+          <AppButton
+            variant="primary"
+            size="sm"
             disabled={save.isPending}
             onClick={() => void persist()}
           >
             {save.isPending ? "Saving…" : "Save draft"}
-          </button>
+          </AppButton>
           {dirty && (
-            <button
-              className="btn btn-ghost btn-sm"
+            <AppButton
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setText(baseline);
                 setFailed(false);
               }}
             >
               Discard changes
-            </button>
+            </AppButton>
           )}
         </>
       )}

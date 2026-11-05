@@ -107,9 +107,13 @@ test("administrator assigns and clears a station without changing application pe
     expect(view.getByLabelText("Watch station")).toHaveValue("Engineering watch");
     fail = false;
     fireEvent.click(view.getByRole("button", { name: "Save station assignment" }));
-    await waitFor(() =>
-      expect(view.getByRole("button", { name: "Save station assignment" })).toBeDisabled()
-    );
+    // A retry can briefly expose the previous button while React Query publishes
+    // the saved user. Keep waitFor failures scalar: formatting a Happy DOM button
+    // through the matcher can block the task queue and starve that publication.
+    await waitFor(() => {
+      const button = view.queryByRole("button", { name: "Save station assignment" }) as HTMLButtonElement | null;
+      expect(button?.disabled).toBe(true);
+    });
     const { revision: _revision, source: _source, ...editable } = assignment;
     expect(writes).toEqual([{ stationAssignment: editable }]);
     expect(view.getByLabelText("Permission level for Sailor")).toHaveTextContent("Viewer");

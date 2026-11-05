@@ -23,6 +23,11 @@ same page session. Viewers retain Preferences in the account menu. Shared values
 UTC; each user may select an IANA zone. Calendar boundaries, issue-date filters,
 clock, message presentation, and notifications use that preference. Stored source
 instants and generated USMTF drafts remain UTC. Existing drafts are preserved.
+Settings version 2 adds the Watch Desk fields `turnoverUtc`, `defaultShips`,
+`operationName` and `groupCommand`; stored version 1 documents load with their
+defaults. The first `commandIds` entry is the own ship shown in the header and
+`shipName` is its display name. With `PARSE_COMMAND_WATCHDESK_DEMO=true`, an empty
+store is seeded from the fictional roster in `backend/config/watchdesk-demo.json`.
 An absent outgoing command or action authority blocks new draft generation.
 Sending remains unavailable and does not create a sent timestamp.
 
@@ -36,6 +41,9 @@ same-origin cookies. Mutations require an exact configured `Origin`.
 | `save-preferences` | Both | `{timezone}` |
 | `options` | Admin | Indexed command IDs, approved model endpoints and credential references |
 | `update` | Admin | `{settings, revision}`; stale saves return 409 |
+| `suggestions` | Both | Operation/exercise names found in published messages, with line citations; dismissed ones omitted |
+| `use-suggestion` | Admin | `{suggestion, revision}`; sets `operationName` through the `update` checks; the audit entry records the citations |
+| `dismiss-suggestion` | Admin | `{suggestion, revision}`; hides the suggestion for all users |
 | `test-ai` | Admin | Test saved connection with bounded `GET /models`; no source content sent |
 | `users` | Admin | `{after?}`; up to 50 users with `nextAfter` |
 | `update-user` | Admin | `{user, revision, action: enable\|disable\|revoke}` |
@@ -45,6 +53,27 @@ of enclave-local OpenAI-compatible base URLs, normally ending `/v1`.
 `PARSE_COMMAND_AI_SECRET_REFS` lists allowed environment variable names beginning
 `PARSE_COMMAND_AI_SECRET_`. Resolve credentials on the server; never submit secret
 values through Settings. No public provider or default remote endpoint is configured.
+
+## Station and responsibility scope
+
+Native user records also hold station assignments, department responsibilities
+and account relevance preferences. `GET /api/v1/auth/session` returns this profile
+for an already authenticated session. Account preferences use
+`PATCH /api/v1/account/settings`; Admin station updates use `GET /api/v1/users`
+and `PATCH /api/v1/users/{id}`. Station changes cannot grant an IdP role or alter
+the native enablement/revocation policy.
+
+`PARSE_COMMAND_REQUIRE_STATION_ASSIGNMENT=true` requires an assigned station
+before scoped message access. It defaults off in local Compose; the UDS example
+enables it. Responsibility definitions carry explicit categories; names do not
+infer access. Assigned scope applies to search, detail, evidence, related messages,
+notifications and canonical private state. Personal relevance preferences may
+narrow that scope. Paging windows bind its current value.
+
+Shared watch context lives on `/watch-settings`, separate from the administrator
+Settings modal. Login briefings capture a frozen availability window; token
+refresh does not move it. See [watch planning](main3-sync.md) and the
+[Rust application API](rust-application-api.md#watch-station-and-briefing-apis).
 
 ## Keycloak / UDS client contract
 
@@ -62,7 +91,8 @@ values through Settings. No public provider or default remote endpoint is config
 
 For UDS packaging, use native `Package.spec.sso` registration and mount its generated
 client secret in Rust. Do not enable the Authservice selector for this application:
-Rust validates the OIDC flow, session, role and ownership itself. The [UDS packaging](../../deploy/uds/README.md) follows this contract; live cluster acceptance remains required.
+Rust validates the OIDC flow, session, role and ownership itself. The [UDS packaging](../../deploy/uds/README.md) follows this native-client
+contract; its pre-rebase Authservice validation remains historical evidence.
 
 Apply `compose.oidc.yml` only after provisioning the client, trusted HTTPS ingress,
 DNS and secret files. `PARSE_COMMAND_SSO_SECRETS` names a private directory outside
@@ -116,6 +146,11 @@ Runtime persistence is entirely OpenSearch:
 - `.parse-command-custody-v1`: raw email receipts, mailbox cursors, parse projections,
   audit/publication outboxes, retries and lifecycle history.
 
+Station metadata and responsibilities use the application-state index. Custody
+also retains explicit routing bindings and the bounded availability ledger that
+atomically records arrival sequences for login briefings. Old issue dates remain
+separate from arrival times.
+
 Both indices are hidden, strict, one primary shard, zero replicas for the laptop
 profile, and request-durable translogs. Payloads are unindexed; only the small state
 envelope is searchable. Hidden indices are not an authorization boundary: prevent
@@ -131,6 +166,12 @@ waits for up to 30 seconds for that lease to expire, then refuses to start if a 
 Custody/history are not silently purged. Capacity uses retained serialized bytes
 and receipt count; disk/translog headroom must be monitored separately. The existing
 365-day message retention policy does not apply to application state.
+
+Existing OpenSearch revisions also require a verified routing-policy binding.
+`backend/tools/migrate_routing.py` inspects retained custody read-only by default
+and supports create-only binding after validation with writers stopped. Follow
+[the intake routing procedure](../../backend/INTAKE.md#source-routing-and-fictional-fixtures);
+do not reset custody or guess routing from names or contacts.
 
 Migration tool: `backend/tools/migrate_state.py`. It opens SQLite **read-only** as a
 snapshot import source; neither Rust runtime crate depends on SQLite.
@@ -160,10 +201,41 @@ python3 backend/tools/migrate_state.py \
   --custody-index .parse-command-custody-v1 --apply
 ```
 
-Existing demo owners migrate to `demo:<previous-owner>`. SSO owners are distinct;
+Existing demo owners migrate to `demo:<previous-owner>`. For reviewed snapshots
+from the previous UDS implementation, pass `--preserve-oidc-owners` to retain
+canonical `oidc:<64 lowercase hex>` owners, whose issuer/subject hash matches
+the native OIDC implementation. Without that explicit opt-in, OIDC-looking
+owners fail migration rather than becoming unreachable demo owners. Malformed
+OIDC owners always fail. The source issuer, subject provenance and group policy
+must be verified first; display names/emails never authorize reassignment.
+Migrated OIDC rows grant no Admin role; native login validates current IdP
+claims before establishing access.
+
+Earlier watch accounts, preferences, responsibilities, watch context and custody
+routing/availability are imported only when supported and unambiguous. Unknown
+tables, unresolved `local` timezone values and ambiguous owner/routing mappings
+stop the import for review.
+
+SSO owners are distinct;
 there is no automatic transfer based on matching names/emails. Demo sessions and
 short-lived search cursors are invalidated; drafts, preparations, orphan records,
 notifications/read state, raw hashes and lifecycle history are preserved.
+
+## Browser calendar preferences
+
+Calendar display preferences are stored in IndexedDB on the current browser,
+keyed by the server-verified user/role scope. They include Day/Week/Month, ship
+selection, layout, interval, separate Day/Week zoom, and the Ships and Since last
+watch panel states. Panels start closed without a saved choice.
+Selecting ship Defaults resumes the shared setting instead of storing its current
+resolved value. Message content, authentication tokens, dates, and search text are
+not stored in this preference database.
+
+Opening Calendar starts on today with an empty search. Explicit URL parameters
+take precedence over saved preferences, preserving message return links and
+shared calendar links. Preferences load before calendar data requests; unavailable
+browser storage falls back to in-memory defaults for that visit. Server-side
+preferences, settings, and operational state remain in OpenSearch.
 
 ## Checks
 

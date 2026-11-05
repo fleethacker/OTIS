@@ -3,6 +3,7 @@ import { TbSettings } from "react-icons/tb";
 import { useIdentity } from "../hooks/useIdentity";
 import { Modal } from "./modal";
 import { SettingsContent } from "./settings-content";
+import { AppButton } from "./ui";
 
 export function SettingsButton() {
   const { role, isLoading } = useIdentity();
@@ -14,9 +15,10 @@ export function SettingsButton() {
 
   return (
     <>
-      <button
+      <AppButton
         type="button"
-        className="btn btn-ghost header-settings-button"
+        variant="ghost"
+        className="header-settings-button"
         aria-label="Settings"
         title="Settings"
         aria-haspopup="dialog"
@@ -27,7 +29,7 @@ export function SettingsButton() {
         }}
       >
         <TbSettings aria-hidden="true" />
-      </button>
+      </AppButton>
       {visited && (
         <Modal
           title="Settings"

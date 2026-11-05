@@ -1,12 +1,13 @@
-//! Compact ICD 1.2.0 documents. Validate before publication; core never carries parser evidence.
+//! Compact ICD 1.3.0 documents. Validate before publication; core never carries parser evidence.
 use chrono::{DateTime, Duration, FixedOffset, SecondsFormat};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, fmt};
 
+mod casualty;
 mod generated;
 pub use generated::*;
-pub const ICD_VERSION: &str = "1.2.0";
+pub const ICD_VERSION: &str = "1.3.0";
 pub const ICD_MAJOR: u16 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,7 +160,7 @@ pub fn validate_subject_id(
 ) -> Result<(), ValidationError> {
     let b = v.as_bytes();
     if b.len() < 2
-        || !b"afcvgr".contains(&b[0])
+        || !b"afcvgrq".contains(&b[0])
         || prefix.is_some_and(|p| p != b[0])
         || b[1] == b'0'
         || !b[1..].iter().all(u8::is_ascii_digit)
@@ -358,6 +359,9 @@ impl Message {
             (None, None) => {}
             _ => return Err(invalid("message.expires_at", "issue_plus_365_days")),
         }
+        if self.casualty.is_some() && self.kind != "CASREP" {
+            return Err(invalid("message.casualty", "casrep_only"));
+        }
         let ids = self
             .periods
             .iter()
@@ -366,6 +370,7 @@ impl Message {
             .chain(self.activities.iter().map(|x| &x.id))
             .chain(self.contacts.iter().map(|x| &x.id))
             .chain(self.locations.iter().map(|x| &x.id))
+            .chain(self.casualty.iter().map(|x| &x.id))
             .chain(self.recurrences.iter().map(|x| &x.id));
         let mut seen = BTreeSet::new();
         for id in ids {

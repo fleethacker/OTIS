@@ -175,6 +175,7 @@ impl App {
                         .key
                         .as_deref()
                         .ok_or_else(|| Error::invalid("message key is required"))?,
+                    &effective,
                 )
                 .await
             }
@@ -455,7 +456,7 @@ impl App {
         let hydrated = if ids.is_empty() {
             json!({"docs":[]})
         } else {
-            self.search.post(&format!("/{MESSAGES}/_mget?_source_includes=id,revision,type,originator,subject,status,review_flags,issued_at,expires_at,command_ids,security"),json!({"ids":candidates.iter().map(|(id,r,_)|format!("{id}:{r}")).collect::<Vec<_>>()})).await?
+            self.search.post(&format!("/{MESSAGES}/_mget?_source_includes=id,revision,type,originator,subject,status,review_flags,issued_at,expires_at,command_ids,security,casualty.serial,casualty.reporting_uic,casualty.category,casualty.report_type,casualty.eic,casualty.identifiers"),json!({"ids":candidates.iter().map(|(id,r,_)|format!("{id}:{r}")).collect::<Vec<_>>()})).await?
         };
         let docs = hydrated["docs"].as_array().ok_or_else(Error::unavailable)?;
         let mut documents = Vec::new();
@@ -531,7 +532,11 @@ impl App {
         meta["similarTo"] = state["similarTo"].clone();
         Ok(envelope(messages, "Page of ranked message matches", meta))
     }
-    pub async fn detail(&self, key: &str) -> Result<Value> {
+    pub async fn detail(
+        &self,
+        key: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
         let (id, revision) = split_key(key)?;
         let core = self.search.canonical(id, revision).await?;
         let audits = self
@@ -586,6 +591,27 @@ impl App {
             let (profile, sets) = presentation::source_sets(&audits, source)?;
             payload["source_profile"] = json!(profile);
             payload["sets"] = sets;
+        }
+        if core["type"] == "CASREP" {
+            let key = crate::casualties::key(&core);
+            match self
+                .search
+                .post(
+                    &format!("/{}/_search", crate::casualties::INDEX),
+                    json!({"size":1,"query":{"term":{"id":key}}}),
+                )
+                .await
+            {
+                Ok(value)
+                    if value["hits"]["hits"][0]["_source"]["id"] == key
+                        && effective.matches(&value["hits"]["hits"][0]["_source"])? =>
+                {
+                    payload["casualty_history"] = value["hits"]["hits"][0]["_source"].clone();
+                }
+                _ => {
+                    payload["casualty_history_state"] = json!("unavailable");
+                }
+            }
         }
         record["structuredPayloadJson"] = json!(payload.to_string());
         Ok(envelope(
@@ -704,6 +730,7 @@ impl App {
         }
         let mut filters = filters;
         let mut search_limited = false;
+        let mut executed_mode = json!("browse");
         if !request.query.trim().is_empty() {
             let search_request = ReadRequest {
                 query: request.query.clone(),
@@ -715,6 +742,8 @@ impl App {
             let results = self
                 .search_messages(search_request, filters.clone(), owner, effective)
                 .await?;
+            // Forward execution metadata only; preserve the existing ranking/filter path.
+            executed_mode = results["meta"]["executedMode"].clone();
             search_limited = results["meta"]["windowLimited"] == true
                 || results["messages"]
                     .as_array()
@@ -742,7 +771,7 @@ impl App {
             .search
             .template(
                 MESSAGE_ALIAS,
-                "parse-command-timeline-v1",
+                TIMELINE_TEMPLATE,
                 json!({"filters":filters,"from":from,"to":to}),
                 false,
             )
@@ -780,7 +809,7 @@ impl App {
         Ok(envelope(
             messages,
             "Resolved source times are displayed as extracted facts requiring review, not operational confirmation",
-            json!({"dataset":"canonical","timelineItems":items,"reviewItems":review,"from":from,"to":to,"windowLimited":hits.len()>100||search_limited,"messageLimit":100}),
+            json!({"dataset":"canonical","executedMode":executed_mode,"timelineItems":items,"reviewItems":review,"from":from,"to":to,"windowLimited":hits.len()>100||search_limited,"messageLimit":100}),
         ))
     }
     pub async fn source_status(&self) -> Result<Value> {
@@ -885,6 +914,12 @@ pub struct Filters {
     pub issued_to: Option<String>,
     pub unassigned_only: bool,
     pub no_commands: bool,
+    pub casualty_serials: Vec<String>,
+    pub casualty_uics: Vec<String>,
+    pub casualty_categories: Vec<String>,
+    pub casualty_report_types: Vec<String>,
+    pub casualty_eics: Vec<String>,
+    pub casualty_identifiers: Vec<String>,
 }
 impl Filters {
     pub fn validate(&self) -> Result<Value> {
@@ -894,6 +929,12 @@ impl Filters {
             ("type", &self.message_types),
             ("originator", &self.originators),
             ("security.classification", &self.classifications),
+            ("casualty.serial", &self.casualty_serials),
+            ("casualty.reporting_uic", &self.casualty_uics),
+            ("casualty.category", &self.casualty_categories),
+            ("casualty.report_type", &self.casualty_report_types),
+            ("casualty.eic", &self.casualty_eics),
+            ("casualty.identifiers", &self.casualty_identifiers),
         ] {
             if values.len() > 32 || values.iter().any(|v| v.trim().is_empty() || v.len() > 256) {
                 return Err(Error::invalid("Invalid metadata filter bounds"));
@@ -963,6 +1004,27 @@ impl Filters {
                 .classifications
                 .iter()
                 .any(|t| core["security"]["classification"] == *t)
+        {
+            return Ok(false);
+        }
+        for (field, values) in [
+            ("serial", &self.casualty_serials),
+            ("reporting_uic", &self.casualty_uics),
+            ("category", &self.casualty_categories),
+            ("report_type", &self.casualty_report_types),
+            ("eic", &self.casualty_eics),
+        ] {
+            if !values.is_empty() && !values.iter().any(|v| core["casualty"][field] == *v) {
+                return Ok(false);
+            }
+        }
+        if !self.casualty_identifiers.is_empty()
+            && !core["casualty"]["identifiers"]
+                .as_array()
+                .is_some_and(|ids| {
+                    ids.iter()
+                        .any(|id| self.casualty_identifiers.iter().any(|v| id == v))
+                })
         {
             return Ok(false);
         }

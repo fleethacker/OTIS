@@ -2,7 +2,7 @@ common:
   domain: uds.dev
   host: parse-command
   clientId: parse-command
-  allowedGroups: [/Parse Command/Users, /Parse Command/Admin]
+  allowedGroups: [/Parse Command/Admin, /Parse Command/Viewer]
   storageClass: ""
   imapHost: ""
   imapPort: 993
@@ -17,7 +17,7 @@ config:
   resources:
     requests: {cpu: 500m, memory: 1536Mi}
     limits: {cpu: "2", memory: 3Gi}
-  jvm: -Xms512m -Xmx512m
+  jvm: -Xms1g -Xmx1g
   bootstrapResources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "1", memory: 256Mi}

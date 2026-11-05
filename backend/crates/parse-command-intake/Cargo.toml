@@ -10,6 +10,7 @@ parse-command-state = { path = "../parse-command-state" }
 parse-command-types.workspace = true
 parse-command-parser-api.workspace = true
 parse-command-core = { path = "../parse-command-core" }
+parse-command-casrep = { path = "../parse-command-casrep" }
 parse-command-optask = { path = "../parse-command-optask" }
 serde.workspace = true
 serde_json.workspace = true
@@ -19,9 +20,9 @@ imap-proto = "=0.16.7"
 nom = "=7.1.3"
 base64 = "=0.22.1"
 mailparse = "=0.16.1"
+ctrlc = { version = "=3.5.2", features = ["termination"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring", "tls12"] }
 webpki-roots = "=1.0.11"
-ctrlc = { version = "=3.5.2", features = ["termination"] }
 
 [lints]
 workspace = true

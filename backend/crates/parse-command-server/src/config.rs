@@ -33,6 +33,7 @@ impl Config {
         crate::station::required()?;
         let get = |key: &str, default: &str| std::env::var(key).unwrap_or_else(|_| default.into());
         let auth = crate::auth::Config::load()?;
+        let profile = get("PARSE_COMMAND_DEPLOYMENT_PROFILE", "local");
         let search = get("PARSE_COMMAND_OPENSEARCH_URL", "http://opensearch:9200");
         let url =
             reqwest::Url::parse(&search).map_err(|_| Error::config("invalid search endpoint"))?;
@@ -60,6 +61,14 @@ impl Config {
         let mut intake = parse_command_intake::config::Config::load(path)
             .map_err(|_| Error::config("invalid intake configuration"))?;
         configure_demo(&mut intake, &get("PARSE_COMMAND_WATCHDESK_DEMO", ""))?;
+        validate_deployment_profile(
+            &profile,
+            &auth.mode,
+            &get("PARSE_COMMAND_SEARCH_SECURITY_POLICY", ""),
+            intake.transport,
+            &search,
+            &intake.opensearch_url,
+        )?;
         Ok(Self {
             intake,
             search: search.trim_end_matches('/').into(),
@@ -84,9 +93,127 @@ impl Config {
     }
 }
 
+fn validate_deployment_profile(
+    profile: &str,
+    auth_mode: &str,
+    search_policy: &str,
+    mail_transport: parse_command_intake::config::Transport,
+    search: &str,
+    custody_search: &str,
+) -> Result<()> {
+    use parse_command_intake::config::Transport;
+    match profile {
+        "local" => Ok(()),
+        "uds" => {
+            if auth_mode != "oidc" || search_policy != "uds_mesh_mtls" {
+                return Err(Error::config(
+                    "UDS requires native OIDC and explicit uds_mesh_mtls search security policy",
+                ));
+            }
+            if !matches!(mail_transport, Transport::Tls) {
+                return Err(Error::config("UDS deployment requires verified IMAP TLS"));
+            }
+            if search.trim_end_matches('/') != custody_search.trim_end_matches('/') {
+                return Err(Error::config(
+                    "UDS custody and application must use the same search endpoint",
+                ));
+            }
+            Ok(())
+        }
+        _ => Err(Error::config("deployment profile must be local or uds")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parse_command_intake::config::Transport;
+
+    #[test]
+    fn uds_requires_native_identity_mesh_and_verified_mail_transport() {
+        let endpoint = "http://opensearch:9200";
+        assert!(
+            validate_deployment_profile(
+                "uds",
+                "oidc",
+                "uds_mesh_mtls",
+                Transport::Tls,
+                endpoint,
+                endpoint
+            )
+            .is_ok()
+        );
+        for (auth, policy, mail) in [
+            ("local_demo", "uds_mesh_mtls", Transport::Tls),
+            ("oidc", "", Transport::Tls),
+            ("oidc", "local_demo", Transport::Tls),
+            ("oidc", "uds_mesh_mtls", Transport::PlaintextDemo),
+        ] {
+            assert!(
+                validate_deployment_profile("uds", auth, policy, mail, endpoint, endpoint).is_err()
+            );
+        }
+        // The writer lease and custody mutations must not target different stores.
+        assert!(
+            validate_deployment_profile(
+                "uds",
+                "oidc",
+                "uds_mesh_mtls",
+                Transport::Tls,
+                endpoint,
+                "http://127.0.0.1:9200"
+            )
+            .is_err()
+        );
+        assert!(
+            validate_deployment_profile(
+                "uds",
+                "oidc",
+                "uds_mesh_mtls",
+                Transport::Tls,
+                endpoint,
+                "http://opensearch:9200/"
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn unknown_profile_fails_and_local_oidc_retains_compose_compatibility() {
+        let endpoint = "http://opensearch:9200";
+        assert!(
+            validate_deployment_profile(
+                "unknown",
+                "oidc",
+                "uds_mesh_mtls",
+                Transport::Tls,
+                endpoint,
+                endpoint
+            )
+            .is_err()
+        );
+        for auth in ["local_demo", "oidc"] {
+            assert!(
+                validate_deployment_profile(
+                    "local",
+                    auth,
+                    "",
+                    Transport::PlaintextDemo,
+                    endpoint,
+                    endpoint
+                )
+                .is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn watchdesk_demo_requires_explicit_opt_in() {
+        assert!(!demo_flag("", false).unwrap());
+        assert!(demo_flag("true", false).unwrap());
+        assert!(!demo_flag("false", true).unwrap());
+        assert!(demo_flag("typo", false).is_err());
+    }
     #[test]
     fn watchdesk_override_is_explicit_and_revalidates_intake() {
         assert!(!demo_flag("", false).unwrap());

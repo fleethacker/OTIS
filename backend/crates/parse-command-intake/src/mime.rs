@@ -42,7 +42,10 @@ pub fn decode(raw: &[u8], limits: MimeLimits) -> Result<Email> {
         return Err(IntakeError("mime_plain_body_count"));
     }
     let (body, provenance) = candidates.pop().ok_or(IntakeError("mime_plain_body"))?;
-    if !body.starts_with("MSGID") {
+    if !["MSGID/", "EXER/", "OPER/"]
+        .iter()
+        .any(|prefix| body.starts_with(prefix))
+    {
         return Err(IntakeError("mime_usmtf_framing"));
     }
     use base64::Engine;

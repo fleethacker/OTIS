@@ -26,6 +26,10 @@ export interface SourceRequest {
   filters?: {
     commandIds?: string[];
     messageTypes?: string[];
+    casualtySerials?: string[];
+    casualtyUics?: string[];
+    casualtyCategories?: string[];
+    casualtyReportTypes?: string[];
     originators?: string[];
     classifications?: string[];
     issuedFrom?: string;

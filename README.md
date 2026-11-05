@@ -1,174 +1,301 @@
-# OTIS - Operational Tasking Integration System
+<p align="center">
+  <img src="apps/watch-desk/docs/branding/otis/otis-patch-master.png" alt="OTIS — Keeping the Watch" width="320">
+</p>
 
-**Keeping the Watch.** Built for FleetHacker 2026; originally Parse Command.
+<h1 align="center">OTIS</h1>
+<p align="center"><strong>Operational Tasking Integration System · Keeping the Watch</strong></p>
 
-## Overview
-Warfare commanders disseminate operational orders via dense, formatted telecommunication messages. Watchstanders must parse hundreds of lines of text to determine when their ship is scheduled for events.
+OTIS turns formatted naval messages into searchable tasking and a consolidated
+schedule, helping watchstanders find what matters to their command and trace it
+back to the source.
 
-### Requirements
-A parser that takes raw formatted military text (USMTF format), extracts frequency plans, crypto change-over windows, and flight quarters event times, and plots them on a consolidated visual timeline.
+Built by the **Parse Command** team at **FleetHacker2026**, a **Task Force Hopper
+Hackathon Event**.
 
-Must:
+[View the briefing](https://fleethacker.github.io/OTIS/) ·
+[Documentation](docs/README.md) · [Architecture](docs/integration/architecture.md) ·
+[Operations](docs/integration/combined-stack.md) · [UDS deployment](#uds-deployment)
 
-- Extract tasking/events/correspondence for specified command(s)
-- Identify proper coordinating POC within Command C2 (CO/XO/OPS/CHENG/etc.) Nice-To-Have:
-- Generates draft response (in proper format) and has ready for review to POC
-- Has access to and is aware of Command schedule identifying conflicts early
+## Capabilities
 
+- **Monitor an inbox:** continuously ingest SMTP-delivered messages over IMAP,
+  retain original email, deduplicate message bodies, and retry interrupted work.
+- **Parse operational tasking:** extract activities, frequency plans, crypto
+  changeover times, reporting requirements, locations, and source points of contact
+  from supported OPTASK layouts.
+- **Read casualty reports:** parse CASREP INITIAL, UPDATE, CORRECT and CANCEL reports,
+  including equipment, repair estimates, assistance and parts; retain linked source history.
+- **Search message traffic:** combine keyword and local semantic search through
+  OpenSearch, with filters for command, message type, originator, and issue date.
+- **Build the watch picture:** browse day, week, and month schedules in Zulu or
+  local time; keep incomplete times and unresolved facts visible for review.
+- **Plan the watch:** assign station and department responsibilities, narrow message
+  relevance by account, and review a frozen briefing of traffic available at login.
+- **Review the evidence:** inspect raw messages, structured source sets, extraction
+  evidence, and processing history from the message reader.
+- **Prepare a response:** generate and privately save acknowledgement drafts for
+  review. Drafts remain unsent; SMTP response delivery is not implemented.
+- **Track new traffic:** receive in-app notifications for newly published messages
+  and intake/publication failures and recoveries.
+- **Run locally:** React UI, Rust application/parser server, and OpenSearch with
+  CPU-only embeddings. Prepared runtime assets support disconnected operation;
+  optional Keycloak OIDC provides shared-deployment authentication.
 
-### Expected Deliverables
-A tool that seamlessly converts mock USMTF raw text into a synchronized 24-hour visual schedule for watchstanders and shipboard leaders.
+## Quick start
 
-## Judge briefing
+Use **Docker Compose 2.24.4+**, **Python 3.9+**, and at least **4 GB of Docker
+memory**. The committed native dependency lock is validated on **Linux ARM64**;
+other architectures need the preparation described in the
+[search runbook](backend/search/README.md). Linux hosts also need
+`vm.max_map_count` set to at least `262144`.
 
-The animated judge-facing slick sheet is in [`site/index.html`](site/index.html).
-See the [GitHub Pages guide](docs/integration/github-pages.md) for local preview,
-publishing setup, and the deployment workflow.
+From the repository root, prepare the local search assets while connected:
 
-## Local application stack
+```sh
+python3 -m venv /tmp/otis-search-venv
+/tmp/otis-search-venv/bin/pip install -r backend/search/requirements.lock
+/tmp/otis-search-venv/bin/python backend/search/prepare_assets.py
+python3 backend/search/prepare_native.py --arch arm64
+```
 
-The **OTIS** app lives in [`apps/watch-desk/`](apps/watch-desk/), retaining the
-original Watch Desk import directory. Approved mascot artwork and branding
-assets are documented in [the OTIS brand guide](apps/watch-desk/docs/branding/otis/README.md).
-Rust serves the application API, private drafts/preparations and continuous
-IMAP-to-OpenSearch publication. A lightweight static/proxy web container serves
-React. The Go implementation remains as reference source. See the
-[combined-stack runbook](docs/integration/combined-stack.md) and
-[frontend API and search templates](docs/integration/rust-application-api.md).
-Admins open settings from the header gear. Native Keycloak OIDC, per-user
-preferences and hidden OpenSearch state are described in the
-[settings and SSO guide](docs/integration/settings-oidc.md). Existing SQLite
-deployments require the documented snapshot migration before replacement.
-
-Prepare the local model/native assets first using the
-[search preparation runbook](backend/search/README.md#connected-preparation).
-The committed native dependency lock is validated on Linux ARM64. Runtime images
-and the model archive can then be transferred to an offline host.
-
-Build and start OTIS, `parse-command-server` and OpenSearch (Docker Compose 2.24.4+ required):
+Start the demo mailbox, build the application stack, and provision the local model:
 
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
-docker compose up --build -d --wait
-curl http://127.0.0.1:8080/api/health
-curl http://localhost:9200
+docker compose up --build -d --wait --wait-timeout 180 opensearch
+/tmp/otis-search-venv/bin/python backend/search/deploy.py
+docker compose up --build -d --wait --wait-timeout 180 server web
+curl --fail http://localhost:8080/api/health
 ```
 
-Open [OTIS](http://127.0.0.1:8080). This local-demo profile reads parsed
-OpenSearch messages through Rust. Search combines BM25 and local MiniLM semantic
-retrieval using OpenSearch reciprocal rank fusion. Full structured/raw content
-and audit evidence load on demand. Existing legacy records and private history
-are preserved by the optional migration; they are not substituted for indexed
-messages. The SMTP/IMAP demo remains a separate environment.
+Open **[OTIS at localhost:8080](http://localhost:8080)**. The default profile uses
+local demo authentication. OpenSearch is available at `http://localhost:9200`;
+SMTP and IMAP use loopback ports `1025` and `1143`. This profile uses plaintext
+mail and disables OpenSearch authentication/TLS for local development.
 
-The prepared OpenSearch 3.9.0 image runs at `http://localhost:9200` with a 512 MB JVM heap and a
-persistent Docker volume. Authentication and TLS are disabled for local development;
-both published service ports bind to `127.0.0.1`. Containers share a private bridge
-network; assets are bundled for runtime use without external CDNs. Optional port
-and mock-auth overrides are in [`.env.example`](.env.example).
-
-Allocate at least 4 GB of memory to Docker. On Linux, set `vm.max_map_count` to at
-least `262144` on the Docker host, as described in the
-[OpenSearch Docker setup guide](https://docs.opensearch.org/latest/install-and-configure/install-opensearch/docker/).
-
-Stop with `docker compose down`; indexed data, custody and private app state remain
-in the OpenSearch data volume. Retain old SQLite volumes for migration/rollback.
-Run only the search service with
-`docker compose up -d --wait opensearch`.
-
-### Demo email inbox
-
-The demo SMTP/IMAP mailbox is a separate environment under `demo/`.
-The root Compose stack contains only the UI (`web`), OpenSearch and Rust server
-(`server`, container `parse-command-server`). Start the demo environment first:
+Send a UTF-8 test message whose body starts with `MSGID/`, `EXER/` or `OPER/`:
 
 ```sh
-docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
-docker compose up --build -d --wait --wait-timeout 180
-docker compose exec -T server parse-command-intake status /etc/parse-command/config.json
-python3 demo/mail.py send ../OPTASK_Messages/*.txt
+python3 demo/mail.py send /absolute/path/to/message.txt \
+  --subject 'SUBJ: DEMO OPTASK exercise'
+python3 demo/mail.py inbox --limit 20
 ```
 
-The server connects to `mailserver:143` on the demo environment's external
-`parse-command-demo_mail` network. SMTP/IMAP bind to loopback ports 1025 and 1143.
-Its hidden custody index and resource limits belong to the application stack. The
-executable/crate remains `parse-command-intake`; its deployed image is
-`parse-command-server:local`. Stop the standalone worker before adopting its
-custody state through the [migration procedure](docs/integration/settings-oidc.md#storage-and-migration).
-See the [stack guide](docs/integration/combined-stack.md).
-`compose.intake.yml` is an empty compatibility file; no overlay is needed.
+Messages are ingested automatically. For historical examples, navigate the
+calendar to the source message dates. See the [mail demo guide](demo/README.md)
+for mailbox details and the [test-data guide](test-data/README.md) for sample
+provenance and usage. Startup does not automatically send sample messages.
+Station assignment, responsibility scope, login briefings and explicit fictional
+demo setup are described in [watch planning](docs/integration/main3-sync.md).
 
-## Architecture
-
-| Location | Responsibility |
-| --- | --- |
-| `apps/watch-desk/` | React UI, static/proxy runtime, original Go reference source, bundled Ark dependencies and handoff guidance |
-| `backend/` | Rust parser SDK, OPTASK contribution, durable IMAP intake, types and tests |
-| `demo/` | SMTP/IMAP demo server and local mail helper |
-| `test-data/` | Shared naval message collections on Thomas-Branch, with provenance and explicit-use guidance |
-| `docs/` | Canonical ICD/schemas/mappings, original engineering planning, integration analysis and decisions |
-| `.pdlc-docs/` | Larger-project product context |
-| `apps/watch-desk/.ark-handoff/` | Original approved UI context and export provenance |
-| `docker-compose.yml` | Unified UI, server and OpenSearch stack with persistent volumes |
-| `compose.intake.yml` | Compatibility overlay; server is now in the root stack |
-
-See [container operation and offline preparation](docs/integration/ark-export.md#docker-compose-operation)
-and [validation results](docs/integration/validation.md). Follow root
-[`AGENTS.md`](AGENTS.md) and nested application guidance when making changes.
-
-## Parser contract
-
-The [parsed-message ICD](docs/ICD.md) defines compact core data, batched OpenSearch audit records, and the interface for teams contributing Rust parser crates. [JSON Schemas](docs/schemas/README.md), [UI test index mappings](docs/opensearch/README.md), and the [external-fixture validator](docs/tools/validate_samples.py) accompany the contract.
-
-Raw and parsed OPTASK acceptance data are kept outside this Git folder at `../OPTASK_Messages` and `../OPTASK_Messages/parsed`. The parsed directory's README contains fixture-load instructions. The OPTASK acceptance corpus is not published in this repository.
-
-On `Thomas-Branch`, the project owner authorized sharing the separate naval
-message collections under [`test-data/messages/`](test-data/messages/). See
-[`test-data/README.md`](test-data/README.md) for their original locations,
-preserved revision, usage and unverified dataset status. These files are explicit
-test inputs; startup does not load or send them automatically.
+Stop the application with `docker compose down`, then stop the mailbox with
+`docker compose -f demo/docker-compose.yml down`. Both retain persistent volumes.
+For offline transfers, restarts, or existing-state migration, follow the
+[stack runbook](docs/integration/combined-stack.md) and
+[settings and migration guide](docs/integration/settings-oidc.md).
 
 ## Supported OPTASK messages
 
-The Rust implementation is in [`backend/`](backend/README.md). The following exact message identifiers have end-to-end regression coverage against the supplied examples and their approved parsed documents:
+Example-based regression coverage includes **AAW, ASUW, ASW, COMMS, COP-CTP, EW,
+GENERAL, IM, LINK, LINK ID SUPP, MCM, MINING, NUC, and RAS**. See the
+[Rust backend guide](backend/README.md) for parser implementation and verification.
 
-| Message | Tested declared version | Tabler calendar icon (`react-icons/tb`) |
-| --- | --- | --- |
-| OPTASK AAW | B.1.01.13 | `TbRadar` |
-| OPTASK ASUW | B.1.01.12 | `TbShip` |
-| OPTASK ASW | B.1.01.12 | `TbSubmarine` |
-| OPTASK COMMS | B.1.01.12 | `TbRadio` |
-| OPTASK COP-CTP | B.1.01.03 | `TbMap2` |
-| OPTASK EW | B.1.01.12 | `TbWaveSine` |
-| OPTASK GENERAL | B.1.01.12 | `TbClipboardList` |
-| OPTASK IM | B.1.01.12 | `TbDatabase` |
-| OPTASK LINK | B.1.02.04 | `TbLink` |
-| OPTASK LINK ID SUPP | B.1.01.12 | `TbIdBadge2` |
-| OPTASK MCM | B.1.01.12 | `TbShieldCheck` |
-| OPTASK MINING | B.1.01.12 | `TbBomb` |
-| OPTASK NUC | B.1.01.12 | `TbRadioactive` |
-| OPTASK RAS | B.1.01.12 | `TbGasStation` |
+**CASREP** is also supported as a separate message family. See the
+[CASREP guide](docs/integration/casrep.md) for report actions, indexing and search.
+GENADMIN remains a separate unsupported type.
 
-This coverage reproduces all approved example facts: 13 periods, 27 frequencies, 25 activities and 8 contacts. Extraction includes frequency plans, crypto changeover points, communications windows/checks, replenishment rendezvous, explicit task records, reporting requirements and source POCs where present. Detailed evidence stays in separate audit documents.
+Support applies to the tested layouts, rather than every USMTF edition or message
+type. Extracted tasking requires human review, and missing or uncertain values
+remain explicit. Production Outlook/Exchange authentication and TLS integration
+require separate implementation and acceptance; the demo exercises SMTP/IMAP.
 
-Support is specific to these tested layouts and extraction rules. Output remains marked `partial` because unprojected records are preserved for review; the example-based profiles do not establish full edition compliance. Missing dates and unresolved command/C2 mappings remain explicit. The parser performs no runtime network or model calls. UI integration lives in [`apps/watch-desk/ui/`](apps/watch-desk/ui/).
+## Repository guide
 
-## Initial inbox test
+| Path | Contents |
+| --- | --- |
+| [`apps/watch-desk/`](apps/watch-desk/) | OTIS React UI, branding, and original Go reference source |
+| [`backend/`](backend/) | Rust parser SDK, application server, durable IMAP intake, and local search tooling |
+| [`demo/`](demo/) | SMTP/IMAP demo mailbox and message helper |
+| [`test-data/`](test-data/) | Shared test messages and provenance |
+| [`docs/`](docs/) | Data contracts, schemas, search mappings, and operating guides |
+| [`site/`](site/) | GitHub Pages briefing |
 
-The [intake runbook](backend/INTAKE.md) covers starting the demo monitor, inspecting per-email custody, restart/retry behavior and loading isolated OpenSearch UI test indices. The worker retains original email bytes and commits parser results with a durable audit outbox before marking a receipt parsed. Duplicate bodies share a projection; IMAP server receipt time selects the newest subject and differences remain flagged.
+Parser contributors should start with the [parsed-message ICD](docs/ICD.md)
+and [JSON Schemas](docs/schemas/README.md). Operational acceptance examples and
+manual-derived knowledge remain outside Git; see the backend and test-data guides.
 
-The [ICD 1.2.0](docs/ICD.md) includes bounded recurrence and optional geographic locations: points, channel endpoint lines and area polygons, with WGS84 as the approved default only when a datum is absent. Source evidence remains in audit. The demo worker monitors IMAP continuously; verified implicit IMAP TLS is available for approved mailboxes. Production Exchange-specific authentication still needs acceptance.
+## UDS deployment
 
-## This branch update
+Deploy the UDS platform first, then install the OTIS application bundle into it.
+The application bundle contains the UI, Rust server, OpenSearch and local model
+bootstrap. It requires **Linux ARM64** nodes and **UDS Core 1.14.3** with Keycloak.
+Use **UDS CLI 0.38.0** and its embedded **Zarf 0.86.0** (`uds zarf`), plus
+`kubectl`, **Python 3.14+** and Helm. Building packages also requires Git and
+Docker/BuildKit with Linux ARM64 support. Pins are recorded in
+[`deploy/uds/versions.json`](deploy/uds/versions.json).
 
-The supplied `main-3` is the baseline. This update carries recurring calendar
-activities, watch context/turnover, station assignments and responsibilities,
-shift briefings and related-message search into its native OIDC, settings and
-hidden OpenSearch storage. Admin/Viewer permissions, per-user IANA timezone and
-activity-driven session renewal remain authoritative. Drafts stay unsent.
+The current native OIDC profile still requires a fresh migration, browser and
+recovery acceptance rehearsal. Read the [validation record](deploy/uds/VALIDATION.md)
+before choosing a release; earlier live results cover the previous architecture.
+The [full UDS runbook](deploy/uds/README.md) covers identity, storage, migration,
+backup and recovery in detail. Run the commands below from the repository root.
 
-Start with [the integration record](docs/integration/main3-sync.md) for changes,
-verification and applying the contribution patch in a real Git clone. The
-[UDS packaging](deploy/uds/README.md) now uses native OIDC. The optional
-[fictional watch demo](compose.watchdesk-demo.yml) explicitly enables demonstration
-roster/defaults; it does not reload mail or reset data.
+### 1. Deploy the UDS platform
+
+For an existing platform, have its operator confirm Core 1.14.3 with either
+`core-base` + `core-identity-authorization` or the standard `core` package, then
+continue to application packaging below. Nodes need working DNS, a default
+StorageClass (or an explicit application override), storage compatible with
+`fsGroup`, and `vm.max_map_count >= 262144`.
+
+For a **new isolated local ARM64 environment**, use the pinned official
+`k3d-core-slim-dev` bundle. Allocate at least 8 CPUs, 16 GiB Docker memory and
+50 GiB free disk for the local validation profile, with ports 80/443 available.
+This slim platform includes base and identity services; see the
+[local profile](deploy/uds/profiles/local-arm64.json) for its scope.
+
+On a connected preparation machine, inspect and download the platform:
+
+```sh
+OTIS_PLATFORM_REF=oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.14.3
+OTIS_PLATFORM_DIR=/absolute/path/to/platform
+mkdir -p "$OTIS_PLATFORM_DIR"
+uds inspect "$OTIS_PLATFORM_REF" --architecture arm64
+uds pull "$OTIS_PLATFORM_REF" --architecture arm64 --output "$OTIS_PLATFORM_DIR"
+```
+
+Transfer the archive and pinned tools to the target if deploying offline. Inspect
+the platform variables, then deploy **once to an unused cluster name**:
+
+```sh
+uds inspect "$OTIS_PLATFORM_DIR/uds-bundle-k3d-core-slim-dev-arm64-1.14.3.tar.zst" \
+  --architecture arm64 --list-variables
+uds deploy "$OTIS_PLATFORM_DIR/uds-bundle-k3d-core-slim-dev-arm64-1.14.3.tar.zst" \
+  --architecture arm64 --set CLUSTER_NAME=parse-command-issue9
+```
+
+**The upstream K3d package deletes a same-named cluster. Never rerun this platform
+deployment over retained application data.** Change `CLUSTER_NAME` if that name
+already exists. Complete platform DNS and certificate trust for `uds.dev`,
+including `sso.uds.dev` and the application hostname, before installing OTIS.
+
+### 2. Build the OTIS application packages
+
+On the connected build machine, choose a new release version and the target
+namespace. The namespace is embedded in the packages and must match deployment
+configuration; changing it requires a rebuild. If you already have a release,
+transfer and verify it as described below, then continue to target configuration.
+
+```sh
+OTIS_VERSION=0.1.0-dev.1
+OTIS_NAMESPACE=parse-command
+python3 -m unittest discover -s deploy/uds/tools/tests -v
+python3 deploy/uds/tools/validate.py
+python3 deploy/uds/tools/build.py --version "$OTIS_VERSION" \
+  --namespace "$OTIS_NAMESPACE" --prepare-assets
+OTIS_RELEASE="deploy/uds/.artifacts/$OTIS_VERSION"
+python3 deploy/uds/tools/verify_artifacts.py --release "$OTIS_RELEASE"
+```
+
+The ignored release directory contains three Zarf packages under `packages/`,
+`uds-bundle-parse-command-arm64-<version>.tar.zst`, `artifact-lock.json` and
+`SHA256SUMS`. It includes all application images, charts, model and native
+libraries needed at runtime. Completed versions cannot be overwritten.
+
+The builder uses a loopback registry at `127.0.0.1:5119`; it does not publish to
+a public registry. When finished, stop it with
+`docker stop parse-command-issue9-registry`. Before a later build, inspect the
+stopped container and explicitly restart it with
+`docker start parse-command-issue9-registry`.
+
+For offline deployment, transfer the complete release directory, the tracked
+files under `deploy/uds/` (preserving their paths), and pinned operator tools to
+the target. Set `OTIS_RELEASE` to the transferred release directory there and
+`OTIS_VERSION` to its version. Verify its `SHA256SUMS` after transfer
+(`sha256sum -c SHA256SUMS` on Linux, or `shasum -a 256 -c SHA256SUMS` on macOS,
+from inside that directory). Development bundles are unsigned; team releases
+require the approved signing and trusted-key distribution process in the runbook.
+
+### 3. Configure the target and provision secrets
+
+For a fresh install, copy the configuration example, then edit it for the target:
+
+```sh
+cp deploy/uds/uds-config.example.yaml deploy/uds/uds-config.yaml
+```
+
+Set `shared.NAMESPACE` to the built namespace. Under `shared.COMMON`, configure
+`domain`, `host`, `clientId`, storage, the real `imapHost`/`imapPort`/`imapCidr`,
+and private Keycloak routing. Set matching mailbox host/port and the real username
+under `shared.SERVER.intake`. The example `.invalid` endpoint cannot be deployed.
+Keep implicit TLS on port 993 unless your verified TLS mailbox uses another port.
+
+Provision Keycloak users in `/Parse Command/Admin` or `/Parse Command/Viewer`;
+keep `COMMON.allowedGroups` aligned with `SERVER.adminGroup`/`viewerGroup`.
+The UDS config package registers the confidential client and creates its Secret.
+Rust handles native OIDC at `https://<host>.<domain>/auth/callback`; leave
+Authservice interception disabled. Both browser and server must reach the trusted
+HTTPS issuer through the configured DNS/private gateway and permitted egress.
+
+Select the target context explicitly (`k3d-parse-command-issue9` for the local
+example) and create a dedicated namespace for a fresh install:
+
+```sh
+OTIS_CONTEXT=k3d-parse-command-issue9
+OTIS_NAMESPACE=parse-command
+kubectl --context "$OTIS_CONTEXT" get nodes
+kubectl --context "$OTIS_CONTEXT" create namespace "$OTIS_NAMESPACE"
+```
+
+Prepare protected files outside Git and release archives, using mode 0600:
+the mailbox password, its trusted CA chain, the issuer CA chain, and an exact
+**32-byte binary session encryption key**. For a fresh install, generate the key
+once with `openssl rand -out /secure/otis/session-key 32` in an existing protected
+directory. Retain and back up that key across upgrades.
+
+Create the Secrets using the chart's default names (adjust names if overridden):
+
+```sh
+kubectl --context "$OTIS_CONTEXT" -n "$OTIS_NAMESPACE" create secret generic parse-command-imap \
+  --from-file=password=/secure/otis/imap-password \
+  --from-file=ca.crt=/secure/otis/mail-ca.crt
+kubectl --context "$OTIS_CONTEXT" -n "$OTIS_NAMESPACE" create secret generic parse-command-sso \
+  --from-file=session-key=/secure/otis/session-key \
+  --from-file=ca.pem=/secure/otis/issuer-ca.pem
+```
+
+Reuse the namespace and retained Secrets for upgrades. Existing SQLite state
+requires the [state adoption and recovery procedure](deploy/uds/README.md#state-adoption-and-recovery)
+before starting the new workers.
+
+### 4. Deploy and verify the application bundle
+
+With `OTIS_VERSION`, `OTIS_RELEASE`, `OTIS_CONTEXT` and the edited config set on
+the target, validate and install the complete bundle:
+
+```sh
+python3 deploy/uds/tools/validate.py --config deploy/uds/uds-config.yaml
+python3 deploy/uds/tools/verify_artifacts.py --release "$OTIS_RELEASE"
+python3 deploy/uds/tools/deploy.py --context "$OTIS_CONTEXT" \
+  --config deploy/uds/uds-config.yaml \
+  --bundle "$OTIS_RELEASE/uds-bundle-parse-command-arm64-$OTIS_VERSION.tar.zst"
+kubectl --context "$OTIS_CONTEXT" -n "$OTIS_NAMESPACE" get packages,pods,pvc
+```
+
+The installer checks the bundle checksum, namespace, ARM64 nodes, pinned Core
+and required Secret keys, deploys the packages in order, and waits for workload
+rollouts. It uses the explicit context without changing your current context.
+
+Open **[OTIS at parse-command.uds.dev](https://parse-command.uds.dev)** for the
+default host/domain, or your configured HTTPS origin, and sign in through
+Keycloak. Verify Package readiness and ready mesh sidecars, then exercise a
+synthetic message through the TLS mailbox, source/detail/audit views, keyword,
+semantic and hybrid search, and save/reopen a private draft. Use
+`python3 deploy/uds/tools/smoke.py --help` for the authenticated mail/API check.
+Health and ready pods alone do not prove the application workflow; complete the
+[native acceptance gates](deploy/uds/README.md#install-and-verify-a-separate-target).
+
+Offline runtime still needs DNS, the private Zarf registry, Keycloak and the
+configured mailbox. Back up OpenSearch state, the session key, configuration and
+artifact lock before upgrades. Preserve search and legacy claims; never delete
+namespaces, clusters or PVCs as a recovery shortcut.

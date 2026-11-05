@@ -35,7 +35,13 @@ def snapshot(path):
     return tables
 
 
-def owner(name):
+def migrated_owner(name, preserve_oidc=False):
+    if name.lower().startswith('oidc:'):
+        if not re.fullmatch(r'oidc:[0-9a-f]{64}', name):
+            raise ValueError('Malformed issuer-scoped OIDC owner')
+        if not preserve_oidc:
+            raise ValueError('OIDC owners require reviewed provenance and --preserve-oidc-owners')
+        return name
     return 'demo:' + name
 
 
@@ -52,7 +58,8 @@ def validate_tables(private, custody):
             raise ValueError('Unsupported ' + label + ' tables; migration requires an explicit mapping: ' + ', '.join(unknown))
 
 
-def account_records(private, users):
+def account_records(private, users, preserve_oidc=False):
+    owner = lambda name: migrated_owner(name, preserve_oidc)
     accounts = {r['id']: r for r in private.get('accounts', [])}
     if len(accounts) != len(private.get('accounts', [])):
         raise ValueError('Duplicate account identity')
@@ -64,7 +71,8 @@ def account_records(private, users):
             raise ValueError('Unowned private record requires explicit migration mapping')
         row = accounts.get(name)
         role = 'admin' if name == 'dev-admin' else 'viewer'
-        payload = dict(username=name, email='', groups=[role], enabled=True, epoch=0, timezone='UTC', identity_type='demo', created_at='', last_login='')
+        oidc = owner(name).startswith('oidc:')
+        payload = dict(username=name, email='', groups=[] if oidc else [role], enabled=True, epoch=0, timezone='UTC', identity_type='oidc' if oidc else 'demo', created_at='', last_login='')
         if row is not None:
             # Native OIDC derives owners differently. Never reclassify a provider
             # identity as a local demo user or assign ownership from an email.
@@ -183,9 +191,10 @@ def availability_record(private, custody):
     return value
 
 
-def convert(private, custody):
+def convert(private, custody, preserve_oidc=False):
     validate_tables(private, custody)
     state, queue = [], []
+    owner = lambda name: migrated_owner(name, preserve_oidc)
     add = lambda kind, key, payload, **kw: state.append(record(kind, key, payload, **kw))
     put = lambda kind, key, payload, **kw: queue.append(record(kind, key, payload, **kw))
     max_id = max([0] + [r['id'] for r in private.get('identities', [])] + [r['id'] for r in private.get('drafts', [])])
@@ -204,7 +213,7 @@ def convert(private, custody):
         row = preps.get((name, key), {})
         add('preparation', owner(name) + '\0' + key, {'fields_json': row.get('fields_json', '{}'), 'generated_text': row.get('generated_text', ''), 'acknowledged': bool(row.get('acknowledged', False)), 'history': histories[(name, key)]}, owner=owner(name), source=key)
     users = {r['owner'] for table in ['drafts', 'preparations', 'activity', 'notification_reads', 'notification_inboxes'] for r in private.get(table, [])}
-    state.extend(account_records(private, users))
+    state.extend(account_records(private, users, preserve_oidc))
     users |= {row['id'] for row in private.get('accounts', [])}
     for row in private.get('responsibility_profiles', []):
         if row['kind'] not in ('department', 'watch_role'):
@@ -331,10 +340,13 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--private',required=True);p.add_argument('--custody',required=True)
     p.add_argument('--url',default='http://127.0.0.1:9200');p.add_argument('--state-index',required=True);p.add_argument('--custody-index',required=True);p.add_argument('--apply',action='store_true')
+    p.add_argument('--preserve-oidc-owners', action='store_true', help='Preserve issuer-scoped oidc:<SHA256> owners only from reviewed, trusted UDS snapshots; never map by name/email')
     args=p.parse_args();private=snapshot(args.private);custody=snapshot(args.custody)
-    state,queue=convert(private,custody)
+    state,queue=convert(private,custody,preserve_oidc=args.preserve_oidc_owners)
     fingerprint=digest(pathlib.Path(args.private).read_bytes()+pathlib.Path(args.custody).read_bytes())
     report={'snapshot_sha256':fingerprint,'source_counts':{'private':{k:len(v) for k,v in private.items()},'custody':{k:len(v) for k,v in custody.items()}},'records':{'private':len(state),'custody':len(queue)},'content_sha256':{'private':digest(encoded(state)),'custody':digest(encoded(queue))},'invalidated':sorted(EXPIRED_PRIVATE), 'compatibility':['local demo platform_admin maps to admin; user/viewer map to viewer', 'native auth sessions and search windows must be recreated']}
+    if args.preserve_oidc_owners:
+        report['owner_policy'] = 'preserve_reviewed_oidc'
     if args.apply:
         target=Target(args.url)
         for index,rows in [(args.state_index,state),(args.custody_index,queue)]:

@@ -10,7 +10,7 @@ use axum::{
     extract::{Path, State},
     http::HeaderMap,
 };
-use parse_command_state::{Record, Store};
+use parse_command_state::Store;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc};
@@ -101,39 +101,137 @@ fn defaults(demo: bool) -> Result<Snapshot> {
         dismissed: Vec::new(),
     })
 }
-/// Suppress stored IDs outside the active roster without rewriting user data.
-fn visible(mut snapshot: Snapshot, demo: bool) -> Result<Snapshot> {
-    let roster = crate::commands::catalog(demo)?;
-    let known = |id: &str| roster.commands.iter().any(|c| c.id == id);
-    if !known(&snapshot.context.own_ship_id) && !snapshot.context.own_ship_id.is_empty() {
-        snapshot.context.own_ship_id.clear();
-        snapshot.confirmations.remove(&Field::OwnShipId);
+/// Native command settings are authoritative. Keep citation and confirmation
+/// metadata beside them in the same document so both settings interfaces use CAS.
+fn from_settings(mut snapshot: Snapshot, settings: &crate::settings::Settings) -> Snapshot {
+    let current = &snapshot.context;
+    for (field, changed) in [
+        (
+            Field::OwnShipId,
+            current.own_ship_id != settings.own_ship().unwrap_or_default(),
+        ),
+        (Field::ShipName, current.ship_name != settings.ship_name),
+        (
+            Field::OperationName,
+            current.operation_name != settings.operation_name,
+        ),
+        (
+            Field::GroupCommand,
+            current.group_command != settings.group_command,
+        ),
+        (
+            Field::DefaultShips,
+            current.default_ships != settings.default_ships,
+        ),
+        (
+            Field::TurnoverUtc,
+            current.turnover_utc != settings.turnover_utc,
+        ),
+    ] {
+        if changed {
+            snapshot.confirmations.remove(&field);
+        }
     }
-    let old = snapshot.context.default_ships.len();
+    snapshot.context = Context {
+        own_ship_id: settings.own_ship().unwrap_or_default().into(),
+        ship_name: settings.ship_name.clone(),
+        operation_name: settings.operation_name.clone(),
+        group_command: settings.group_command.clone(),
+        default_ships: settings.default_ships.clone(),
+        turnover_utc: settings.turnover_utc.clone(),
+    };
     snapshot
-        .context
-        .default_ships
-        .retain(|id| id == UNASSIGNED || id.strip_prefix("unit:").is_some_and(known));
-    if old != snapshot.context.default_ships.len() {
-        snapshot.confirmations.remove(&Field::DefaultShips);
-    }
-    Ok(snapshot)
 }
 pub async fn read(store: &Store, demo: bool) -> Result<Snapshot> {
-    let snapshot = if let Some(doc) = store.get("watch_context", "shared").await? {
+    let legacy = store.get("watch_context", "shared").await?;
+    let mut snapshot = if let Some(doc) = legacy {
         serde_json::from_value(doc.record.payload).map_err(|_| Error::unavailable())?
     } else {
         defaults(demo)?
     };
-    visible(snapshot, demo)
+    if let Some(doc) = store.get("settings", "shared").await? {
+        if let Some(metadata) = doc.record.payload.get("watch_context") {
+            snapshot =
+                serde_json::from_value(metadata.clone()).map_err(|_| Error::unavailable())?;
+        }
+        let settings = crate::settings::Settings::load(doc.record.payload["settings"].clone())?;
+        snapshot = from_settings(snapshot, &settings);
+        snapshot.dismissed = doc.record.payload["dismissed"]
+            .as_array()
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    Ok(snapshot)
 }
-fn values(field: Field, values: &[String], confirm: bool, demo: bool) -> Result<()> {
+/// Commit watch edits and evidence atomically with native settings and their audit.
+pub async fn save(
+    store: &Store,
+    mut snapshot: Snapshot,
+    before: &parse_command_state::Document,
+    actor: &str,
+) -> Result<Snapshot> {
+    let mut settings = crate::settings::Settings::load(before.record.payload["settings"].clone())?;
+    let own = &snapshot.context.own_ship_id;
+    if settings.own_ship().unwrap_or_default() != own {
+        if own.is_empty() {
+            settings.command_ids.clear();
+        } else {
+            settings.command_ids.retain(|id| id != own);
+            settings.command_ids.insert(0, own.clone());
+        }
+    }
+    settings.ship_name = snapshot.context.ship_name.clone();
+    settings.operation_name = snapshot.context.operation_name.clone();
+    settings.group_command = snapshot.context.group_command.clone();
+    settings.default_ships = snapshot.context.default_ships.clone();
+    settings.turnover_utc = snapshot.context.turnover_utc.clone();
+    settings.default_ships.sort();
+    settings.default_ships.dedup();
+    settings.turnover_utc.sort();
+    settings.turnover_utc.dedup();
+    settings.validate()?;
+    snapshot = from_settings(snapshot, &settings);
+    let mut row = before.record.clone();
+    crate::settings::apply(
+        &mut row.payload,
+        &settings,
+        actor,
+        &crate::settings::revision(before),
+        None,
+    )?;
+    row.payload["dismissed"] = json!(snapshot.dismissed);
+    row.payload["watch_context"] = json!(snapshot);
+    store.put(&row, Some(before)).await?;
+    Ok(snapshot)
+}
+fn values(
+    field: Field,
+    values: &[String],
+    confirm: bool,
+    demo: bool,
+    indexed: &[String],
+) -> Result<()> {
     let roster = crate::commands::catalog(demo)?;
-    let known = |id: &str| roster.commands.iter().any(|c| c.id == id);
-    if values.len() > 32
+    let known = |id: &str| {
+        indexed.iter().any(|c| c == id)
+            || (field == Field::DefaultShips && roster.commands.iter().any(|c| c.id == id))
+    };
+    let max_bytes = match field {
+        Field::OwnShipId => 256,
+        Field::DefaultShips => 261,
+        Field::ShipName => 120,
+        _ => 128,
+    };
+    let max_values = if field == Field::DefaultShips { 33 } else { 32 };
+    if values.len() > max_values
         || values
             .iter()
-            .any(|v| v.len() > 128 || v.trim() != v || v.chars().any(char::is_control))
+            .any(|v| v.len() > max_bytes || v.trim() != v || v.chars().any(char::is_control))
     {
         return Err(Error::invalid(
             "Context values exceed bounds or contain control characters",
@@ -188,11 +286,27 @@ fn values(field: Field, values: &[String], confirm: bool, demo: bool) -> Result<
 }
 /// Called only after require_admin; actor is server identity, never request JSON.
 pub fn update(
+    snapshot: Snapshot,
+    request: Request,
+    actor: &str,
+    metadata: &Metadata,
+    demo: bool,
+) -> Result<Snapshot> {
+    let commands = crate::commands::catalog(demo)?
+        .commands
+        .into_iter()
+        .map(|c| c.id)
+        .collect::<Vec<_>>();
+    update_with_commands(snapshot, request, actor, metadata, demo, &commands)
+}
+/// The server supplies the same indexed command options used by native Settings.
+pub fn update_with_commands(
     mut snapshot: Snapshot,
     request: Request,
     actor: &str,
     metadata: &Metadata,
     demo: bool,
+    indexed: &[String],
 ) -> Result<Snapshot> {
     if actor.is_empty() {
         return Err(Error::new("unauthenticated", "Missing actor"));
@@ -277,7 +391,7 @@ pub fn update(
     // All validation and writes share this transaction. A rejected field saves nothing.
     let recorded_at = now();
     for (field, mut selected, sources, confirm) in edits {
-        values(field, &selected, confirm, demo)?;
+        values(field, &selected, confirm, demo, indexed)?;
         if matches!(field, Field::DefaultShips | Field::TurnoverUtc) {
             selected.sort();
             selected.dedup();
@@ -401,16 +515,24 @@ pub async fn handle(
     let metadata = metadata.unwrap_or_default();
     let demo = app.config.intake.demo_fixture_assignments;
     let snapshot = if operation == "update" {
-        let before = app.private.state.get("watch_context", "shared").await?;
-        let old = if let Some(doc) = &before {
-            serde_json::from_value(doc.record.payload.clone()).map_err(|_| Error::unavailable())?
+        let (_, before) = crate::settings::shared(&app.private.state).await?;
+        let old = read(&app.private.state, demo).await?;
+        let touches_commands = request
+            .field
+            .is_some_and(|f| matches!(f, Field::OwnShipId | Field::DefaultShips))
+            || request.changes.as_ref().is_some_and(|changes| {
+                changes
+                    .iter()
+                    .any(|c| matches!(c.field, Field::OwnShipId | Field::DefaultShips))
+            });
+        let options = if touches_commands {
+            crate::settings::command_options(&app).await?
         } else {
-            defaults(demo)?
+            Vec::new()
         };
-        let snapshot = update(old, request, &identity.owner, &metadata, demo)?;
-        let row = Record::new("watch_context", "shared", json!(snapshot));
-        app.private.state.put(&row, before.as_ref()).await?;
-        visible(snapshot, demo)?
+        let snapshot =
+            update_with_commands(old, request, &identity.owner, &metadata, demo, &options)?;
+        save(&app.private.state, snapshot, &before, &identity.owner).await?
     } else {
         read(&app.private.state, demo).await?
     };

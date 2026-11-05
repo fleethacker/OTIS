@@ -10,7 +10,7 @@ import { WatchContextHeader } from "../components/watch-context-header";
 import type { ContextResponse, ContextUpdate } from "../components/watch-context";
 import Settings from "./watch-settings";
 
-function setup(role = "admin", denyWrites = false, missingSources = false, demo = true) {
+function setup(role = "admin", denyWrites = false, missingSources = false, demo = true, indexedCommands: string[] = []) {
   const source = {
     messageKey: `sha256:${"a".repeat(64)}@fictional-r1`,
     auditId: "fictional-audit",
@@ -58,7 +58,12 @@ function setup(role = "admin", denyWrites = false, missingSources = false, demo 
     defaultsSource: "fictional config",
   };
   const requests: ContextUpdate[] = [];
+  const optionReads: string[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    if (String(url).endsWith("/settings/options")) {
+      optionReads.push(String(url));
+      return Response.json({ commands: indexedCommands, aiEndpoints: [], secretRefs: [] });
+    }
     if (String(url).endsWith("/commands/list"))
       return Response.json({
         commands: demo
@@ -133,6 +138,7 @@ function setup(role = "admin", denyWrites = false, missingSources = false, demo 
   return {
     view,
     requests,
+    optionReads,
     client,
     close: () => {
       view.unmount();
@@ -143,7 +149,7 @@ function setup(role = "admin", denyWrites = false, missingSources = false, demo 
 }
 
 test("demo-off header and Settings do not imply a fictional own ship", async () => {
-  const { view, client, close } = setup("viewer", false, false, false);
+  const { view, client, optionReads, close } = setup("viewer", false, false, false, ["INDEXED COMMAND"]);
   try {
     await waitFor(() =>
       expect(
@@ -153,6 +159,8 @@ test("demo-off header and Settings do not imply a fictional own ship", async () 
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(view.queryByRole("option", { name: "USS Meridian" })).toBeNull();
     expect(view.queryByText(/Unconfirmed demo defaults/)).toBeNull();
+    expect(view.queryByRole("option", { name: "INDEXED COMMAND" })).toBeNull();
+    expect(optionReads).toEqual([]);
   } finally {
     close();
   }
@@ -304,5 +312,29 @@ test("user is read-only, missing citation arrays do not crash, and revoked write
     );
   } finally {
     admin.close();
+  }
+});
+
+
+test("admin selects indexed own ship and defaults without a demo roster", async () => {
+  const { view, requests, optionReads, close } = setup("admin", false, false, false, ["USS EXAMPLE", "CTF 77"]);
+  try {
+    await waitFor(() => expect(view.getByRole("option", { name: "USS EXAMPLE" })).toBeTruthy());
+    expect(view.getByLabelText("Own ship")).not.toBeDisabled();
+    await act(async () => {
+      fireEvent.change(view.getByLabelText("Own ship"), { target: { value: "USS EXAMPLE" } });
+      fireEvent.click(view.getByRole("checkbox", { name: "USS EXAMPLE" }));
+    });
+    await act(async () => fireEvent.click(view.getByRole("button", { name: "Save settings" })));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0]).toEqual({ changes: [
+      { field: "ownShipId", values: ["USS EXAMPLE"] },
+      { field: "defaultShips", values: ["unassigned:", "unit:USS EXAMPLE"] },
+    ] });
+    expect(optionReads).toEqual(["/api/v1/settings/options"]);
+    await waitFor(() => expect(view.getByLabelText("Own ship")).toHaveValue("USS EXAMPLE"));
+    expect(view.queryByRole("option", { name: "USS Meridian" })).toBeNull();
+  } finally {
+    close();
   }
 });

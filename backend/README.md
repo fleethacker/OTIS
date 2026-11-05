@@ -1,6 +1,6 @@
 # Parse Command backend
 
-The Rust parser foundation lives here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the imported UI and its Go presentation service live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration analysis](../docs/integration/ark-export.md) and [decision to retain Go for now](../docs/decisions/0001-retain-watch-desk-go-service.md). SDK version 0.2.0 implements ICD 1.2.0 as local, compiled crates; nothing is published to a package registry.
+The Rust parser, intake worker and application server live here. Shared contracts remain in [`../docs/ICD.md`](../docs/ICD.md); the React UI and retained Go reference source live in [`../apps/watch-desk/`](../apps/watch-desk/). See the [integration guide](../docs/integration/ark-export.md). SDK version 0.2.0 implements ICD 1.3.0 as local, compiled crates; nothing is published to a package registry.
 
 The root [`compose.intake.yml`](../compose.intake.yml) overlay runs this worker
 with Watch Desk, OpenSearch and the demo mail server in one Compose project.
@@ -95,3 +95,10 @@ Compiled contributors are trusted code with process authority. Cooperative cance
 `parse-command-server` combines durable intake, continuous batched OpenSearch publication, typed read APIs, generated ConnectRPC services and owner-scoped private state in hidden OpenSearch indices. The parser SDK remains transport independent. See the [combined stack](../docs/integration/combined-stack.md) and [application API](../docs/integration/rust-application-api.md). Building the server requires Rust 1.97.1 in the pinned Docker build; the parser foundation retains its declared minimum. The root build context supplies the original application proto files and canonical index definitions.
 
 Settings, native OIDC, hidden-state migration and verification are documented in [settings-oidc.md](../docs/integration/settings-oidc.md).
+
+## CASREP contribution
+
+The compiled `parse-command-casrep` crate adds exact CASREP dispatch independently
+of OPTASK and GENADMIN. Demo intake enables it explicitly. See the
+[CASREP integration guide](../docs/integration/casrep.md) for supported profiles,
+ICD 1.3.0, immutable reports, derived history, search and acceptance tests.

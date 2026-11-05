@@ -1,3 +1,4 @@
+import { AppButton, Notice, TextInput } from "../components/ui";
 import { useDisplayTime } from "../components/display-time";
 import { Link, useSearchParams } from "react-router-dom";
 import { useRef, useState } from "react";
@@ -27,7 +28,18 @@ function MessageSearch() {
   const debounced = useDebounced(query);
   const criteria = JSON.stringify([
     zone,
-    ["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) => params.get(key)),
+    ...[
+      "q",
+      "messageType",
+      "sender",
+      "fromDate",
+      "throughDate",
+      "sort",
+      "casualtySerial",
+      "casualtyUic",
+      "casualtyCategory",
+      "casualtyReportType",
+    ].map((key) => params.get(key)),
     session?.user?.id,
     sourceScopeKey(session),
   ]);
@@ -77,8 +89,17 @@ function MessageSearch() {
   }
   function applyFilters(fields: MessageFilters) {
     const next = new URLSearchParams(params);
-    for (const key of ["messageType", "sender", "fromDate", "throughDate"] as const) {
-      const value = fields[key];
+    for (const key of [
+      "messageType",
+      "sender",
+      "fromDate",
+      "throughDate",
+      "casualtySerial",
+      "casualtyUic",
+      "casualtyCategory",
+      "casualtyReportType",
+    ] as const) {
+      const value = fields[key] ?? "";
       if (value === "") {
         next.delete(key);
       } else {
@@ -111,18 +132,17 @@ function MessageSearch() {
             onPage={setPageToken}
           />
         </div>
-        <input
+        <TextInput
           id="record-search"
-          className="input"
           type="search"
           value={query}
           placeholder="Message ID, subject, event or raw text"
           onChange={(e) => update("q", e.target.value)}
         />
         <div className="message-search-actions">
-          <button className="btn btn-ghost btn-sm" onClick={() => update("q", "")}>
+          <AppButton variant="ghost" size="sm" onClick={() => update("q", "")}>
             Clear search
-          </button>
+          </AppButton>
           <MessageSearchControls
             fields={search.fields}
             sort={search.sort}
@@ -146,25 +166,25 @@ function MessageSearch() {
         </p>
       )}
       {search.error !== undefined ? (
-        <div role="alert" className="alert">
+        <Notice role="alert" tone="error">
           {search.error}
-        </div>
+        </Notice>
       ) : result.isPending || waiting ? null : result.isError ? (
-        <div role="alert" className="alert">
+        <Notice role="alert" tone="error">
           Message records could not be loaded. {result.error.message} No schedule data is confirmed.
-          <button className="btn btn-sm" onClick={retryResults}>
+          <AppButton size="sm" onClick={retryResults}>
             Retry
-          </button>
-        </div>
+          </AppButton>
+        </Notice>
       ) : (
         <>
           {messages.length === 0 && (
             <div className="unfinished">
               <h2>No Message records available</h2>
               <p>The source returned an empty dataset.</p>
-              <button className="btn btn-sm" onClick={retryResults}>
+              <AppButton size="sm" onClick={retryResults}>
                 Retry
-              </button>
+              </AppButton>
             </div>
           )}
           <div className="messages-workspace" data-reader-open={record.length > 0}>
@@ -186,24 +206,26 @@ function MessageSearch() {
             </section>
             {record.length > 0 && (
               <div className="message-viewer">
-                <button
+                <AppButton
                   type="button"
-                  className="btn btn-ghost btn-xs message-viewer-close"
+                  variant="ghost"
+                  size="xs"
+                  className="message-viewer-close"
                   aria-label="Close message"
                   title="Close message"
                   onClick={closeMessage}
                 >
                   <TbX aria-hidden="true" focusable="false" />
-                </button>
+                </AppButton>
                 {record && detail.isPending ? (
                   <p role="status">Loading selected message…</p>
                 ) : record && detail.isError ? (
-                  <div role="alert">
+                  <Notice role="alert" tone="error">
                     Selected message could not be loaded: {detail.error.message}
-                    <button className="btn btn-sm" onClick={() => void detail.refetch()}>
+                    <AppButton size="sm" onClick={() => void detail.refetch()}>
                       Retry selected message
-                    </button>
-                  </div>
+                    </AppButton>
+                  </Notice>
                 ) : selected ? (
                   <MessageReader
                     key={`${selected.sourceMessageId}:${params.get("tab") ?? ""}`}
@@ -216,9 +238,9 @@ function MessageSearch() {
                       The requested record {record} is unavailable. No other record has been
                       substituted.
                     </p>
-                    <button className="btn btn-sm" onClick={retryResults}>
+                    <AppButton size="sm" onClick={retryResults}>
                       Retry
-                    </button>
+                    </AppButton>
                   </section>
                 ) : null}
               </div>

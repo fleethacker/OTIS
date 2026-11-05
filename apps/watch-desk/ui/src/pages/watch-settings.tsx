@@ -1,8 +1,10 @@
 import { useId, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import type { RouteMeta } from "../route-registry";
 import { calendarReturn, messageHref } from "../components/calendar-links";
 import { useCommands, type Command } from "../components/command-roster";
+import { settingsRequest } from "../components/settings-data";
 import {
   useWatchContext,
   useUpdateContext,
@@ -41,7 +43,7 @@ function ContextForm({
   save,
 }: {
   data: ContextResponse;
-  commands: Command[];
+  commands: Pick<Command, "id" | "name">[];
   canEdit: boolean;
   rosterUnavailable: boolean;
   pending: boolean;
@@ -328,6 +330,36 @@ function ContextForm({
 export default function Settings() {
   const context = useWatchContext(true);
   const roster = useCommands();
+  const options = useQuery({
+    queryKey: ["settings", "options", context.identityKey],
+    enabled: context.canEdit && !context.isError,
+    retry: false,
+    queryFn: async () => {
+      const reply = await settingsRequest<{ commands: unknown }>("options");
+      if (!Array.isArray(reply.commands) ||
+          !reply.commands.every((value: unknown) => typeof value === "string" && value.length > 0)) {
+        throw new Error("Command options unavailable.");
+      }
+      return reply.commands as string[];
+    },
+  });
+  // Indexed command IDs are administrator options, not a replacement for the
+  // viewer's scoped roster. Prefer roster display names when both sources agree.
+  const commands = new Map<string, Pick<Command, "id" | "name">>();
+  if (!roster.isError) {
+    for (const command of roster.data?.commands ?? []) {
+      commands.set(command.id, command);
+    }
+  }
+  if (context.canEdit && !options.isError) {
+    for (const id of options.data ?? []) {
+      if (!commands.has(id)) {
+        commands.set(id, { id, name: id });
+      }
+    }
+  }
+  const rosterUnavailable = (roster.isError || roster.data === undefined) &&
+    !(context.canEdit && options.isSuccess);
   const update = useUpdateContext();
   const [params] = useSearchParams();
   const returnTo = calendarReturn(params.get("returnTo"));
@@ -343,6 +375,10 @@ export default function Settings() {
         disabled={context.isFetching || update.isPending}
         onClick={() => {
           void context.refetch();
+          void roster.refetch();
+          if (context.canEdit) {
+            void options.refetch();
+          }
         }}
       >
         Refresh context and suggestions
@@ -374,14 +410,17 @@ export default function Settings() {
               ? `Last update: ${data.updatedBy} · ${data.updatedAt}`
               : `Unconfirmed ${data.demoRoster === true ? "demo defaults" : "defaults"} · ${data.defaultsSource}`}
           </p>
-          {roster.isError && (
-            <p role="alert">Roster unavailable; ship selection cannot be edited.</p>
+          {rosterUnavailable && roster.isError && (
+            <p role="alert">Command options unavailable.</p>
+          )}
+          {context.canEdit && options.isError && !rosterUnavailable && (
+            <p role="alert">Indexed command options unavailable.</p>
           )}
           <ContextForm
             data={data}
-            commands={roster.isError ? [] : (roster.data?.commands ?? [])}
+            commands={[...commands.values()]}
             canEdit={context.canEdit && !context.isError}
-            rosterUnavailable={roster.isError || !roster.data}
+            rosterUnavailable={rosterUnavailable}
             pending={update.isPending}
             returnTo={returnTo}
             save={(request) => update.mutateAsync(request)}

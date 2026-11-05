@@ -2,13 +2,12 @@
 """Explicit synthetic SMTP -> IMAP intake -> publication -> authenticated application read.
 
 Never called by install. The operator supplies a test mailbox, synthetic message,
-HTTPS origin, trusted CA and a short-lived native application cookie file.
+HTTPS origin, trusted CA and a protected native-session Cookie header file.
 """
 import argparse
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 import json
-import http.cookiejar
 from pathlib import Path
 import smtplib
 import ssl
@@ -21,6 +20,13 @@ import uuid
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise RuntimeError('expected authenticated JSON; received an identity redirect')
+
+
+def read_session_cookie(path):
+    cookie = path.read_text().strip()
+    if not cookie.startswith('parse_command_session=') or not cookie.partition('=')[2] or len(cookie) > 16384 or any(ord(c) < 33 or c == ';' for c in cookie):
+        raise ValueError('one bounded native session cookie is required')
+    return cookie
 
 
 def validate_origin(origin):
@@ -47,7 +53,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--origin', required=True)
     p.add_argument('--ca', required=True)
-    p.add_argument('--cookie-file', type=Path, required=True, help='Protected Netscape-format cookies from a test account browser session')
+    p.add_argument('--cookie-file', type=Path, required=True, help='Protected file containing parse_command_session=<opaque session>, obtained by real browser OIDC login')
     p.add_argument('--smtp-host', required=True)
     p.add_argument('--smtp-port', type=int, default=465)
     p.add_argument('--smtp-user', required=True)
@@ -57,19 +63,18 @@ def main():
     p.add_argument('--body', type=Path, required=True, help='Operator-reviewed synthetic USMTF body; never real traffic')
     p.add_argument('--deadline', type=int, default=300)
     a = p.parse_args()
-    try:
-        origin = validate_origin(a.origin)
-    except ValueError as error:
-        p.error(str(error))
     if not 1 <= a.deadline <= 900:
         p.error('a 1..900 second deadline is required')
-    if a.cookie_file.stat().st_size > 65536 or a.body.stat().st_size > 65536:
-        p.error('bounded native cookie file and synthetic body required')
-    cookies = http.cookiejar.MozillaCookieJar(str(a.cookie_file))
-    cookies.load(ignore_discard=True, ignore_expires=False)
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=a.ca)), urllib.request.HTTPCookieProcessor(cookies), NoRedirect())
+    try:
+        origin = validate_origin(a.origin)
+        cookie = read_session_cookie(a.cookie_file)
+    except ValueError as error:
+        p.error(str(error))
+    if a.body.stat().st_size > 65536:
+        p.error('bounded synthetic body required')
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=a.ca)), NoRedirect())
     def api(path, body):
-        req = urllib.request.Request(origin + path, data=None if body is None else json.dumps(body).encode(), headers={'Origin': origin, 'Content-Type': 'application/json'})
+        req = urllib.request.Request(origin + path, data=None if body is None else json.dumps(body).encode(), headers={'Cookie': cookie, 'Origin': origin, 'Content-Type': 'application/json'})
         with opener.open(req, timeout=15) as response:
             payload = response.read(4_194_305)
             if len(payload) > 4_194_304:

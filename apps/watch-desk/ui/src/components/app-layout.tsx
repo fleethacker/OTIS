@@ -1,5 +1,5 @@
 import { Link, Outlet } from "react-router-dom";
-import otisIcon from "../assets/otis/otis-icon.webp";
+import otisIcon from "../assets/otis/otis-logo.png";
 import { WatchContextHeader } from "./watch-context-header";
 import { StationAssignmentNotice } from "./station-assignment";
 import { HeaderClock } from "./header-clock";
@@ -7,6 +7,7 @@ import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
 import { SettingsButton } from "./settings-button";
 import { Notifications } from "./notifications";
+import { ThemeControl } from "./theme-control";
 import { DisplayTimeProvider, useDisplayTime } from "./display-time";
 
 export function AppLayout() {
@@ -43,6 +44,7 @@ function DeskLayout() {
           <Notifications />
           <UserMenu />
           <SettingsButton />
+          <ThemeControl />
         </div>
       </header>
       <main id="main" tabIndex={-1}>

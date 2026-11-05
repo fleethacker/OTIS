@@ -15,42 +15,7 @@ kind: ConfigMap
 metadata: {name: parse-command-ui}
 data:
   nginx.conf: |
-    worker_processes 1;
-    pid /tmp/nginx.pid;
-    error_log /dev/stderr warn;
-    events { worker_connections 128; }
-    http {
-      include /etc/nginx/mime.types;
-      default_type application/octet-stream;
-      access_log off;
-      client_body_temp_path /tmp/client;
-      proxy_temp_path /tmp/proxy;
-      client_max_body_size 128k;
-      server {
-        listen 8080;
-        server_name _;
-        root /usr/share/nginx/html;
-        add_header X-Content-Type-Options nosniff always;
-        add_header Cache-Control no-store always;
-        location = /healthz { return 200 'ok'; }
-        location ~ ^/(api/|app\.v1\.|__ark/|auth/) {
-          proxy_pass http://server:8081;
-          proxy_set_header Host $http_host;
-          # Native OIDC uses its opaque same-origin cookie.
-          proxy_set_header Authorization "";
-          proxy_set_header Origin $http_origin;
-          proxy_set_header Cookie $http_cookie;
-          proxy_set_header X-Auth-Request-User "";
-          proxy_set_header X-Auth-Request-Email "";
-          proxy_set_header X-Auth-Request-Groups "";
-          proxy_set_header X-Forwarded-For "";
-          proxy_read_timeout 12s;
-          proxy_connect_timeout 2s;
-          proxy_buffering off;
-        }
-        location / { try_files $uri $uri/ /index.html; }
-      }
-    }
+{{ .Files.Get "nginx.conf" | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -62,6 +27,8 @@ spec:
   template:
     metadata:
       labels: {app: parse-command-ui}
+      annotations:
+        checksum/nginx: {{ .Files.Get "nginx.conf" | sha256sum }}
     spec:
       serviceAccountName: parse-command-ui
       automountServiceAccountToken: false

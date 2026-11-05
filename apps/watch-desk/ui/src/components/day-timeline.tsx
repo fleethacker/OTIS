@@ -1,3 +1,5 @@
+import { CommandChips } from "./command-chips";
+import { AppButton } from "./ui";
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
@@ -28,19 +30,13 @@ import { messageHref } from "./calendar-links";
 import { useDisplayTime, civilDate, civilHour } from "./display-time";
 import moment from "moment-timezone";
 import { commandColor, commandKeys, commandName, type Command } from "./command-roster";
-import { CommandChips } from "./command-chips";
 import { OptaskIcon } from "./optask-icons";
 import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";
 import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
 import { inShipColumns, shipResources, type ShipResource } from "./calendar-resources";
-import {
-  calendarGridWidth,
-  openingScrollTime,
-  useOpeningScroll,
-  useCalendarOverflow,
-} from "./calendar-viewport";
+import { calendarGridWidth, openingScrollTime, useOpeningScroll, useCalendarOverflow } from "./calendar-viewport";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -84,7 +80,7 @@ function sourceType(message: MessageRecord) {
   return typeof value === "string" ? value : undefined;
 }
 function eventKey(row: ScheduleEntry) {
-  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}${(row.resourceId ?? "") !== "" ? `:${row.resourceId}` : ""}`;
+  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}${row.resourceId ? `:${row.resourceId}` : ""}`;
 }
 function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const { format: utc } = useDisplayTime();
@@ -92,15 +88,11 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const information = [
     row.title,
     row.sourceType,
-    row.recurrence
-      ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}`
-      : undefined,
+    row.recurrence ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}` : undefined,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
-    `Applicability: ${commandKeys(row.commandIds)
-      .map((key) => commandName(key, row.commands))
-      .join(", ")}`,
+    `Applicability: ${commandKeys(row.commandIds).map((key) => commandName(key, row.commands)).join(", ")}`,
     (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
     row.reviewRequired === true ? "Requires review" : undefined,
     row.event.isRevised ? "Revised" : undefined,
@@ -111,11 +103,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     .join("\n");
   const content = (
     <>
-      {row.recurrence && (
-        <span aria-hidden="true" title="Recurring source fact">
-          ↻
-        </span>
-      )}
+      {row.recurrence && <span aria-hidden="true" title="Recurring source fact">↻</span>}
       <OptaskIcon type={row.sourceType} />
       <span className="calendar-event-title">{row.title}</span>
     </>
@@ -144,9 +132,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   );
   return (
     <div className="calendar-event-copy">
-      {row.resourceId === undefined && (
-        <CommandChips ids={row.commandIds} commands={row.commands} />
-      )}
+      {row.resourceId === undefined && <CommandChips ids={row.commandIds} commands={row.commands} />}
       {target}
     </div>
   );
@@ -189,12 +175,7 @@ export function DayTimeline({
   const { zone, mode, label, format } = useDisplayTime();
   const dialog = useRef<HTMLDialogElement>(null);
   const calendarRoot = useRef<HTMLDivElement>(null);
-  useCalendarZoom(
-    calendarRoot,
-    view,
-    interval,
-    `${from}:${to}:${shipLayout}:${JSON.stringify(selectedShips ? [...selectedShips] : null)}`
-  );
+  useCalendarZoom(calendarRoot, view, interval, `${from}:${to}:${shipLayout}:${JSON.stringify(selectedShips ? [...selectedShips] : null)}`);
   const measurements = useCalendarMeasurements(calendarRoot);
   const [selected, setSelected] = useState<ScheduleEntry | null>(null);
   const [showIndex, setShowIndex] = useState(false);
@@ -263,9 +244,7 @@ export function DayTimeline({
               return [];
             }
             const existing = message.events.find((event) => event.sourceEventId === item.factId);
-            const event = existing
-              ? clone(ExtractedEventSchema, existing)
-              : create(ExtractedEventSchema);
+            const event = existing ? clone(ExtractedEventSchema, existing) : create(ExtractedEventSchema);
             event.title = item.title;
             event.sourceEventId = item.factId ?? item.key;
             event.startAt = timestampFromDate(new Date(start));
@@ -295,45 +274,18 @@ export function DayTimeline({
   const resources = shipResources(commands, rows, selectedShips);
   const displayed = side ? inShipColumns(rows, resources) : rows;
   const minimumHeight = (row: ScheduleEntry) => measurements.titles.get(eventKey(row)) ?? 40;
-  const laneGroups = side
-    ? resources.map((r) => displayed.filter((row) => row.resourceId === r.id))
-    : [rows];
-  const columns = Math.max(
-    1,
-    ...laneGroups.flatMap((group) =>
-      calendarLanes(
-        group.map((row) => ({
-          event: row,
-          top: Math.max(from, +row.start),
-          height: Math.max(
-            +row.end - Math.max(from, +row.start),
-            (minimumHeight(row) / measurements.height) * 86400000
-          ),
-        }))
-      ).map((row) => row.columns)
-    )
-  );
-  const dayLanes = windows.map((window) =>
-    Math.max(
-      1,
-      ...calendarLanes(
-        rows
-          .filter(
-            (row) =>
-              +row.start < window.to &&
-              (row.point === true ? +row.start >= window.from : +row.end > window.from)
-          )
-          .map((row) => ({
-            event: row,
-            top: Math.max(window.from, +row.start),
-            height: Math.max(
-              Math.min(window.to, +row.end) - Math.max(window.from, +row.start),
-              (minimumHeight(row) / measurements.height) * (window.to - window.from)
-            ),
-          }))
-      ).map((row) => row.columns)
-    )
-  );
+  const laneGroups = side ? resources.map((r) => displayed.filter((row) => row.resourceId === r.id)) : [rows];
+  const columns = Math.max(1, ...laneGroups.flatMap((group) => calendarLanes(
+    group.map((row) => ({
+      event: row,
+      top: Math.max(from, +row.start),
+      height: Math.max(+row.end - Math.max(from, +row.start), (minimumHeight(row) / measurements.height) * 86400000),
+    }))
+  ).map((row) => row.columns)));
+  const dayLanes = windows.map((window) => Math.max(1, ...calendarLanes(rows
+    .filter((row) => +row.start < window.to && (row.point ? +row.start >= window.from : +row.end > window.from))
+    .map((row) => ({ event: row, top: Math.max(window.from, +row.start), height: Math.max(Math.min(window.to, +row.end) - Math.max(window.from, +row.start), minimumHeight(row) / measurements.height * (window.to - window.from)) }))
+  ).map((row) => row.columns)));
   const gridWidth = calendarGridWidth(view, side, resources.length, columns, expanded, dayLanes);
   const overflow = useCalendarOverflow(calendarRoot, gridWidth);
   const layout: DayLayoutFunction<ScheduleEntry> = ({ events, slotMetrics }) => {
@@ -364,52 +316,21 @@ export function DayTimeline({
   const midnight = civilHour(day, 0, zone);
   const axisStart = civilHour(day, startHour ?? 0, zone);
   const axisEnd = civilHour(day, endHour ?? 24, zone);
-  const opening = openingScrollTime(
-    from,
-    to,
-    displayed.map((row) => +row.start),
-    Date.now(),
-    view,
-    zone
-  );
+  const opening = openingScrollTime(from, to, displayed.map((row) => +row.start), Date.now(), view, zone);
   const focusParams = new URLSearchParams(returnTo.split("?")[1] ?? "");
   const focusKey = `${view}:${from}:${to}:${interval}:${shipLayout}:${focusParams.get("q")}:${focusParams.get("dataset")}:${JSON.stringify(selectedShips ? [...selectedShips].sort() : null)}`;
   // Turnover disclosure/UTC edits are not schedule navigation and must not reset scrolling.
-  useOpeningScroll(
-    calendarRoot,
-    focusKey,
-    ready && view !== "month",
-    (opening - axisStart) / (axisEnd - axisStart)
-  );
+  useOpeningScroll(calendarRoot, focusKey, ready && view !== "month", (opening - axisStart) / (axisEnd - axisStart));
   if (side && resources.length === 0) {
-    return (
-      <p className="calendar-result-limit">
-        No valid ship calendars selected. Choose a ship or Unassigned.
-      </p>
-    );
+    return <p className="calendar-result-limit">No valid ship calendars selected. Choose a ship or Unassigned.</p>;
   }
   return (
     <>
-      {view !== "month" && overflow && (
-        <div className="calendar-overflow">
-          Readable lanes extend beyond this view. Scroll horizontally for more{" "}
-          {side ? "ships" : "days"}.
-          <button
-            className="btn btn-xs"
-            aria-label="Scroll calendar left"
-            onClick={() => calendarRoot.current?.scrollBy({ left: -320, behavior: "smooth" })}
-          >
-            ←
-          </button>
-          <button
-            className="btn btn-xs"
-            aria-label="Scroll calendar right"
-            onClick={() => calendarRoot.current?.scrollBy({ left: 320, behavior: "smooth" })}
-          >
-            →
-          </button>
-        </div>
-      )}
+      {view !== "month" && overflow && <div className="calendar-overflow">
+        Readable lanes extend beyond this view. Scroll horizontally for more {side ? "ships" : "days"}.
+        <button className="btn btn-xs" aria-label="Scroll calendar left" onClick={() => calendarRoot.current?.scrollBy({ left: -320, behavior: "smooth" })}>←</button>
+        <button className="btn btn-xs" aria-label="Scroll calendar right" onClick={() => calendarRoot.current?.scrollBy({ left: 320, behavior: "smooth" })}>→</button>
+      </div>}
       <div
         ref={calendarRoot}
         style={
@@ -471,12 +392,8 @@ export function DayTimeline({
               getNow={() => new Date()}
               tooltipAccessor={() => ""}
               dayPropGetter={(date) => {
-                if (view !== "week" || expanded) {
-                  return {};
-                }
-                const index = windows.findIndex(
-                  (window) => civilDate(new Date(window.from), zone) === civilDate(date, zone)
-                );
+                if (view !== "week" || expanded) return {};
+                const index = windows.findIndex((window) => civilDate(new Date(window.from), zone) === civilDate(date, zone));
                 return { style: { minWidth: `${Math.max(1, dayLanes[index] ?? 1) * 128}px` } };
               }}
               eventPropGetter={(row) => ({
@@ -487,10 +404,7 @@ export function DayTimeline({
                   .filter(Boolean)
                   .join(" "),
                 style: {
-                  "--ship-color": commandColor(
-                    row.resourceId ?? commandKeys(row.commandIds)[0],
-                    commands
-                  ),
+                  "--ship-color": commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands),
                   borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}`,
                 } as CSSProperties,
               })}
@@ -508,15 +422,10 @@ export function DayTimeline({
               components={{
                 eventWrapper: SourceEventWrapper,
                 event: EventContent,
-                resourceHeader: ({ resource }) => (
-                  <span
-                    className="resource-ship-chip"
-                    title={resource.name}
-                    style={{ backgroundColor: commandColor(resource.id, commands) }}
-                  >
-                    {resource.id === "unassigned:" ? "Unassigned" : resource.title}
-                  </span>
-                ),
+                resourceHeader: ({ resource }) => <span className="resource-ship-chip" title={resource?.name}
+                  style={{ backgroundColor: commandColor(resource?.id ?? "unassigned:", commands) }}>
+                  {resource?.id === "unassigned:" ? "Unassigned" : resource?.title}
+                </span>,
                 // Public 1.20 hook; @types 1.16 predates it. Suppress a retained
                 // indicator when changing to a window that excludes the real now.
                 ...{
@@ -525,13 +434,14 @@ export function DayTimeline({
                 },
                 month: {
                   dateHeader: ({ date, label }) => (
-                    <button
-                      className="btn btn-ghost btn-xs"
+                    <AppButton
+                      variant="ghost"
+                      size="xs"
                       aria-label={`Open ${civilDate(date, zone)} in Day view`}
                       onClick={() => onDay?.(civilDate(date, zone))}
                     >
                       {label}
-                    </button>
+                    </AppButton>
                   ),
                 },
               }}
@@ -541,8 +451,9 @@ export function DayTimeline({
       </div>
       {view === "week" && rows.length > 0 && (
         <>
-          <button
-            className="btn btn-sm week-index"
+          <AppButton
+            size="sm"
+            className="week-index"
             onClick={() => {
               setShowIndex(true);
               setSelected(null);
@@ -550,11 +461,13 @@ export function DayTimeline({
             }}
           >
             Events in window ({rows.length}) · Browse details
-          </button>
+          </AppButton>
           <dialog ref={dialog} className="modal" aria-labelledby="week-detail-heading">
             <div className="modal-box week-details">
               <form method="dialog">
-                <button className="btn btn-sm float-right">Close details</button>
+                <AppButton type="submit" size="sm" className="float-right">
+                  Close details
+                </AppButton>
               </form>
               <h2 id="week-detail-heading">
                 {showIndex ? "Events in selected windows" : selected?.title}
@@ -563,8 +476,8 @@ export function DayTimeline({
                 <ul>
                   {rows.map((row) => (
                     <li key={eventKey(row)}>
-                      <button
-                        className="btn btn-ghost"
+                      <AppButton
+                        variant="ghost"
                         onClick={() => {
                           setSelected(row);
                           setShowIndex(false);
@@ -572,7 +485,7 @@ export function DayTimeline({
                       >
                         {row.title} · <CommandChips ids={row.commandIds} commands={commands} />
                         {row.event.isRevised ? " · Revised" : ""}
-                      </button>
+                      </AppButton>
                     </li>
                   ))}
                 </ul>
@@ -591,18 +504,10 @@ export function DayTimeline({
                         : `${format(selected.event.startAt)} → ${format(selected.event.endAt)}`}
                       {selected.reviewRequired === true && " · Requires review"}
                     </p>
-                    {selected.recurrence && (
-                      <>
-                        <p>↻ {selected.recurrence.description}</p>
-                        <p>
-                          Rule: <code>{selected.recurrence.rule}</code>
-                          <br />
-                          Audited fact: {selected.recurrence.ruleFactId}
-                          <br />
-                          Occurrence: {selected.recurrence.occurrenceId}
-                        </p>
-                      </>
-                    )}
+                    {selected.recurrence && <>
+                      <p>↻ {selected.recurrence.description}</p>
+                      <p>Rule: <code>{selected.recurrence.rule}</code><br />Audited fact: {selected.recurrence.ruleFactId}<br />Occurrence: {selected.recurrence.occurrenceId}</p>
+                    </>}
                     {selected.before && <p>Continues from earlier than a selected window.</p>}
                     {selected.after && <p>Continues later than a selected window.</p>}
                     {selected.event.isRevised && (

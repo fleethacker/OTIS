@@ -2,14 +2,15 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { TbLogout, TbAdjustmentsHorizontal } from "react-icons/tb";
 import { Link } from "react-router-dom";
 import { useIdentity } from "../hooks/useIdentity";
+import { AppButton, Notice } from "./ui";
 
 /**
  * UserMenu — avatar + username dropdown with a Sign out action.
  *
  * Mount in the AppShell header (or wherever the layout places persistent
  * identity chrome). The presentation belongs to this app and may be adapted.
- * Ark's auth boundary owns /logout in preview and production; the menu only
- * navigates there. useIdentity calls the shipped GetIdentity RPC.
+ * Sign out uses the app's native session endpoint before reloading the calendar.
+ * useIdentity calls the shipped GetIdentity RPC.
  *
  * Accessibility: the trigger is a real <button> exposing aria-haspopup="menu"
  * and aria-expanded bound to the open state, so screen readers announce that a
@@ -90,7 +91,7 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
 
   return (
     <div
-      className="relative inline-block"
+      className="account-menu relative inline-block"
       // Escape closes and returns focus to the trigger; closing on focus-out
       // (focus left the whole dropdown subtree) handles click-away and Tab-out.
       onKeyDown={(e) => {
@@ -105,7 +106,7 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
         }
       }}
     >
-      <button
+      <AppButton
         ref={triggerRef}
         type="button"
         aria-haspopup="menu"
@@ -113,7 +114,9 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
         aria-controls="user-menu"
         aria-label="Account menu"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-base-200 cursor-pointer"
+        variant="ghost"
+        size="sm"
+        className="account-trigger"
       >
         {/* Avatar — w-7 h-7 paired so the placeholder renders as a square
             circle, not collapsed to text-only height inside the trigger. */}
@@ -122,8 +125,8 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
             <span className="text-xs font-semibold">{initial}</span>
           </div>
         </div>
-        <span className="text-sm font-medium">{username}</span>
-      </button>
+        <span className="account-name text-sm font-medium">{username}</span>
+      </AppButton>
       {/* Rendered only while open so aria-expanded stays truthful and the menu
           is genuinely controlled (not CSS-:focus-driven). Header rows (username
           + email + role) are NOT daisyUI `menu-title`: that is single-line
@@ -143,7 +146,11 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
               <div className="text-xs text-bc-muted">{role === "admin" ? "Admin" : "Viewer"}</div>
             )}
           </div>
-          {logoutFailed && <p role="alert">Sign-out failed. Retry.</p>}
+          {logoutFailed && (
+            <Notice tone="error" role="alert">
+              Sign-out failed. Retry.
+            </Notice>
+          )}
           <ul className="menu menu-sm gap-0 px-1 py-1">
             <li>
               <Link to="/account" role="menuitem" onClick={() => setOpen(false)}>
@@ -159,10 +166,17 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
               </li>
             )}
             <li>
-              <button type="button" role="menuitem" onClick={() => void logout()}>
+              <AppButton
+                variant="ghost"
+                size="sm"
+                className="account-signout"
+                type="button"
+                role="menuitem"
+                onClick={() => void logout()}
+              >
                 <TbLogout />
                 Sign out
-              </button>
+              </AppButton>
             </li>
           </ul>
         </div>

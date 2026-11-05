@@ -56,8 +56,9 @@ test("manual refresh keeps events visible while pending and after failure, then 
     await waitFor(() =>
       expect(view.getByRole("link", { name: "Morning watch, source record" })).toBeTruthy()
     );
-    expect(view.getByText(/Last refreshed:/)).toBeTruthy();
-    const refreshed = view.container.querySelector("time")?.getAttribute("dateTime");
+    const refresh = view.getByRole("button", { name: "Refresh calendar" });
+    expect(refresh.title).toContain("Last refreshed:");
+    const refreshed = refresh.title;
     fireEvent.click(view.getByRole("button", { name: "Refresh calendar" }));
     await waitFor(() => expect(release).toBeDefined());
     expect(view.getByRole("link", { name: "Morning watch, source record" })).toBeTruthy();
@@ -65,10 +66,10 @@ test("manual refresh keeps events visible while pending and after failure, then 
       release?.(new Response(JSON.stringify({ message: "Source unavailable" }), { status: 503 }));
     });
     await waitFor(() =>
-      expect(view.getByRole("alert").textContent).toContain("Showing the last successful schedule")
+      expect(view.getByRole("alert").textContent).toContain("Showing saved schedule")
     );
     expect(view.getByRole("link", { name: "Morning watch, source record" })).toBeTruthy();
-    expect(view.container.querySelector("time")?.getAttribute("dateTime")).toBe(refreshed);
+    expect(refresh.title).toBe(refreshed);
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(view.getByRole("link", { name: "Updated watch, source record" })).toBeTruthy()

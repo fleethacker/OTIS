@@ -1,10 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { ThemeObserver } from "./components/theme-observer";
 import { App } from "./App";
 import { AuthGate } from "./components/AuthGate";
-// App-owned CSS follows the browser's color preference without a forced data-theme.
-// App Shell authors and reviews both modes; an explicit app setting can override it.
-// Preserve the AuthGate, identity, and provider boundaries when changing presentation.
+import { initializeTheme } from "./theme";
+import "./fonts.css";
+
+initializeTheme();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
@@ -13,6 +15,7 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
+    <ThemeObserver />
     <AuthGate>
       <App />
     </AuthGate>

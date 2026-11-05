@@ -99,7 +99,7 @@ The first command is read-only. The apply command repeats the metadata-only scan
 
 The decoder bounds header bytes/counts, part count, nesting and decoded body bytes. It handles base64, quoted-printable and unencoded UTF-8/ASCII text/plain, including bounded multipart mixed/alternative/related wrappers. Exactly one eligible inline plain-text body is required; attachments and HTML are not executed or interpreted as orders. Ambiguous/malformed email is retained for review. Decoded source whitespace and line endings remain unchanged. Subject decoding and one leading `SUBJ:` removal are separate from body-based parser dispatch. Both local custody time and IMAP server receipt time are retained separately. Original headers and selected-part byte provenance accompany the receipt audit event; full original email remains in hidden OpenSearch custody.
 
-ICD 1.2.0 retains optional `locations` with `geo_point` and GeoJSON `geo_shape` mappings. Supported coordinate forms produce points, channel endpoint lines, and closed area polygons. Circle centers retain their radius without invented polygon vertices. WGS84 is the approved default only when no datum is declared; explicit different/unknown datums and unresolved locations retain review states without map geometry. Geometry does not imply tasking or local C2 responsibility. Detailed tokens, spans and rules remain in audit. ICD 1.2.0 also carries bounded recurrence rules; ordinary date and time fields do not imply recurrence.
+ICD 1.3.0 retains optional `locations` with `geo_point` and GeoJSON `geo_shape` mappings. Supported coordinate forms produce points, channel endpoint lines, and closed area polygons. Circle centers retain their radius without invented polygon vertices. WGS84 is the approved default only when no datum is declared; explicit different/unknown datums and unresolved locations retain review states without map geometry. Geometry does not imply tasking or local C2 responsibility. Detailed tokens, spans and rules remain in audit. ICD 1.3.0 also carries bounded recurrence rules; ordinary date and time fields do not imply recurrence.
 
 ## Populate the local UI test indices
 
@@ -126,3 +126,12 @@ Synthetic importer regressions run with `python3 -m unittest discover -s backend
 Verified locally on 2026-11-04: the fourteen external example emails produced fourteen distinct core projections; an additional same-body email with a changed subject remained a separate duplicate receipt, updated the display subject and retained the conflict flag. The transport probe was quarantined independently. An abrupt SIGKILL/restart retained all sixteen receipt records, fourteen projections and 558 pending audit events without duplication.
 
 The local OpenSearch 3.9.0 test indices accepted fourteen message documents and 558 audit documents. Actual nested spatial queries matched five documents with points and two with polygons. The source corpus yielded fifteen points, two polygons and six unresolved locations; synthetic regression cases also exercise channel LineString output. The idle Rust worker measured about 7.3 MiB container memory usage at this small workload within the configured 128 MiB demo cap; this is not a burst/maximum-input capacity measurement.
+
+## Verified IMAP TLS for UDS
+
+The UDS work adds `transport: "tls"` for implicit TLS with hostname and CA
+verification before LOGIN. Optional `tls_ca` selects an additional PEM trust
+bundle. Plaintext-demo host restrictions remain unchanged. This adapter supports
+password LOGIN, not STARTTLS or OAuth/XOAUTH2; validate the target mail service
+before adopting it. See the [UDS runbook](../deploy/uds/README.md) for Secret,
+network, capacity and acceptance inputs.

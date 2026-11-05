@@ -42,22 +42,20 @@ spec:
         port: {{ .Values.common.imapPort }}
       - direction: Egress
         selector: {app: parse-command-server}
-        remoteNamespace: {{ .Values.common.idpGatewayNamespace | quote }}
-        remoteSelector: {{ .Values.common.idpGatewaySelector | toJson }}
-        port: {{ .Values.common.idpGatewayPort }}
+        remoteNamespace: {{ required "common.idpNamespace is required" .Values.common.idpNamespace | quote }}
+        remoteSelector: {{ required "common.idpSelector is required" .Values.common.idpSelector | toJson }}
+        port: {{ .Values.common.idpPort }}
   sso:
-    - name: Parse Command
+    - name: OTIS
       clientId: {{ .Values.common.clientId | quote }}
       redirectUris:
         - {{ printf "https://%s.%s/auth/callback" .Values.common.host .Values.common.domain | quote }}
-      publicClient: false
-      standardFlowEnabled: true
-      serviceAccountsEnabled: false
-      attributes:
-        pkce.code.challenge.method: S256
-        use.refresh.tokens: "true"
+      webOrigins:
+        - {{ printf "https://%s.%s" .Values.common.host .Values.common.domain | quote }}
+      secretConfig:
+        name: {{ required "common.clientSecretName is required" .Values.common.clientSecretName | quote }}
       groups:
-        anyOf: {{ list .Values.common.adminGroup .Values.common.viewerGroup | toJson }}
+        anyOf: {{ .Values.common.allowedGroups | toJson }}
       protocolMappers:
         - name: groups
           protocol: openid-connect

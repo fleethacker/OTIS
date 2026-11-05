@@ -2,6 +2,7 @@ import { useContext, useId, useLayoutEffect, useRef, type ReactNode } from "reac
 import { createPortal } from "react-dom";
 import { TbX } from "react-icons/tb";
 import { SessionVisibility } from "./session-visibility";
+import { AppButton } from "./ui";
 
 export function Modal({
   title,
@@ -60,14 +61,15 @@ export function Modal({
     >
       <header>
         <h2 id={id}>{title}</h2>
-        <button
+        <AppButton
           type="button"
-          className="btn btn-ghost btn-xs"
+          variant="ghost"
+          size="xs"
           aria-label={`Close ${title.toLowerCase()}`}
           onClick={onClose}
         >
           <TbX aria-hidden="true" />
-        </button>
+        </AppButton>
       </header>
       {children}
     </dialog>,

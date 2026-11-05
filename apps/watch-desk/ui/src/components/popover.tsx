@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { AppButton } from "./ui";
 
 /** Small anchored popover with keyboard, focus and outside-click dismissal. */
 export function Popover({
@@ -54,15 +55,21 @@ export function Popover({
         }
       }}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
+        // Close only when focus moves to a known element outside. Safari and macOS
+        // browsers do not focus links on click, so mousedown on a menu link blurs
+        // with relatedTarget null; closing then would unmount the link before its
+        // click lands. Outside clicks are handled by the pointerdown listener.
+        const next = event.relatedTarget;
+        if (next instanceof Node && !event.currentTarget.contains(next)) {
           setOpen(false);
         }
       }}
     >
-      <button
+      <AppButton
         ref={button}
         type="button"
-        className="btn btn-ghost popover-trigger"
+        variant="ghost"
+        className="popover-trigger"
         aria-label={label}
         title={label}
         aria-haspopup="dialog"
@@ -71,7 +78,7 @@ export function Popover({
         onClick={() => setOpen((value) => !value)}
       >
         {trigger}
-      </button>
+      </AppButton>
       {open && (
         <div
           ref={panel}

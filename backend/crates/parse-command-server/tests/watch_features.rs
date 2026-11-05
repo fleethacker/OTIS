@@ -20,7 +20,7 @@ fn scope(ids: Option<Vec<String>>) -> station::ResolvedScope {
     }
 }
 fn core(id: &str, rev: &str, ship: &str) -> Value {
-    json!({"id":id,"revision":rev,"subject":id,"type":"OPTASK COMMS","originator":"FICTIONAL","command_ids":[ship],"issued_at":"2026-11-05T10:00:00Z"})
+    json!({"id":parse_command_types::message_id(id),"revision":rev,"subject":id,"type":"OPTASK COMMS","originator":"FICTIONAL","command_ids":[ship],"issued_at":"2026-11-05T10:00:00Z"})
 }
 fn window() -> briefing::LoginWindow {
     briefing::LoginWindow {
@@ -70,7 +70,7 @@ fn ledger_replay_is_immutable_and_frozen_windows_use_latest_revision_before_logi
             .as_array()
             .unwrap()
             .iter()
-            .any(|i| i["messageKey"] == "one@r1")
+            .any(|i| i["messageKey"] == format!("{}@r1", parse_command_types::message_id("one")))
     );
     let mut later = window();
     later.upper = Some(3);
@@ -103,7 +103,10 @@ fn station_filter_and_turnover_do_not_expose_other_stations_and_use_source_time(
     )
     .unwrap();
     assert_eq!(result["items"].as_array().unwrap().len(), 1);
-    assert_eq!(result["items"][0]["messageKey"], "one@r1");
+    assert_eq!(
+        result["items"][0]["messageKey"],
+        format!("{}@r1", parse_command_types::message_id("one"))
+    );
     assert_eq!(
         result["hiddenCount"], 0,
         "other stations never appear in hidden counts"
@@ -137,6 +140,48 @@ fn preferences_use_iana_and_profile_writes_cannot_change_roles_or_active_state()
     assert_eq!(
         parse_command_server::web::shift_return("/shift?returnTo=/calendar"),
         "/shift"
+    );
+}
+
+#[test]
+fn watch_context_uses_indexed_commands_without_demo_roster() {
+    let snapshot: watch_context::Snapshot = serde_json::from_value(json!({
+        "context":{"ownShipId":"","shipName":"","operationName":"","groupCommand":"","defaultShips":[],"turnoverUtc":["0400Z"]},
+        "confirmations":{},"updatedBy":null,"updatedAt":null,"dismissed":[]
+    })).unwrap();
+    let request = || {
+        serde_json::from_value(json!({"changes":[
+            {"field":"ownShipId","values":["SHIP-REAL"]},
+            {"field":"defaultShips","values":["unit:SHIP-REAL","unassigned:"]}
+        ]}))
+        .unwrap()
+    };
+    assert!(
+        watch_context::update_with_commands(
+            snapshot.clone(),
+            request(),
+            "admin",
+            &Default::default(),
+            false,
+            &[]
+        )
+        .is_err()
+    );
+    let result = watch_context::update_with_commands(
+        snapshot,
+        request(),
+        "admin",
+        &Default::default(),
+        false,
+        &["SHIP-REAL".into()],
+    )
+    .unwrap();
+    assert_eq!(result.context.own_ship_id, "SHIP-REAL");
+    assert!(
+        result
+            .context
+            .default_ships
+            .contains(&"unit:SHIP-REAL".into())
     );
 }
 fn headers(token: &str) -> HeaderMap {
@@ -310,7 +355,7 @@ async fn notification_counts_members_and_reads_are_scope_bound() {
     let mut notification = Record::new(
         "notification",
         "traffic:1",
-        json!({"id":1,"kind":"traffic","count":2,"members":{"one":{"messageKey":"one@r1","subject":"Allowed","context":"A","at":"2026-11-05T10:00:00Z","version":1},"two":{"messageKey":"two@r1","subject":"Hidden","context":"B","at":"2026-11-05T10:01:00Z","version":2}}}),
+        json!({"id":1,"kind":"traffic","count":2,"members":{"one":{"messageKey":format!("{}@r1", parse_command_types::message_id("one")),"subject":"Allowed","context":"A","at":"2026-11-05T10:00:00Z","version":1},"two":{"messageKey":format!("{}@r1", parse_command_types::message_id("two")),"subject":"Hidden","context":"B","at":"2026-11-05T10:01:00Z","version":2}}}),
     );
     notification.order = 2;
     app.private.state.put(&notification, None).await.unwrap();
@@ -410,5 +455,104 @@ async fn watch_context_batches_validate_before_cas_and_preserve_server_actor() {
     let saved = watch_context::read(&store, false).await.unwrap();
     assert_eq!(saved.updated_by.as_deref(), Some("verified-owner"));
     assert_eq!(saved.context.operation_name, "FICTIONAL");
+    support::cleanup(&store).await;
+}
+
+#[tokio::test]
+#[ignore = "requires isolated OpenSearch test indices"]
+async fn watch_context_and_native_settings_share_one_authoritative_cas_document() {
+    let store = support::store().await;
+    settings::bootstrap(&store).await.unwrap();
+    let (mut native, before) = settings::shared(&store).await.unwrap();
+    native.operation_name = "NATIVE SETTINGS".into();
+    let mut row = before.record.clone();
+    settings::apply(
+        &mut row.payload,
+        &native,
+        "native-admin",
+        &settings::revision(&before),
+        None,
+    )
+    .unwrap();
+    store.put(&row, Some(&before)).await.unwrap();
+    let snapshot = watch_context::read(&store, false).await.unwrap();
+    assert_eq!(snapshot.context.operation_name, "NATIVE SETTINGS");
+
+    let request = serde_json::from_value(json!({"changes":[
+        {"field":"operationName","values":["WATCH SETTINGS"]},
+        {"field":"turnoverUtc","values":["0400Z","0800Z"]}
+    ]}))
+    .unwrap();
+    let updated =
+        watch_context::update(snapshot, request, "watch-admin", &Default::default(), false)
+            .unwrap();
+    let (_, before) = settings::shared(&store).await.unwrap();
+    watch_context::save(&store, updated.clone(), &before, "watch-admin")
+        .await
+        .unwrap();
+    assert!(
+        watch_context::save(&store, updated, &before, "stale-admin")
+            .await
+            .is_err()
+    );
+    let (mut native, doc) = settings::shared(&store).await.unwrap();
+    assert_eq!(native.operation_name, "WATCH SETTINGS");
+    assert_eq!(native.turnover_utc, ["0400Z", "0800Z"]);
+    assert_eq!(
+        doc.record.payload["watch_context"]["confirmations"]["operationName"]["actor"],
+        "watch-admin"
+    );
+    assert!(
+        store
+            .get("watch_context", "shared")
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    native.operation_name = "NATIVE UPDATE".into();
+    let mut row = doc.record.clone();
+    settings::apply(
+        &mut row.payload,
+        &native,
+        "native-admin",
+        &settings::revision(&doc),
+        None,
+    )
+    .unwrap();
+    store.put(&row, Some(&doc)).await.unwrap();
+    let snapshot = watch_context::read(&store, false).await.unwrap();
+    assert_eq!(snapshot.context.operation_name, "NATIVE UPDATE");
+    assert!(
+        !snapshot
+            .confirmations
+            .contains_key(&watch_context::Field::OperationName)
+    );
+    assert!(
+        snapshot
+            .confirmations
+            .contains_key(&watch_context::Field::TurnoverUtc)
+    );
+
+    let (_, doc) = settings::shared(&store).await.unwrap();
+    let mut row = doc.record.clone();
+    settings::dismiss(&mut row.payload, "context:native-dismissal").unwrap();
+    store.put(&row, Some(&doc)).await.unwrap();
+    let mut snapshot = watch_context::read(&store, false).await.unwrap();
+    assert!(
+        snapshot
+            .dismissed
+            .contains(&"context:native-dismissal".into())
+    );
+    snapshot.dismissed.push("context:watch-dismissal".into());
+    let (_, doc) = settings::shared(&store).await.unwrap();
+    watch_context::save(&store, snapshot, &doc, "watch-admin")
+        .await
+        .unwrap();
+    let (_, doc) = settings::shared(&store).await.unwrap();
+    assert_eq!(
+        doc.record.payload["dismissed"],
+        json!(["context:native-dismissal", "context:watch-dismissal"])
+    );
     support::cleanup(&store).await;
 }

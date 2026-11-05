@@ -137,7 +137,12 @@ impl Publisher {
         if !matches!(health["status"].as_str(), Some("green" | "yellow")) {
             return Err(Error::unavailable());
         }
+        let mut casualty_rebuild = None;
         let definitions = [
+            (
+                crate::casualties::INDEX,
+                include_str!("../../../../docs/opensearch/casualties.index.json"),
+            ),
             (
                 MESSAGES,
                 include_str!("../../../../docs/opensearch/messages.ui-index.json"),
@@ -169,10 +174,61 @@ impl Publisher {
                 }
                 Err(error) => return Err(error),
             };
+            if matches!(name, MESSAGES | PASSAGES)
+                && document[name]["mappings"]["properties"]
+                    .get("casualty")
+                    .is_none()
+            {
+                let definition: Value =
+                    serde_json::from_str(body).map_err(|_| Error::config("Index definition"))?;
+                let mut metadata = document[name]["mappings"]["_meta"]
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default();
+                metadata.insert(
+                    "icd_version".into(),
+                    json!(parse_command_types::ICD_VERSION),
+                );
+                self.request(reqwest::Method::PUT, &format!("/{name}/_mapping"), json!({"_meta":metadata,"properties":{"casualty":definition["mappings"]["properties"]["casualty"]}}))?;
+            }
+            if name == MESSAGES {
+                let expected: Value =
+                    serde_json::from_str(body).map_err(|_| Error::config("Index definition"))?;
+                if let Some(update) = recurrence_mapping_update(
+                    &document[name]["mappings"],
+                    &expected["mappings"]["properties"]["recurrences"],
+                )? {
+                    self.request(reqwest::Method::PUT, &format!("/{name}/_mapping"), update)?;
+                }
+            }
             let uuid = document[name]["settings"]["index"]["uuid"]
                 .as_str()
                 .ok_or_else(Error::unavailable)?;
-            self.reset_index(name, uuid)?;
+            if name == crate::casualties::INDEX {
+                let previous = self.store.get("publication_index", name)?;
+                if previous
+                    .as_ref()
+                    .is_none_or(|d| d.record.payload["uuid"] != uuid)
+                {
+                    casualty_rebuild = Some(uuid.to_owned());
+                }
+            } else {
+                self.reset_index(name, uuid)?;
+            }
+        }
+        if let Some(uuid) = casualty_rebuild {
+            self.rebuild_casualties()?;
+            let previous = self
+                .store
+                .get("publication_index", crate::casualties::INDEX)?;
+            self.store.put(
+                &Record::new(
+                    "publication_index",
+                    crate::casualties::INDEX,
+                    json!({"uuid":uuid}),
+                ),
+                previous.as_ref(),
+            )?;
         }
         self.request(reqwest::Method::POST,"/_aliases",json!({"actions":[{"add":{"index":MESSAGES,"alias":MESSAGE_ALIAS}},{"add":{"index":PASSAGES,"alias":"parse-command-search-passages"}}]}))?;
         let model=self.request(reqwest::Method::POST,"/_plugins/_ml/models/_search",json!({"size":10,"query":{"bool":{"filter":[{"term":{"model_content_hash_value":MODEL_HASH}},{"exists":{"field":"model_config"}}]}}})).unwrap_or_else(|_|json!({"hits":{"hits":[]}}));
@@ -207,10 +263,24 @@ impl Publisher {
             )?;
         }
         self.request(reqwest::Method::PUT,"/_search/pipeline/parse-command-hybrid-rrf-v1",json!({"phase_results_processors":[{"score-ranker-processor":{"combination":{"technique":"rrf","rank_constant":60}}}]}))?;
-        self.status.model.store(
-            model_id.is_some_and(|_| matching[0]["_source"]["model_state"] == "DEPLOYED"),
-            Ordering::Relaxed,
-        );
+        // Persisted model metadata is insufficient after a node restart.
+        let inference_ready = model_id.is_some() && self.request(
+            reqwest::Method::POST,
+            &format!("/_ingest/pipeline/{INGEST}/_simulate"),
+            json!({"docs":[{"_index":PASSAGES,"_id":"readiness-probe","_source":{"text":"Coordinate the communications plan and reporting requirements."}}]}),
+        ).is_ok_and(|value| {
+            let source = &value["docs"][0]["doc"]["_source"];
+            source["embedding_status"] == "ready" && source["embedding"].as_array().is_some_and(|v|
+                v.len() == 384 && v.iter().all(|n| n.as_f64().is_some_and(f64::is_finite)))
+        });
+        self.status.model.store(inference_ready, Ordering::Relaxed);
+        if !inference_ready && let Some(id) = model_id {
+            let _ = self.request(
+                reqwest::Method::POST,
+                &format!("/_plugins/_ml/models/{id}/_deploy"),
+                json!({}),
+            );
+        }
         Ok(())
     }
     fn reset_index(&self, target: &str, uuid: &str) -> Result<()> {
@@ -415,7 +485,25 @@ impl Publisher {
                 ) && matches!(
                     audit["payload"]["set_id"].as_str(),
                     Some("GENTEXT" | "NARR" | "AMPN")
-                ) {
+                ) || (core["type"] == "CASREP"
+                    && matches!(
+                        audit["kind"].as_str(),
+                        Some("record_interpreted" | "fact_interpreted")
+                    )
+                    && matches!(
+                        audit["payload"]["set_id"].as_str(),
+                        Some(
+                            "CASLTY"
+                                | "ESTIMATE"
+                                | "ASSIST"
+                                | "TECHDATA"
+                                | "PARTS"
+                                | "REQNDATA"
+                                | "RCPTDATA"
+                                | "CORRSTAT"
+                        )
+                    ))
+                {
                     records.insert(
                         audit["payload"]["record_sequence"]
                             .as_u64()
@@ -457,6 +545,20 @@ impl Publisher {
                         )
                     );
                     let mut passage = json!({"id":pid,"message_id":id,"revision":revision,"ordinal":ordinal,"text":text,"embedding_status":"pending","mentioned_units":[]});
+                    if let Some(casualty) = core.get("casualty") {
+                        let metadata: serde_json::Map<String, Value> = [
+                            "serial",
+                            "reporting_uic",
+                            "eic",
+                            "category",
+                            "report_type",
+                            "identifiers",
+                        ]
+                        .into_iter()
+                        .filter_map(|key| casualty.get(key).map(|v| (key.to_owned(), v.clone())))
+                        .collect();
+                        passage["casualty"] = json!(metadata);
+                    }
                     for key in [
                         "type",
                         "originator",
@@ -693,6 +795,9 @@ impl Publisher {
                 success = value["_source"]["embedding_status"] == "ready";
                 self.status.model.store(success, Ordering::Relaxed);
             }
+            if success && kind == "message" && row.payload["document"]["type"] == "CASREP" {
+                success = self.refresh_casualties(&row.payload["document"]).is_ok();
+            }
             self.record_delivery(
                 doc,
                 success,
@@ -706,6 +811,67 @@ impl Publisher {
         Ok(selected.len())
     }
 
+    fn rebuild_casualties(&self) -> Result<()> {
+        let mut after = None;
+        loop {
+            let mut query = json!({"size":0,"query":{"term":{"type":"CASREP"}},"aggs":{"families":{"composite":{"size":32,"sources":[{"uic":{"terms":{"field":"casualty.reporting_uic"}}},{"serial":{"terms":{"field":"casualty.serial"}}}]}}}});
+            if let Some(value) = after {
+                query["aggs"]["families"]["composite"]["after"] = value;
+            }
+            let response = self.request(
+                reqwest::Method::POST,
+                &format!("/{MESSAGES}/_search"),
+                query,
+            )?;
+            if response["timed_out"] == true
+                || response["_shards"]["failed"].as_u64().unwrap_or(1) > 0
+            {
+                return Err(Error::unavailable());
+            }
+            let buckets = response["aggregations"]["families"]["buckets"]
+                .as_array()
+                .ok_or_else(Error::unavailable)?;
+            for bucket in buckets {
+                self.refresh_casualties(&json!({"casualty":{"reporting_uic":bucket["key"]["uic"],"serial":bucket["key"]["serial"]}}))?;
+            }
+            if buckets.len() < 32 {
+                break;
+            }
+            after = response["aggregations"]["families"]
+                .get("after_key")
+                .cloned();
+            if after.is_none() {
+                return Err(Error::unavailable());
+            }
+        }
+        Ok(())
+    }
+    fn refresh_casualties(&self, core: &Value) -> Result<()> {
+        let response=self.request(reqwest::Method::POST,&format!("/{MESSAGES}/_search"),json!({"size":crate::casualties::MAX_HISTORY+1,"track_total_hits":true,"_source":["id","revision","type","issued_at","security","command_ids","casualty.report_type","casualty.serial","casualty.reporting_uic","casualty.initial_report_label","casualty.update_sequence","casualty.equipment","casualty.eic","casualty.category","casualty.cause","casualty.repair_estimate_date"],"query":{"bool":{"filter":[{"term":{"type":"CASREP"}},{"term":{"casualty.reporting_uic":core["casualty"]["reporting_uic"]}},{"term":{"casualty.serial":core["casualty"]["serial"]}}]}},"sort":["id","revision"]}))?;
+        if response["timed_out"] == true || response["_shards"]["failed"].as_u64().unwrap_or(1) > 0
+        {
+            return Err(Error::unavailable());
+        }
+        let hits = response["hits"]["hits"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        let reports = hits
+            .iter()
+            .take(crate::casualties::MAX_HISTORY)
+            .map(|h| h["_source"].clone())
+            .collect::<Vec<_>>();
+        for view in
+            crate::casualties::project(&reports, hits.len() > crate::casualties::MAX_HISTORY)
+        {
+            let id = view["id"].as_str().ok_or_else(Error::unavailable)?;
+            self.request(
+                reqwest::Method::PUT,
+                &format!("/{}/_doc/{id}?refresh=wait_for", crate::casualties::INDEX),
+                view.clone(),
+            )?;
+        }
+        Ok(())
+    }
     pub fn run(mut self, cancelled: Arc<AtomicBool>) {
         let mut cycles = 0u64;
         while !cancelled.load(Ordering::Relaxed) {
@@ -804,10 +970,35 @@ pub fn chunks(
     }
     Ok(output)
 }
+fn recurrence_mapping_update(mapping: &Value, expected: &Value) -> Result<Option<Value>> {
+    let current = &mapping["properties"]["recurrences"];
+    if !current.is_null() && current != expected {
+        return Err(Error::config(
+            "Existing recurrence mapping is incompatible; operator migration required",
+        ));
+    }
+    let version = mapping["_meta"]["icd_version"].as_str();
+    if !matches!(version, Some("1.1.0" | "1.2.0" | "1.3.0")) {
+        return Err(Error::config(
+            "Verify canonical message schema before recurrence mapping upgrade",
+        ));
+    }
+    if !current.is_null() && version == Some(parse_command_types::ICD_VERSION) {
+        return Ok(None);
+    }
+    // Add only this field; preserve all other properties and metadata keys.
+    let mut metadata = mapping["_meta"].as_object().cloned().unwrap_or_default();
+    metadata.insert(
+        "icd_version".into(),
+        json!(parse_command_types::ICD_VERSION),
+    );
+    Ok(Some(
+        json!({"properties":{"recurrences":expected},"_meta":metadata}),
+    ))
+}
 fn templates(model: Option<&str>) -> Vec<(String, String)> {
     let filters = json!({"bool":{"filter":"__FILTERS__"}});
-    let lexical =
-        json!({"multi_match":{"query":"__QUERY__","fields":["text","subject"],"operator":"or"}});
+    let lexical = json!({"bool":{"should":[{"multi_match":{"query":"__QUERY__","fields":["text","subject"],"operator":"or"}},{"match":{"casualty.identifiers":{"query":"__QUERY__","boost":8}}}],"minimum_should_match":1}});
     let neural = json!({"neural":{"embedding":{"query_text":"__QUERY__","model_id":model.unwrap_or(""),"k":100,"filter":{"bool":{"filter":[filters,{"term":{"embedding_status":"ready"}}]}}}}});
     let mut templates = Vec::new();
     for (mode, query) in [
@@ -827,10 +1018,12 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
         templates.push((format!("parse-command-passages-{mode}-v2"),json!({"size":100,"timeout":"5s","track_total_hits":false,"_source":["id","message_id","revision","text","embedding_status"],"query":query}).to_string()));
     }
     templates.push(("parse-command-message-detail-v1".into(),json!({"size":2,"timeout":"5s","query":{"bool":{"filter":[{"term":{"id":"__ID__"}},{"term":{"revision":"__REV__"}}]}}}).to_string()));
-    templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
-    templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
+    templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags","casualty.serial","casualty.reporting_uic","casualty.category","casualty.report_type","casualty.eic","casualty.identifiers"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
+    templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags","casualty.serial","casualty.reporting_uic","casualty.category","casualty.report_type","casualty.eic","casualty.identifiers"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
     templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
-    templates.push(("parse-command-timeline-v1".into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","must":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}}]}},"sort":["id","revision"]}).to_string()));
+    // Recurrences include unsupported/unanchored rules for review in every view;
+    // their occurrences are bounded in Rust, never by issue/receipt time.
+    templates.push((TIMELINE_TEMPLATE.into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","should":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}},{"nested":{"path":"recurrences","query":{"match_all":{}}}}],"minimum_should_match":1}},"sort":["id","revision"]}).to_string()));
     templates.push(("parse-command-evidence-list-v1".into(),json!({"size":65,"timeout":"5s","query":{"bool":{"filter":"__FILTERS__"}},"sort":["id"],"search_after":"__AFTER__"}).to_string()));
     templates.push(("parse-command-source-status-v1".into(),json!({"size":0,"track_total_hits":true,"aggs":{"embedding_states":{"terms":{"field":"embedding_status","size":3}}}}).to_string()));
     templates
@@ -891,5 +1084,65 @@ mod backfill_tests {
         assert_eq!(row.payload["entries"][0]["sequence"], 1);
         assert_eq!(row.payload["entries"][1]["messageKey"], "body@new");
         assert_eq!(row.payload["entries"][1]["sequence"], 2);
+    }
+}
+
+#[cfg(test)]
+mod recurrence_tests {
+    use super::*;
+    #[test]
+    fn mapping_upgrade_is_additive_and_rejects_unknown_or_conflicting_schemas() {
+        let schema: Value = serde_json::from_str(include_str!(
+            "../../../../docs/opensearch/messages.ui-index.json"
+        ))
+        .unwrap();
+        let field = &schema["mappings"]["properties"]["recurrences"];
+        let original = json!({"_meta":{"icd_version":"1.1.0","operator_note":"preserve"},"properties":{"subject":{"type":"text"}}});
+        let update = recurrence_mapping_update(&original, field)
+            .unwrap()
+            .unwrap();
+        assert_eq!(update["_meta"]["operator_note"], "preserve");
+        assert_eq!(update["properties"].as_object().unwrap().len(), 1);
+        assert!(original["properties"].get("recurrences").is_none());
+        assert!(
+            recurrence_mapping_update(&schema["mappings"], field)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            recurrence_mapping_update(&json!({"_meta":{"icd_version":"9.0.0"}}), field).is_err()
+        );
+        assert!(recurrence_mapping_update(&json!({"_meta":{"icd_version":"1.1.0"},"properties":{"recurrences":{"type":"text"}}}),field).is_err());
+    }
+    #[test]
+    fn timeline_keeps_recurrence_only_and_unanchored_candidates_with_the_same_filters_and_bound() {
+        assert_eq!(TIMELINE_TEMPLATE, "parse-command-timeline-v2");
+        let published = templates(None);
+        assert!(
+            published
+                .iter()
+                .all(|(name, _)| name != "parse-command-timeline-v1")
+        );
+        let (_, template) = published
+            .into_iter()
+            .find(|(name, _)| name == TIMELINE_TEMPLATE)
+            .unwrap();
+        let value: Value = serde_json::from_str(
+            &template
+                .replace("{{#toJson}}filters{{/toJson}}", "[]")
+                .replace("{{to}}", "2026-11-06T00:00:00Z"),
+        )
+        .unwrap();
+        assert_eq!(value["size"], 101);
+        assert_eq!(value["query"]["bool"]["filter"], json!([]));
+        assert_eq!(value["query"]["bool"]["minimum_should_match"], 1);
+        assert!(
+            value["query"]["bool"]["should"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|q| q["nested"]["path"] == "recurrences"
+                    && q["nested"]["query"]["match_all"] == json!({}))
+        );
     }
 }

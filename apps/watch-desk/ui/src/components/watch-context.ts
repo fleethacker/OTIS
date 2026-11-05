@@ -105,7 +105,7 @@ export async function contextRequest(
   }
   return value;
 }
-export function useWatchContext(suggestions = false) {
+export function useWatchContext(suggestions = false, enabled = true) {
   const identity = useIdentity();
   const { session } = useSession();
   const identityKey = JSON.stringify([
@@ -118,7 +118,7 @@ export function useWatchContext(suggestions = false) {
   const query = useQuery({
     queryKey: ["watchdesk-context", identityKey, suggestions],
     queryFn: ({ signal }) => contextRequest("get", { includeSuggestions: suggestions }, signal),
-    enabled: !identity.isLoading && !!identity.username,
+    enabled: enabled && !identity.isLoading && !!identity.username,
     staleTime: 15_000,
     gcTime: 60_000,
     retry: false,
@@ -142,6 +142,8 @@ export function useUpdateContext() {
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ["watchdesk-context"] }),
+        client.invalidateQueries({ queryKey: ["settings", "shared"] }),
+        client.invalidateQueries({ queryKey: ["settings", "suggestions"] }),
         client.invalidateQueries({ queryKey: ["watchdesk-commands"] }),
       ]);
     },

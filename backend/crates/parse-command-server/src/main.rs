@@ -153,7 +153,15 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let result = runtime.block_on(async move {
         let state = parse_command_state::Store::new(&config.search, &config.state_index)?;
         state.provision().await?;
-        parse_command_server::settings::bootstrap(&state).await?;
+        // The fictional Watch Desk demo seeds its roster defaults only into an empty store.
+        let initial = if config.intake.demo_fixture_assignments {
+            parse_command_server::settings::Settings::demo(
+                &parse_command_server::commands::catalog(true)?,
+            )
+        } else {
+            parse_command_server::settings::Settings::default()
+        };
+        parse_command_server::settings::bootstrap_with(&state, initial).await?;
         let custody =
             parse_command_state::Store::new(&config.search, &config.intake.custody_index)?;
         let app = Arc::new(App {

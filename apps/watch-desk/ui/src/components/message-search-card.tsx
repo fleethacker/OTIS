@@ -36,10 +36,10 @@ export function MessageSearchCard({
         <span className="record-card-type" title={type}>
           {type}
         </span>
-        <strong className="record-card-subject" title={subject}>
-          {subject}
-        </strong>
       </span>
+      <strong className="record-card-subject" title={subject}>
+        {subject}
+      </strong>
       <span className="record-card-metadata">
         <span className="record-card-originator" title={originator}>
           {originator}

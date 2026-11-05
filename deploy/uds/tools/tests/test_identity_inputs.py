@@ -48,20 +48,20 @@ class IdentityInputsTests(unittest.TestCase):
 
     def test_native_identity_and_hidden_storage_inputs(self):
         config = self.config()
-        self.assertIn(('parse-command-session', ['session-key', 'ca.pem']), required_secrets(inputs(config)))
-        for field in ['sessionTtlSeconds', 'oidcPolicySecret', 'oidcPolicy', 'oidcKeySecret', 'private', 'custody']:
+        self.assertIn(('parse-command-sso', ['session-key', 'ca.pem']), required_secrets(inputs(config)))
+        for field in ['sessionTtlSeconds', 'oidcPolicySecret', 'oidcPolicy', 'oidcKeySecret']:
             invalid = copy.deepcopy(config)
             invalid['shared']['SERVER'][field] = 'obsolete'
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'obsolete'):
                 inputs(invalid)
-        config['shared']['COMMON']['idpGatewayPort'] = 8443
-        self.assertEqual(inputs(config)['COMMON']['idpGatewayPort'], 8443)
-        config['shared']['COMMON']['viewerGroup'] = config['shared']['COMMON']['adminGroup']
+        config['shared']['COMMON']['idpPort'] = 8443
+        self.assertEqual(inputs(config)['COMMON']['idpPort'], 8443)
+        config['shared']['SERVER']['viewerGroup'] = config['shared']['SERVER']['adminGroup']
         with self.assertRaisesRegex(ValueError, 'distinct'):
             inputs(config)
         config = self.config()
         config['shared']['SERVER']['intake']['journal'] = '/data/custody.sqlite'
-        with self.assertRaisesRegex(ValueError, 'OpenSearch'):
+        with self.assertRaisesRegex(ValueError, 'snapshot migration'):
             inputs(config)
 
     def test_smoke_requires_exact_origin_and_station_before_sending_mail(self):

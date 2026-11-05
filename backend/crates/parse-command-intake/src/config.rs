@@ -13,12 +13,12 @@ pub struct Config {
     pub mailbox: String,
     pub password_env: String,
     pub transport: Transport,
-    #[serde(default)]
-    pub tls_ca: Option<PathBuf>,
     #[serde(default = "default_search")]
     pub opensearch_url: String,
     #[serde(default = "default_index")]
     pub custody_index: String,
+    #[serde(default)]
+    pub tls_ca: Option<PathBuf>,
     pub revision: String,
     pub poll_seconds: u64,
     pub retry_max_seconds: u64,

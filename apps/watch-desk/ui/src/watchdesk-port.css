@@ -1,40 +1,57 @@
 /* Watch Desk port only. Parker's base stylesheet remains unchanged apart from this import. */
-/* Bounded review disclosure stays reachable without displacing the time grid. */
-.calendar-review { flex: none; margin-top: 8px; border-left: 3px solid var(--color-warning); background: var(--color-base-100); color: var(--color-base-content); }
-.calendar-review summary { cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 650; }
-.calendar-review-content { max-height: 26vh; overflow: auto; padding: 0 12px 10px; font-size: 12px; overflow-wrap: anywhere; }
-.calendar-review-content p { margin: 6px 0; }
-.calendar-review-content ul { list-style: none; padding: 0; }
-.calendar-review-content li { padding: 8px 0; border-top: 1px solid var(--color-base-300); }
-.calendar-review-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
-.calendar-review-content small { color: var(--color-bc-muted); }
 .calendar-result-limit { padding: 8px 16px; font-size: 12px; color: var(--color-base-content); }
 .calendar-search-status { flex: none; font-size: 12px; margin: 0 0 8px; overflow-wrap: anywhere; }
 .calendar-search-status a { color: var(--color-primary); text-decoration: underline; }
-.calendar-review-limit { font-weight: 600; }
-.calendar-review :is(summary, a, button):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 /* Never inherit RBC's white gutter in the dark theme. */
 .calendar-with-ships .ship-calendar .rbc-time-gutter, .calendar-with-ships .ship-calendar .rbc-time-header-gutter { background: var(--color-base-100); color: var(--color-base-content); }
 
 /* The roster is independent of filtered/limited source pages. */
-.calendar-page.calendar-with-ships { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 16px; }
+.calendar-page.calendar-with-ships { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 12px; }
+.calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: 32px minmax(0, 1fr); }
 .calendar-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.ships-sidebar { overflow: auto; min-height: 0; font-size: 12px; }
-.ships-sidebar summary { cursor: pointer; font-size: 15px; font-weight: 650; padding: 6px 0; }
-.ships-sidebar fieldset { margin: 14px 0; min-width: 0; }
-.ships-sidebar legend label, .ship-choice label { display: flex; align-items: center; gap: 7px; }
-.ships-sidebar legend { font-weight: 600; color: var(--color-bc-muted); margin-bottom: 4px; }
-.ship-choice { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin: 6px 0; }
-.ship-choice label { min-width: 0; overflow-wrap: anywhere; }
-.ship-choice input { flex: none; }
-.ship-swatch { flex: none; width: 9px; height: 9px; border-radius: 2px; }
-.ship-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
-.roster-provenance, .ships-sidebar small { color: var(--color-bc-muted); font-size: 11px; overflow-wrap: anywhere; }
+.ships-sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; font-size: 13px; }
+.ships-header { display: flex; flex: none; align-items: center; gap: 2px; margin-bottom: 6px; }
+.ships-header h2 { display: flex; flex: 1; align-items: baseline; gap: 6px; min-width: 0; font-size: 13px; font-weight: 600; }
+.ships-header small { color: var(--color-bc-muted); font-size: 11px; font-weight: 400; }
+.ships-header .popover-trigger, .ships-header .ships-toggle { width: 32px; height: 32px; min-height: 32px; padding: 6px; flex: none; }
+.ships-header svg { width: 16px; height: 16px; }
+.ships-header .popover-panel { min-width: 140px; }
+.ships-sidebar[data-expanded="false"] .ships-header { justify-content: center; }
+.ships-content { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.ships-content[hidden] { display: none; }
+.ships-sidebar .ship-search { flex: none; width: 100%; min-height: 32px; height: 32px; padding: 4px 8px; font-size: 13px; }
+.ship-list { overflow-y: auto; min-height: 0; padding: 4px; }
+.ships-sidebar fieldset { margin: 0 0 12px; min-width: 0; }
+.ships-sidebar legend label, .ship-choice label { display: flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.ships-sidebar legend { font-size: 11px; font-weight: 600; color: var(--color-bc-muted); }
+.ships-sidebar input[type="checkbox"] { flex: none; width: 14px; height: 14px; accent-color: var(--color-primary); }
+.ship-choice { display: flex; align-items: center; justify-content: space-between; gap: 2px; border-radius: var(--radius-field); }
+.ship-choice:hover, .ship-choice:focus-within { background: var(--brand-selection); }
+.ship-choice label { flex: 1; min-width: 0; padding: 3px 0; line-height: 1.35; overflow-wrap: anywhere; }
+.ship-choice .ship-only { opacity: 0; flex: none; height: 24px; min-height: 24px; padding: 2px 4px; font-size: 11px; font-weight: 500; }
+.ship-choice:hover .ship-only, .ship-choice:focus-within .ship-only { opacity: 1; }
+.ship-swatch { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.ship-calendar-options { display: grid; gap: 2px; }
+.ship-calendar-options .btn { justify-content: flex-start; min-height: 30px; padding: 4px 8px; font-size: 13px; font-weight: 400; }
+.ships-warning, .ships-error { font-size: 12px; overflow-wrap: anywhere; }
+.ships-warning { color: var(--color-warning); }
+.ships-sidebar :is(button, input):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .command-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: baseline; }
 .command-chip { color: white; font-size: 10px; font-weight: 600; line-height: 1.4; padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
-  .calendar-page.calendar-with-ships { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
-  .ships-sidebar { max-height: 30vh; }
+  .calendar-page.calendar-with-ships,
+  .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
+  .ships-content { max-height: 30vh; }
+  .ships-sidebar[data-expanded="false"] .ships-header { justify-content: flex-start; margin-bottom: 0; }
+}
+@media (hover: none) { .ship-choice .ship-only { opacity: 1; } }
+@media (pointer: coarse) {
+  .ships-header .popover-trigger, .ships-header .ships-toggle { width: 44px; height: 44px; min-height: 44px; }
+  .ship-choice .ship-only, .ship-calendar-options .btn, .ships-sidebar .ship-search,
+  .ships-sidebar legend label, .ship-choice label { min-height: 44px; }
+}
+@media (pointer: coarse) and (min-width: 901px) {
+  .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: 44px minmax(0, 1fr); }
 }
 
 /* Narrow view scrolls the page rather than crushing the calendar below wrapped chrome. */
@@ -46,15 +63,6 @@
   .calendar-page.calendar-with-ships .calendar-scroll { flex: none; height: 460px; min-height: 420px; }
   .calendar-page.calendar-with-ships .calendar-scroll .ship-calendar { min-height: 420px; }
 }
-@media (max-width: 640px) {
-  #root .desk-header { height: auto; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
-  .desk-header .header-start { grid-column: 1; gap: 8px; }
-  .desk-header .account { grid-column: 2; grid-row: 1; gap: 4px; }
-  .desk-header .header-clock { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
-  .desk-header .wordmark { gap: 8px; }
-}
-.desk-header .popover-trigger { color: white; }
-.desk-header .avatar > div { background: oklch(78% 0.08 190); color: oklch(25% 0.04 250); }
 
 /* Day resources and Week Fit only; Expanded keeps Parker's lane-proportional width. */
 .calendar-with-ships .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
@@ -90,26 +98,39 @@
 .calendar-event-copy { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: auto; }
 .calendar-with-ships .ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }
 
-/* App-owned Settings; read-only users see the same confirmed context. */
-.watch-settings { max-width: 900px; margin: 0 auto; }
-.watch-settings h1 { font-size: 24px; font-weight: 650; margin: 16px 0; }
-.watch-settings > p, .context-editor p, .context-confirmation { color: var(--color-bc-muted); font-size: 12px; margin: 8px 0; overflow-wrap: anywhere; }
-.context-editor { border-top: 1px solid var(--color-base-300); padding: 14px 0 4px; }
-.context-editor legend { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
-.context-editor .input, .context-editor .select { width: min(100%, 480px); }
-.context-editor button { display: block; margin-top: 8px; }
-.context-ship-options { display: flex; flex-wrap: wrap; gap: 10px 18px; }
-.context-ship-options label, .context-hide-confirm { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.context-hide-confirm { border-left: 3px solid var(--color-warning); padding: 8px; }
-.context-suggestions { margin-top: 24px; }
-.context-suggestions h2 { font-size: 18px; font-weight: 600; }
-.context-suggestions > p { font-size: 12px; margin: 8px 0; }
-.context-suggestion { border: 1px solid var(--color-base-300); padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
-.context-suggestion h3 { font-weight: 600; }
-.context-suggestion a, .context-confirmation a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
-.context-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.context-conflict { border-left: 3px solid var(--color-warning); padding-left: 10px; }
-.watch-settings [role="alert"] { color: var(--color-error); font-size: 13px; }
+/* Watch fields and message suggestions inside the shared Settings form. */
+/* Disabled fields stay legible on both theme surfaces, including Safari text fill. */
+.settings-content fieldset:disabled :is(.input, .select),
+.settings-content :is(.input, .select):disabled {
+  background-color: var(--color-base-100);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-base-content);
+  -webkit-text-fill-color: var(--color-base-content);
+  opacity: 1;
+}
+.settings-content .input::placeholder {
+  color: var(--color-bc-muted);
+  -webkit-text-fill-color: var(--color-bc-muted);
+  opacity: 1;
+}
+.settings-content label small, .settings-default-ships small, .settings-view-only { color: var(--color-bc-muted); font-size: 12px; }
+.settings-default-ships { grid-column: 1 / -1; display: grid; gap: 5px; font-size: 12px; }
+.settings-content .context-ship-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.settings-content .context-ship-options label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.settings-content .context-ship-options input[type="checkbox"] { flex: none; width: auto; }
+.context-suggestions { border-top: 1px solid var(--color-base-300); padding-top: 12px; font-size: 13px; }
+.context-suggestions > p { color: var(--color-bc-muted); margin: 4px 0; overflow-wrap: anywhere; }
+.context-suggestions-heading { justify-content: space-between; }
+.context-suggestions h2 { font-size: 14px; font-weight: 650; }
+.context-suggestion { border: 1px solid var(--color-base-300); padding: 10px; margin: 8px 0; overflow-wrap: anywhere; }
+.context-suggestion h3 { font-size: 13px; font-weight: 600; }
+.context-suggestion small { font-size: 12px; font-weight: 400; }
+.context-suggestion a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
+.context-suggestion .settings-actions { justify-content: flex-start; margin-top: 6px; }
+.context-conflict { padding-left: 10px; }
+@media (max-width: 600px) {
+  .settings-content .context-ship-options { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* P5: source-owned turnover, independent of scheduled date/search and existing inbox. */
 .watch-turnover { flex: none; margin-bottom: 10px; background: var(--color-base-100); border: 1px solid var(--color-base-300); font-size: 12px; }
@@ -124,5 +145,26 @@
 .turnover-content a { color: var(--color-primary); text-decoration: underline; }
 .turnover-content small { color: var(--color-bc-muted); }
 .turnover-content h3 { font-weight: 600; margin-top: 12px; }
-.turnover-hidden { border-left: 3px solid var(--color-warning); padding-left: 8px; }
+.turnover-hidden { padding-left: 8px; }
 .turnover-content [role="alert"] { color: var(--color-error); }
+
+/* App-owned Settings; read-only users see the same confirmed context. */
+.watch-settings { max-width: 900px; margin: 0 auto; }
+.watch-settings h1 { font-size: 24px; font-weight: 650; margin: 16px 0; }
+.watch-settings > p, .watch-settings .context-editor p, .watch-settings .context-confirmation { color: var(--color-bc-muted); font-size: 12px; margin: 8px 0; overflow-wrap: anywhere; }
+.watch-settings .context-editor { border: 1px solid var(--color-base-300); border-radius: var(--radius-box); padding: 14px; margin-top: 12px; }
+.watch-settings .context-editor legend { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.watch-settings .context-editor .input, .watch-settings .context-editor .select { width: min(100%, 480px); }
+.watch-settings .context-editor button { display: block; margin-top: 8px; }
+.watch-settings .context-ship-options { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.watch-settings .context-ship-options label, .watch-settings .context-hide-confirm { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.watch-settings .context-hide-confirm { border: 1px solid var(--color-warning); border-radius: var(--radius-box); padding: 8px; }
+.watch-settings .context-suggestions { margin-top: 24px; }
+.watch-settings .context-suggestions h2 { font-size: 18px; font-weight: 600; }
+.watch-settings .context-suggestions > p { font-size: 12px; margin: 8px 0; }
+.watch-settings .context-suggestion { border: 1px solid var(--color-base-300); padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+.watch-settings .context-suggestion h3 { font-weight: 600; }
+.watch-settings .context-suggestion a, .watch-settings .context-confirmation a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
+.watch-settings .context-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.watch-settings .context-conflict { border: 1px solid var(--color-warning); border-radius: var(--radius-box); padding-left: 10px; }
+.watch-settings [role="alert"] { color: var(--color-error); font-size: 13px; }

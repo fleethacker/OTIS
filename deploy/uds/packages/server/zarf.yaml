@@ -5,13 +5,6 @@
     "version": "###ZARF_PKG_TMPL_VERSION###",
     "description": "Disconnected Linux ARM64 Parse Command server"
   },
-  "variables": [
-    {
-      "name": "NAMESPACE",
-      "default": "parse-command",
-      "description": "Namespace shared by the three packages"
-    }
-  ],
   "components": [
     {
       "name": "server",
@@ -20,7 +13,7 @@
         {
           "name": "parse-command-server",
           "version": "0.1.0",
-          "namespace": "###ZARF_VAR_NAMESPACE###",
+          "namespace": "###ZARF_PKG_TMPL_NAMESPACE###",
           "localPath": "../../charts/server",
           "valuesFiles": [
             "images.yaml"

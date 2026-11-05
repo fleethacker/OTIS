@@ -5,7 +5,7 @@ Current authentication, roles and persistence are defined in [Settings, OIDC and
 The React app calls the same-origin Rust server through `web`. OpenSearch DSL,
 index names, model IDs, passage grouping and search templates stay in Rust.
 The browser does not receive vectors, credentials or arbitrary query access.
-The parsed-message ICD 1.2.0 remains the contributor/storage contract.
+The parsed-message ICD 1.3.0 remains the contributor/storage contract.
 
 ## Reads
 
@@ -109,7 +109,7 @@ Rust installs and calls these versioned templates after cluster health preflight
 | --- | --- |
 | `parse-command-messages-list-v1` | Filtered PIT browsing; metadata only |
 | `parse-command-message-detail-v1` | Exact message/revision lookup |
-| `parse-command-timeline-v1` | Bounded activity retrieval for the UTC window |
+| `parse-command-timeline-v2` | Bounded activity and recurrence candidates for the UTC window |
 | `parse-command-evidence-list-v1` | Revision/fact/kind-filtered audit paging |
 | `parse-command-source-status-v1` | Embedding-state aggregation |
 | `parse-command-passages-keyword-v2` | BM25 narrative/subject search |
@@ -120,6 +120,10 @@ The server supplies validated template parameters, not browser-provided DSL.
 `publisher.rs::templates` owns their source. Older v1 passage templates remain
 available to existing test tools; the application uses v2's larger candidate
 window. The existing local ingest pipeline/model pins remain unchanged.
+
+The recurrence-aware timeline uses v2. This server does not publish or replace
+`parse-command-timeline-v1`, so older application instances can keep using v1
+on the same cluster without overwriting the recurrence query.
 
 ## Timeline semantics
 
@@ -150,7 +154,9 @@ Authentication has explicit `local_demo` and `oidc` modes; OIDC never falls back
 demo accounts. Browser-supplied identity headers are ignored. See the
 [authentication contract](settings-oidc.md#keycloak--uds-client-contract) for cookie,
 origin, revocation, expiry and role behavior. Production Exchange PKI remains a
-separate intake transport requirement.
+separate intake transport requirement. The UDS profile requires verified implicit
+IMAP TLS and the explicit mesh search policy; see the
+[UDS runbook](../../deploy/uds/README.md).
 
 Confirmed UI behavior: one search input invokes BM25 plus local MiniLM semantic
 search in a single hybrid query, fused by OpenSearch RRF. No search-mode or
@@ -175,7 +181,7 @@ state; the browser does not reparse raw USMTF or render internal facts as sets.
 The viewer uses compact source-set cards and a review pill. Metadata and
 narrative cards have layouts for their content; frequency plans use a channel
 table. Labels select the baseline or observed-extension layout explicitly.
-Unregistered positions retain their source value with a neutral field label.
+Unregistered positions retain their original source values without invented labels.
 The actions sidebar is removed. Lifecycle remains a separate tab with a vertical timeline.
 
 `Send Acknowledgement` opens a modal that generates and privately saves an
@@ -277,7 +283,7 @@ The UI polls every 30 seconds while foregrounded (one second during bounded
 catch-up); notifications use local storage/API resources only, without OpenSearch
 searches, email delivery, push services, or runtime external dependencies.
 
-## Watch, station and briefing additions on main-3
+## Watch, station and briefing APIs
 
 The native `/auth/*` routes remain the authentication boundary. Additional
 `GET /api/v1/auth/session` returns profile/station metadata for that already
@@ -309,7 +315,7 @@ context and conflict-checked field updates. `POST /api/v1/commands/list` supplie
 command choices. The UI separates watch context at `/watch-settings` from the
 native administrator settings modal.
 
-ICD 1.2 daily crypto recurrences expand only within requested calendar bounds;
+Daily crypto recurrences in ICD 1.3 expand only within requested calendar bounds;
 each occurrence keeps its source fact link and review state. Partial/unresolved
 time expressions remain unresolved. These extensions do not send messages or
 turn a private draft into an acknowledgement.

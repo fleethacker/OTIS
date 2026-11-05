@@ -14,7 +14,7 @@ const fields: [ContextField, string][] = [
 function Citation({ source, returnTo }: { source: ContextCitation; returnTo: string }) {
   if (!source.messageKey) return <span>Source unavailable</span>;
   return <Link to={messageHref(source.messageKey, returnTo)} title={`${source.setId} · ${source.messageKey}`}>
-    {source.setId} message · lines {source.lineStart}–{source.lineEnd}
+    {source.setId} message · {source.lineStart === source.lineEnd ? `line ${source.lineStart}` : `lines ${source.lineStart}–${source.lineEnd}`}
   </Link>;
 }
 function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, returnTo, save }: {
@@ -105,8 +105,8 @@ function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, retu
         {suggestion.sources?.[0] ? <Citation source={suggestion.sources[0]} returnTo={returnTo} /> : <p>Source unavailable</p>}
         {(suggestion.sources?.length ?? 0) > 1 && <details><summary>+{suggestion.sources!.length - 1} more sources</summary><ul>{suggestion.sources!.slice(1).map((s) => <li key={`${s.auditId}:${s.startByte}`}><Citation source={s} returnTo={returnTo} /></li>)}</ul></details>}
         <div className="context-actions">
-          <button className="btn btn-sm" disabled={!canEdit || busy || dirty || !suggestion.sources?.length} onClick={() => { void suggest(suggestion.id); }}>Use {suggestion.values.join(", ")}</button>
-          <button className="btn btn-sm" disabled={!canEdit || busy || dirty} onClick={() => { void suggest(suggestion.id, true); }}>Dismiss {suggestion.values.join(", ")}</button>
+          <button type="button" className="btn btn-primary btn-sm context-suggestion-use" aria-label={`Use ${suggestion.values.join(", ")}`} disabled={!canEdit || busy || dirty || !suggestion.sources?.length} onClick={() => { void suggest(suggestion.id); }}>Use</button>
+          <button type="button" className="btn btn-outline btn-sm context-suggestion-dismiss" aria-label={`Dismiss ${suggestion.values.join(", ")}`} disabled={!canEdit || busy || dirty} onClick={() => { void suggest(suggestion.id, true); }}>Dismiss</button>
         </div>
       </article>)}
     </section>

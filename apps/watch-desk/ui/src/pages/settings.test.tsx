@@ -16,7 +16,7 @@ function setup(role = "platform_admin", denyWrites = false, missingSources = fal
     context: { ownShipId: demo ? "demo-meridian" : "", shipName: "", operationName: "", groupCommand: "", defaultShips: demo ? ["unit:demo-meridian", "unassigned:"] : ["unassigned:"], turnoverUtc: ["0000Z", "0400Z"] },
     demoRoster: demo,
     confirmations: {}, updatedBy: null, updatedAt: null, canEdit: role === "platform_admin",
-    suggestions: [{ id: "context:fictional-copper", field: "operationName", values: ["FICTIONAL COPPER"], sources: missingSources ? undefined : [source, { ...source, messageKey: `sha256:${"b".repeat(64)}@fictional-r1`, auditId: "fictional-other" }] }],
+    suggestions: [{ id: "context:fictional-copper", field: "operationName", values: ["FICTIONAL COPPER"], sources: missingSources ? undefined : [source, { ...source, messageKey: `sha256:${"b".repeat(64)}@fictional-r1`, auditId: "fictional-other", lineEnd: 4 }] }],
     suggestionState: "available", suggestionsLimited: false, suggestionScope: "Bounded fictional metadata", defaultsSource: "backend/config/watchdesk-demo.json",
   };
   const requests: ContextUpdate[] = [];
@@ -117,8 +117,18 @@ test("Use sends only a group ID and renders confirmed context/citations; Dismiss
   const { view, requests, close } = setup();
   try {
     await waitFor(() => expect(view.getByRole("button", { name: "Use FICTIONAL COPPER" })).not.toBeDisabled());
+    const use = view.getByRole("button", { name: "Use FICTIONAL COPPER" });
+    const dismiss = view.getByRole("button", { name: "Dismiss FICTIONAL COPPER" });
+    expect(use.textContent).toBe("Use");
+    expect(dismiss.textContent).toBe("Dismiss");
+    expect(use).toHaveClass("btn", "btn-sm", "btn-primary", "context-suggestion-use");
+    expect(dismiss).toHaveClass("btn", "btn-sm", "btn-outline", "context-suggestion-dismiss");
+    expect(use).toHaveAttribute("aria-label", "Use FICTIONAL COPPER");
+    expect(dismiss).toHaveAttribute("aria-label", "Dismiss FICTIONAL COPPER");
     expect(view.getByText("+1 more sources")).toBeTruthy();
-    const source = view.getAllByRole("link", { name: "EXER message · lines 2–2" })[0];
+    expect(view.container.textContent).toContain("EXER message · lines 2–4");
+    expect(view.container.textContent).not.toContain("lines 2–2");
+    const source = view.getAllByRole("link", { name: "EXER message · line 2" })[0];
     expect(source.getAttribute("title")).toContain(`sha256:${"a".repeat(64)}@fictional-r1`);
     expect(new URL(source.getAttribute("href")!, "http://localhost").searchParams.get("record")).toBe(`sha256:${"a".repeat(64)}@fictional-r1`);
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Use FICTIONAL COPPER" })); });
@@ -182,6 +192,7 @@ test("user is read-only, missing citation arrays do not crash, and revoked write
     await waitFor(() => expect(reader.view.getByText("View only. A platform administrator can change these settings.")).toBeTruthy());
     expect(reader.view.getByRole("button", { name: "Save settings" })).toBeDisabled();
     expect(reader.view.getByRole("button", { name: "Use FICTIONAL COPPER" })).toBeDisabled();
+    expect(reader.view.getByRole("button", { name: "Dismiss FICTIONAL COPPER" })).toBeDisabled();
     expect(reader.view.getByText("Source unavailable")).toBeTruthy();
     expect(reader.requests).toHaveLength(0);
   } finally { reader.close(); }

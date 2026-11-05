@@ -59,10 +59,11 @@ function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, retu
       } catch (error) { setError(error instanceof Error ? error.message : "Save result unavailable; refresh before retrying"); }
       finally { setSaving(false); }
     }}>
+      <div className="context-fields">
       {fields.map(([field, label]) => {
         const values = draft[field] ?? current(field);
         const confirmation = data.confirmations[field];
-        return <div className="context-editor" key={field}>
+        return <div className={`context-editor${field === "defaultShips" || field === "turnoverUtc" ? " context-editor-wide" : ""}`} key={field}>
           <fieldset disabled={!canEdit || busy || ((field === "ownShipId" || field === "defaultShips") && rosterUnavailable)}>
             <legend>{label}</legend>
             {field === "ownShipId" ? <select className="select select-sm" aria-label={label} value={values[0]} onChange={(e) => set(field, [e.target.value])}>
@@ -83,6 +84,7 @@ function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, retu
           </p>}
         </div>;
       })}
+      </div>
       <div className="context-actions">
         <button className="btn btn-primary btn-sm" disabled={!canEdit || busy || !dirty || (hides && !confirm) || (rosterUnavailable && changed.some(([f]) => f === "ownShipId" || f === "defaultShips"))}>{saving ? "Saving…" : "Save settings"}</button>
         <button type="button" className="btn btn-sm" disabled={!dirty || busy} onClick={reset}>Cancel changes</button>
@@ -119,8 +121,10 @@ export default function Settings() {
   const data = context.data;
   return <section className="watch-settings" aria-labelledby="settings-heading">
     <Link className="back-link" to={returnTo}>Return to Calendar</Link>
-    <h1 id="settings-heading">Watch settings</h1>
-    <button type="button" className="btn btn-sm settings-refresh" title="Reload settings and message suggestions. Unsaved changes are kept." disabled={context.isFetching || update.isPending} onClick={() => { void context.refetch(); }}>Refresh settings</button>
+    <div className="settings-heading">
+      <h1 id="settings-heading">Watch settings</h1>
+      <button type="button" className="btn btn-sm settings-refresh" title="Reload settings and message suggestions. Unsaved changes are kept." disabled={context.isFetching || update.isPending} onClick={() => { void context.refetch(); }}>Refresh settings</button>
+    </div>
     <p title="Display settings only, not tasking, access control or acknowledgement authority. Changed fields use last-write-wins; no durable edit history. Refresh preserves unsaved edits; Cancel resets them to the latest loaded settings.">Shared ship and watch settings.</p>
     {context.isPending && <p role="status">Loading settings…</p>}
     {context.isError && <p role="alert">Settings could not be loaded. <button className="btn btn-sm" onClick={() => { void context.refetch(); }}>Retry settings</button></p>}

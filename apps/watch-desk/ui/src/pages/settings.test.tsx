@@ -137,6 +137,8 @@ test("one save batches changed fields; Cancel resets without a write", async () 
   const { view, requests, close } = setup();
   try {
     await waitFor(() => expect(view.getByLabelText("Display ship name")).not.toBeDisabled());
+    expect(view.getAllByRole("form", { name: "Watch settings" })).toHaveLength(1);
+    expect(within(view.getByRole("form", { name: "Watch settings" })).getAllByRole("group")).toHaveLength(6);
     expect(view.getAllByRole("button", { name: "Save settings" })).toHaveLength(1);
     expect(view.getByRole("button", { name: "Save settings" })).toBeDisabled();
     await act(async () => {

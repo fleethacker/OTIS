@@ -395,7 +395,10 @@ export function DayTimeline({
                 ]
                   .filter(Boolean)
                   .join(" "),
-                style: { borderLeft: `5px solid ${commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}` },
+                style: {
+                  "--ship-color": commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands),
+                  borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}`,
+                } as CSSProperties,
               })}
               formats={{
                 timeGutterFormat: (date) =>
@@ -411,7 +414,10 @@ export function DayTimeline({
               components={{
                 eventWrapper: SourceEventWrapper,
                 event: EventContent,
-                resourceHeader: ({ resource }) => <span title={resource?.name}>{resource?.title}</span>,
+                resourceHeader: ({ resource }) => <span className="resource-ship-chip" title={resource?.name}
+                  style={{ backgroundColor: commandColor(resource?.id ?? "unassigned:", commands) }}>
+                  {resource?.id === "unassigned:" ? "Unassigned" : resource?.title}
+                </span>,
                 // Public 1.20 hook; @types 1.16 predates it. Suppress a retained
                 // indicator when changing to a window that excludes the real now.
                 ...{

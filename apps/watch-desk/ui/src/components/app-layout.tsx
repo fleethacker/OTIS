@@ -1,6 +1,6 @@
 import { SettingsProvider } from "./SettingsProvider";
 import { Link, Outlet } from "react-router-dom";
-import otisIcon from "../assets/otis/otis-logo.png";
+import otisIcon from "../assets/otis/otis-icon.webp";
 import { HeaderClock } from "./header-clock";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";

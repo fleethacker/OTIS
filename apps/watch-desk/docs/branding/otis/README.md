@@ -3,34 +3,30 @@
 OTIS is the **Operational Tasking Integration System**. Its motto is
 **Keeping the Watch**, and its mascot is a watchstanding sea otter.
 
-## Current artwork
+## Approved artwork
 
-`otis-patch-master.png` is the owner-revised 600 × 600 OTIS logo and the single
-source for current application branding and the repository README.
-The earlier `otis-icon-master.png` and both prompt files are retained as design
-history; the application does not use the earlier mascot illustration.
+The owner selected these illustrations on 2026-11-05. They were created with
+the imagegen CLI/API fallback using `gpt-image-2`. The app icon was derived
+from the patch as an identity reference. Original PNG files are preserved
+without modification; the accompanying prompt files record their creative brief.
+
+- `otis-patch-master.png`: original 1024 × 1024 emblem for larger presentation.
+- `otis-icon-master.png`: original 1024 × 1024 mascot for app branding.
+- `otis-patch-prompt.txt` and `otis-icon-prompt.txt`: generation prompts.
 
 ## Application assets
 
 Runtime files live in `ui/src/assets/otis/`, relative to the application root:
 
-- `otis-logo.png`: an exact copy of the current master, shared by the header,
-  sign-in screen, and About page.
-- `otis-favicon.png`: a 64 × 64 resize of the same artwork for browser tabs.
+- `otis-icon.webp`: 256 × 256, used in the header and sign-in view.
+- `otis-patch.webp`: 800 × 800, used on the About page.
+- `otis-favicon.svg`: simplified otter, cap, and headset for small browser tabs.
 
-The logo is imported by application code and emitted as a local hashed asset by
-Ark's existing bundler. The favicon is embedded as a PNG data URI in
-`ui/index.html` so it loads before JavaScript. Keep that URI byte-for-byte in sync
-with `otis-favicon.png`. No external asset host or framework changes are needed.
+The WebP images are imported by application code and emitted as local hashed
+assets by the existing Ark bundler. The favicon's percent-encoded SVG is embedded
+in `ui/index.html` so it loads before JavaScript and requires no external asset
+host or protected pipeline change. Keep the SVG file and HTML data URI in sync.
 
-When replacing the master, copy it to `otis-logo.png`, regenerate the favicon,
-and update its data URI. Preserve the image's aspect ratio and transparency.
-Current favicon generation, from the repository root on macOS:
-
-```sh
-sips -z 64 64 apps/watch-desk/docs/branding/otis/otis-patch-master.png \
-  --out apps/watch-desk/ui/src/assets/otis/otis-favicon.png
-```
-
-Semantic controls, message-type symbols, and signal flags keep their own icons;
-OTIS branding consistently uses the owner-revised logo.
+Use the compact mascot in navigation and reserve the full emblem for larger
+areas where its lettering stays legible. Preserve the app's status colors,
+readable light/dark themes, and the artwork's aspect ratio.

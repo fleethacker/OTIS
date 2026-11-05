@@ -306,7 +306,10 @@ export function DayTimeline({
   const axisStart = civilHour(day, startHour ?? 0, zone);
   const axisEnd = civilHour(day, endHour ?? 24, zone);
   const opening = openingScrollTime(from, to, displayed.map((row) => +row.start), Date.now(), view, zone);
-  useOpeningScroll(calendarRoot, `${view}:${from}:${to}:${shipLayout}:${returnTo}`, ready && view !== "month", (opening - axisStart) / (axisEnd - axisStart));
+  const focusParams = new URLSearchParams(returnTo.split("?")[1] ?? "");
+  const focusKey = `${view}:${from}:${to}:${interval}:${shipLayout}:${focusParams.get("q")}:${focusParams.get("dataset")}:${JSON.stringify(selectedShips ? [...selectedShips].sort() : null)}`;
+  // Turnover disclosure/UTC edits are not schedule navigation and must not reset scrolling.
+  useOpeningScroll(calendarRoot, focusKey, ready && view !== "month", (opening - axisStart) / (axisEnd - axisStart));
   if (side && resources.length === 0) {
     return <p className="calendar-result-limit">No valid ship calendars selected. Choose a ship or Unassigned.</p>;
   }

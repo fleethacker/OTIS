@@ -112,6 +112,12 @@ export default function Messages() {
           placeholder="Message ID, subject, event or raw text"
           onChange={(e) => update("q", e.target.value)}
         />
+        <label>Search mode
+          <select className="select select-sm" value={search.request.mode} onChange={(e) => update("mode", e.target.value)}>
+            <option value="keyword">Keyword passages</option>
+            <option value="hybrid">Related messages (hybrid)</option>
+          </select>
+        </label>
         <div className="message-search-actions">
           <AppButton variant="ghost" size="sm" onClick={() => update("q", "")}>
             Clear search
@@ -130,6 +136,10 @@ export default function Messages() {
           />
         </div>
       </div>
+      {query.trim() && !waiting && !result.isFetching && !result.isError && result.data && <p className="calendar-search-status">
+        Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
+        {result.data.meta.executedMode === "hybrid" ? " Related ranked results may have no exact word match; this is not an exhaustive keyword result set." : " Searches indexed narrative passages, not all event titles. Calendar also includes local title matches."}
+      </p>}
       {search.error !== undefined ? (
         <Notice role="alert" tone="error">
           {search.error}

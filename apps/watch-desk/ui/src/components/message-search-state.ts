@@ -63,7 +63,7 @@ export function messageSearchState(
   }
   const request: SourceRequest = {
     query,
-    mode: "hybrid",
+    mode: params.get("mode") === "hybrid" ? "hybrid" : "keyword",
     dataset: "canonical",
     sort,
     filters,

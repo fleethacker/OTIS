@@ -35,7 +35,7 @@ import { CalendarAccessibility } from "./calendar-accessibility";
 import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
 import { inShipColumns, shipResources, type ShipResource } from "./calendar-resources";
-import { calendarGridWidth, openingScrollTime, useOpeningScroll } from "./calendar-viewport";
+import { calendarGridWidth, openingScrollTime, useOpeningScroll, useCalendarOverflow } from "./calendar-viewport";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -277,6 +277,12 @@ export function DayTimeline({
       height: Math.max(+row.end - Math.max(from, +row.start), (minimumHeight(row) / measurements.height) * 86400000),
     }))
   ).map((row) => row.columns)));
+  const dayLanes = windows.map((window) => Math.max(1, ...calendarLanes(rows
+    .filter((row) => +row.start < window.to && (row.point ? +row.start >= window.from : +row.end > window.from))
+    .map((row) => ({ event: row, top: Math.max(window.from, +row.start), height: Math.max(Math.min(window.to, +row.end) - Math.max(window.from, +row.start), minimumHeight(row) / measurements.height * (window.to - window.from)) }))
+  ).map((row) => row.columns)));
+  const gridWidth = calendarGridWidth(view, side, resources.length, columns, expanded, dayLanes);
+  const overflow = useCalendarOverflow(calendarRoot, gridWidth);
   const layout: DayLayoutFunction<ScheduleEntry> = ({ events, slotMetrics }) => {
     // The library's public hook types slotMetrics as any; narrow it at this boundary.
     const metrics = slotMetrics as {
@@ -312,13 +318,18 @@ export function DayTimeline({
   }
   return (
     <>
+      {view !== "month" && overflow && <div className="calendar-overflow" role="status">
+        Readable lanes extend beyond this view. Scroll horizontally for more {side ? "ships" : "days"}.
+        <button className="btn btn-xs" aria-label="Scroll calendar left" onClick={() => calendarRoot.current?.scrollBy({ left: -320, behavior: "smooth" })}>←</button>
+        <button className="btn btn-xs" aria-label="Scroll calendar right" onClick={() => calendarRoot.current?.scrollBy({ left: 320, behavior: "smooth" })}>→</button>
+      </div>}
       <div
         ref={calendarRoot}
         style={
           view === "month"
             ? undefined
             : ({
-                "--calendar-grid-min-width": `${calendarGridWidth(view, side, resources.length, columns, expanded)}px`,
+                "--calendar-grid-min-width": `${gridWidth}px`,
               } as CSSProperties)
         }
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}
@@ -372,6 +383,11 @@ export function DayTimeline({
               scrollToTime={new Date(opening)}
               getNow={() => new Date()}
               tooltipAccessor={() => ""}
+              dayPropGetter={(date) => {
+                if (view !== "week" || expanded) return {};
+                const index = windows.findIndex((window) => civilDate(new Date(window.from), zone) === civilDate(date, zone));
+                return { style: { minWidth: `${Math.max(1, dayLanes[index] ?? 1) * 128}px` } };
+              }}
               eventPropGetter={(row) => ({
                 className: [
                   row.event.isRevised ? "calendar-revised" : "",

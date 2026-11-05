@@ -384,6 +384,21 @@ Parker must run the external OPTASK regression against his unavailable samples.
   footer below review and no document horizontal overflow; repeat dark and desktop.
   Attach those screenshots; no browser-size claim made locally.
 
+## Polish 8 — Readable collision lanes
+
+- Fit Week widens only busy days to 128px per visual lane; sparse days stay 128px.
+  Day resources reserve the same lane floor. Dense calendars scroll inside the named
+  calendar region with an explicit overflow notice and left/right buttons. Titles
+  ellipsize on one line; existing full-title/time tooltips and Week detail/index remain.
+- This intentionally trades dense-view all-columns-at-once fit for legibility;
+  Expanded retains equal lane-proportional widths. Parker's call: accept this tradeoff?
+- Files: DayTimeline, calendar-viewport/test, port CSS. No API or source-time changes.
+  Corrected narrow override specificity against the later base stylesheet; Month
+  retains a 620px floor even on mobile. Dark grid separators use theme border tokens.
+- Static diff check only; container geometry gate required: 5 overlapping Week facts,
+  2 overlapping per-ship facts, full titles/tooltips, header/body alignment, keyboard
+  overflow controls, 1280/1440/400px and zoom. Attach dense Week/Side screenshots.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

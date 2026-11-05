@@ -299,6 +299,17 @@ Parker must run the external OPTASK regression against his unavailable samples.
 - Screenshots to attach: Settings pristine/dirty/saved, hide-Unassigned confirmation,
   read-only user, light/dark and 400px. Parker: accept changed-fields last-write-wins?
 
+## Polish 2 — Month overflow affordance
+
+- Month events now use the same 24px height as RBC's dummy capacity measurement;
+  ship chips and titles stay on one ellipsized row. A 600px month floor keeps date
+  headings and show-more reachable even when controls/review consume the viewport.
+- Files: `watchdesk-port.css`, monthly journey. No API changes.
+- Added containment + real hit-test assertion before the existing popup click.
+  Existing journey has older workflow expectations; Claude must exercise the current
+  canonical demo at 05 NOV in both themes and narrow/short viewports as well.
+- Static diff check only; no build/browser run. Attach Month + open popup screenshots.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

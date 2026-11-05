@@ -73,6 +73,7 @@ test("turnover uses exact custody sources, keeps unknowns outside counts and val
     await waitFor(() => expect(client.isFetching()).toBe(0));
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Show all ships" })); });
     await waitFor(() => expect(view.getByRole("link", { name: "Fictional Halyard receipt" })).toBeTruthy());
-    expect(new URLSearchParams(view.getByTestId("location").textContent!).has("ships")).toBe(false);
+    // Explicit all-ships state, so shared default ships do not re-apply.
+    expect(new URLSearchParams(view.getByTestId("location").textContent!).get("ships")).toBe("all");
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });

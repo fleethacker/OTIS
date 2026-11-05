@@ -9,6 +9,7 @@ import { renderWithProviders } from "../test-utils/render";
 import Calendar from "../pages/calendar";
 import { DayTimeline } from "./day-timeline";
 import { commandKeys, readCommands, type CommandRoster } from "./command-roster";
+import { effectiveShips } from "./ship-calendars";
 
 const roster: CommandRoster = {
   commands: [
@@ -48,7 +49,8 @@ test("sidebar sends explicit IDs/none through the existing JSON URL; Show preser
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Show all ships and clear search" })); });
     await waitFor(() => expect(client.isFetching()).toBe(0));
     params = new URLSearchParams(view.getByTestId("location").textContent!);
-    expect(params.has("ships")).toBe(false);
+    // Explicit all-ships state, so shared default ships do not re-apply.
+    expect(params.get("ships")).toBe("all");
     expect(params.get("view")).toBe("week");
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });
@@ -105,4 +107,15 @@ test("roster rejects duplicate identities and never substitutes demo data on fai
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ ...roster, commands: [roster.commands[0], roster.commands[0]] }));
   try { await expect(readCommands()).rejects.toThrow("duplicate"); }
   finally { fetch.mockRestore(); }
+});
+
+test("ship view uses the URL, then shared default ships, then calendar commands, then all", () => {
+  const settings = { defaultShips: ["unassigned:", "unit:demo-tern"], commandIds: ["demo-meridian"] };
+  expect([...effectiveShips('["unit:demo-halyard"]', settings)!]).toEqual(["unit:demo-halyard"]);
+  expect(effectiveShips("all", settings)).toBeUndefined();
+  expect([...effectiveShips(null, settings)!]).toEqual(["unassigned:", "unit:demo-tern"]);
+  expect([...effectiveShips(null, { defaultShips: [], commandIds: ["demo-meridian"] })!]).toEqual(["unit:demo-meridian"]);
+  expect(effectiveShips(null, { defaultShips: [], commandIds: [] })).toBeUndefined();
+  expect(effectiveShips(null)).toBeUndefined();
+  expect([...effectiveShips("not-json", settings)!]).toEqual(["invalid-selection:"]);
 });

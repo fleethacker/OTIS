@@ -11,7 +11,7 @@ import { UserMenu } from "./UserMenu";
 const shared: SettingsReply = {
   revision: "1:1",
   settings: {
-    version: 1,
+    version: 2,
     shipName: "EXAMPLE SHIP",
     unitName: "",
     commandIds: [],
@@ -19,6 +19,10 @@ const shared: SettingsReply = {
     actionAuthority: "OPS",
     defaultTimezone: "UTC",
     ai: null,
+    turnoverUtc: ["0000Z"],
+    defaultShips: [],
+    operationName: "",
+    groupCommand: "",
   },
 };
 function mount(role: string) {

@@ -39,6 +39,17 @@ impl App {
         origin: Option<&str>,
         host: Option<&str>,
     ) -> Result<Identity> {
+        let identity = self.resolve_identity(cookie, origin, host).await?;
+        // Throttled lastSeenAt; a failed write never fails the request.
+        let _ = crate::watch::touch(&self.private.state, &identity.owner).await;
+        Ok(identity)
+    }
+    async fn resolve_identity(
+        &self,
+        cookie: Option<&str>,
+        origin: Option<&str>,
+        host: Option<&str>,
+    ) -> Result<Identity> {
         self.auth.config.origin(origin)?;
         let _ = host;
         if self.config.auth.mode == "oidc" {

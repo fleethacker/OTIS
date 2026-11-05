@@ -71,7 +71,7 @@ pub fn added_events(core: &Value) -> (Vec<Value>, bool) {
         if let Some(activity) = rule["activity_id"].as_str() {
             rules.insert(activity.to_owned(), summary);
         } else {
-            events.push(json!({"factId":text(rule,"id"),"title":text(rule,"kind").map(|v| v.replace('_', " ")),
+            events.push(json!({"factId":text(rule,"id"),"title":text(rule,"type").or_else(|| text(rule,"kind")).map(|v| v.replace('_', " ")),
                 "kind":"recurring","commandIds":ids,"recurring":true,"recurrence":summary}));
         }
     }

@@ -226,3 +226,12 @@ fn list_and_review_requests_reject_actor_fields() {
     assert!(serde_json::from_str::<ReviewAll>(r#"{"since":"2026-11-05T04:00:00Z"}"#).is_err()); // watermark required
     assert!(serde_json::from_str::<ReviewAll>(r#"{"watermark":3}"#).is_ok());
 }
+#[test]
+fn standalone_recurrence_takes_its_title_from_the_icd_type_field() {
+    // ICD recurrences carry `type`; a recurrence without an activity is listed on its own.
+    let core = json!({"command_ids":["demo-tern"],"recurrences":[{"id":"r1","type":"communications_check","rule":"FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0","dtstart":"2026-11-05T00:00:00Z"}]});
+    let (events, limited) = added_events(&core);
+    assert!(!limited);
+    assert_eq!(events[0]["kind"], "recurring");
+    assert_eq!(events[0]["title"], "communications check");
+}

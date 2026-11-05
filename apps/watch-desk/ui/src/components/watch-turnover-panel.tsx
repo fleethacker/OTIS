@@ -38,7 +38,7 @@ function AddedEventLine({ event, commands }: { event: AddedEvent; commands: Comm
   const recurring = event.recurring || event.recurrence;
   return <p className="turnover-addition">
     Adds {at ? <time dateTime={at} title={at}>{clock(at)}{event.end && Number.isFinite(Date.parse(event.end)) ? `–${clock(event.end)}` : ""} </time> : "(time not set) "}
-    {event.title}{recurring ? ` · ${recurrence?.rule?.includes("FREQ=DAILY") ? "daily" : "recurring"}` : ""}
+    {event.title || "Scheduled event"}{recurring ? ` · ${recurrence?.rule?.includes("FREQ=DAILY") ? "daily" : "recurring"}` : ""}
     {event.commandIds && <> · <CommandChips ids={event.commandIds} commands={commands} /></>}
   </p>;
 }

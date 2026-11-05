@@ -6,7 +6,7 @@ import { useWatchSession } from "./watch-session";
 export interface AddedEvent {
   key?: string;
   factId?: string;
-  title: string;
+  title?: string | null;
   at?: string;
   start?: string;
   end?: string;
@@ -72,7 +72,7 @@ export async function readChanges(request: ChangeRequest, signal?: AbortSignal):
   }
   for (const row of [...result.items, ...result.unknownTime]) {
     if ((row.reviewedAt !== undefined && row.reviewedAt !== null && (typeof row.reviewedAt !== "string" || !Number.isFinite(Date.parse(row.reviewedAt)))) ||
-        (row.addedEvents !== undefined && (!Array.isArray(row.addedEvents) || row.addedEvents.length > 20 || row.addedEvents.some((event) => !event || typeof event.title !== "string")))) {
+        (row.addedEvents !== undefined && (!Array.isArray(row.addedEvents) || row.addedEvents.length > 20 || row.addedEvents.some((event) => !event || (event.title !== undefined && event.title !== null && typeof event.title !== "string"))))) {
       throw new Error("Turnover response is invalid");
     }
   }

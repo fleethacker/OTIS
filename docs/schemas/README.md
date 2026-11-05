@@ -17,7 +17,7 @@ convention and the distinction from a full iCalendar component.
 
 The separate [xnet notice schema](xnet-notice.schema.json) describes the strictly
 content-free fictional desk payload. It is an application presentation contract,
-not a change to ICD 1.1.0 or a parser-generated document; see the
+not a change to ICD 1.3.0 or a parser-generated document; see the
 [workflow guide](../integration/xnet-notices.md).
 
 Register all resources locally; references are URNs, not URLs to fetch. Enable `date-time` format checking in addition to structural validation. JSON parsing must reject NaN/Infinity, and the host must enforce finite vectors and the selected model dimension.

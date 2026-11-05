@@ -16,11 +16,14 @@ import {
 } from "../components/calendar-time";
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
 import { readShips } from "../components/ship-calendars";
+import { useCommands } from "../components/command-roster";
+import { ShipsSidebar } from "../components/ships-sidebar";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
   const { shared } = useSettings();
   const { zone } = useDisplayTime();
+  const roster = useCommands();
   const [params, setParams] = useSearchParams();
   const today = civilDate(new Date(), zone);
   const [landingDate] = useState(today);
@@ -84,7 +87,21 @@ export default function Calendar() {
     );
   }
   return (
-    <div className={`calendar-page${week ? " calendar-page-week" : ""}`}>
+    <div className={`calendar-page calendar-with-ships${week ? " calendar-page-week" : ""}`}>
+      <ShipsSidebar
+        roster={roster.data}
+        selected={ships}
+        pending={roster.isPending}
+        error={roster.isError ? roster.error.message : undefined}
+        retry={() => { void roster.refetch(); }}
+        onChange={(selected) => {
+          const next = new URLSearchParams(canonical);
+          if (selected === undefined) next.delete("ships");
+          else next.set("ships", JSON.stringify([...selected].sort()));
+          setParams(next);
+        }}
+      />
+      <div className="calendar-main">
       <section className="calendar-controls" aria-label="Calendar controls">
         <label className="schedule-search">
           Search schedule
@@ -178,6 +195,7 @@ export default function Calendar() {
           </h2>
         </div>
         <DayTimeline
+          commands={roster.isError ? [] : roster.data?.commands}
           messages={result.isError || refreshing ? [] : messages}
           sourceItems={
             dataset === "canonical"
@@ -205,6 +223,7 @@ export default function Calendar() {
       {dataset === "canonical" && result.data && !refreshing && !result.isError && (
         <CalendarReview
           items={result.data.meta.reviewItems}
+          commands={roster.isError ? [] : roster.data?.commands}
           limited={result.data.meta.windowLimited === true}
           filtered={ships !== undefined || query.trim() !== ""}
           returnTo={returnTo}
@@ -216,6 +235,7 @@ export default function Calendar() {
           }}
         />
       )}
+      </div>
     </div>
   );
 }

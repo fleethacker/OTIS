@@ -1,16 +1,19 @@
 import { Link } from "react-router-dom";
 import { messageHref } from "./calendar-links";
 import type { TimelineItem } from "./source-data";
+import { CommandChips, type Command } from "./command-roster";
 
 /** A bounded source projection, never a count of all unresolved tasking. */
 export function CalendarReview({
   items,
+  commands = [],
   limited,
   filtered,
   returnTo,
   onShowAll,
 }: {
   items?: TimelineItem[];
+  commands?: Command[];
   limited: boolean;
   filtered: boolean;
   returnTo: string;
@@ -40,6 +43,7 @@ export function CalendarReview({
             <ul>
               {items.map((item) => (
                 <li key={item.key}>
+                  <CommandChips ids={item.commandIds} commands={commands} /> {" "}
                   {item.messageKey ? (
                     <Link to={messageHref(item.messageKey, returnTo)}>{item.title}</Link>
                   ) : <strong>{item.title}</strong>}

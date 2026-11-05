@@ -31,6 +31,8 @@ export interface TimelineItem {
   key: string;
   messageKey: string;
   factId?: string;
+  /** Explicit message-level applicability from the canonical source, never event.unit. */
+  commandIds?: string[];
   sourceType?: string;
   title: string;
   kind: "point" | "interval" | "unresolved";

@@ -4,7 +4,13 @@ Branch: `feat/watchdesk-port`, base `60ac735`. Local commits only; Neal owns pub
 All added cases are constructed fictional data. No excluded traffic restored/read.
 Builds and runtime tests are delegated to Claude's containers, not claimed locally.
 
-## P1 — Calendar Needs review
+## P1 — Calendar Needs review (placement needs Parker's call)
+
+Parker deliberately removed the Calendar review list in `971ac11`. `DESIGN.md`
+(notification/review guidance around lines 132/200) points unresolved schedules to
+inbox Action items, but `60ac735` has no unresolved-schedule producer. **This slice
+restores review on Calendar, or we route it to the inbox instead — Parker's call.**
+It is not a claim that his simplified calendar was an accidental regression.
 
 - **Files:** `apps/watch-desk/ui/src/components/calendar-review{,.test}.tsx`,
   `ui/src/pages/calendar.tsx`, `ui/src/index.css` (UI paths under `apps/watch-desk/`).
@@ -30,8 +36,67 @@ Builds and runtime tests are delegated to Claude's containers, not claimed local
 
 ## Demo-grade deferrals (apply to subsequent slices)
 
-Explicitly deferred by Neal: admin-only Settings permissions, audit tables,
-optimistic-revision conflicts, durable amendment/cancellation producers and
-retention. Keep authenticated same-origin handlers, input bounds and source
-citations. Production command assignment is Parker's Q6 decision; no message-text
-inference is permitted. Context is not acknowledgement authority or authorization.
+Deferred: audit tables, optimistic-revision conflicts, durable amendment/cancellation
+producers and retention. **Permissions are not deferred (Neal's P2 steer): every new
+application write calls `access::require_admin`, resolving the current server session,
+and records that identity's username as actor.** No caller-supplied actor/role.
+Keep authenticated same-origin reads, input bounds and source citations. Production
+command assignment is Parker's Q6 decision; no message-text inference is permitted.
+Context is not acknowledgement authority or authorization.
+
+## P2 — Synthetic roster, explicit applicability and ship sidebar
+
+- **Files:** `backend/config/watchdesk-demo.json`, six newly constructed bodies in
+  `backend/config/watchdesk-fixtures/`, opt-in `demo-compose-intake.json`; intake
+  `src/{demo,config,service,lib}.rs`, `tests/custody.rs`; server
+  `src/{commands,access,error,main,lib}.rs`, `tests/commands_contract.rs`; UI
+  `components/{command-roster,ships-sidebar,day-timeline,calendar-review,source-data}`,
+  Calendar, related tests and CSS.
+- **API:** `POST /api/v1/commands/list {}` returns `commands` with id/name/shortLabel/
+  group/colorIndex/isOwnShip, config source/version/provenance and assignmentEnabled.
+  Authenticated, strict unknown-field rejection, <=32 commands. No roster write API.
+- **Assignment:** `demo_fixture_assignments` defaults false; explicitly enabled in
+  the Compose demo config. Exact decoded-body SHA-256 allowlist (LF and CRLF variants)
+  supplies `ParseContext.command_ids`. Changed/unlisted bodies remain Unassigned;
+  sender/participants/mentions/unit never supply IDs. Shared fixture assigns Tern
+  and Halyard; the unassigned fixture names Meridian/Halyard but assigns neither.
+  Existing audit outbox records the fixture/config/version and message-level scope.
+  No operational per-fact assignment is asserted. **Parker to decide production
+  assignment (Q6).** Fixture policy is versioned source configuration, not a UI edit.
+- **UI:** own ship pinned, grouped checkboxes/Only/select-all/clear, search above six
+  ships, mobile native disclosure; Parker's JSON `ships` and server filters remain.
+  None stays `[]`, malformed/stale selection never becomes all. Show/URL hydration
+  writes no storage (P2 has URL-only preferences). Canonical chips use all explicit
+  IDs; empty IDs show REVIEW even with a unit/sender. Amber only denotes review.
+  Roster reads never fall back to examples on failure. Presentation clones protobuf
+  messages instead of mutating cache entries.
+- **Tests added:** allowlist hashes/line endings, changed-body denial, opt-in intake
+  through canonical projection + assignment audit, multi-command/empty chips,
+  outgoing URL/filter requests, roster failures, real server-session read/write-role
+  checks and server actor. Updated old Calendar mount tests to mock/settle JSON reads.
+- **Validation:** static diff/JSON/hash checks only; no builds/tests run here.
+- **Demo setup:** fixtures are *not* automatically sent or loaded. Neal must verify
+  the isolated demo mailbox/destination before using the existing mail helper with
+  `backend/config/watchdesk-fixtures/*.txt`. Use 5 Nov 2026 in Calendar. Receipt/change
+  time will be actual custody time, not the authored issue time. Do not clear volumes
+  or reprocess existing records as a shortcut; config changes are not a backfill.
+- **TODOs:** persistent user preferences, complete hidden-review aggregation, and
+  production roster/assignment policy. P1 placement remains Parker's decision.
+
+### User-lifecycle seam — interface only; owned by the other contributor
+
+- Keep `App::headers_identity(headers) -> Result<Identity>` as the server integration
+  point. Future resolver: `resolve_session(cookie) -> {subjectId, username, roles,
+  enabled, sessionVersion}`; reject disabled/revoked/expired sessions on every request.
+  Adapt it to the current Identity until multi-role identity is agreed.
+- New mutators call `access::require_admin(app, headers) -> Identity`; writes store
+  the returned `username` (future stable subject ID plus username snapshot). Never
+  accept actor, role, or enabledness from JSON/browser state. Current demo sessions
+  still resolve role-based `dev-user`/`dev-admin`; they are not a user directory.
+- Other contributor owns `create_user`, `disable_user`, `assign_roles`, session
+  invalidation/role refresh, replacement of demo identities and migration of existing
+  sessions. Disable/role removal must take effect before the next write, including
+  already-open Settings pages. Do not reuse display ship selection as access control.
+- Coordinate `api.rs` identity resolution, `web.rs`, `private.rs` sessions and identity
+  response/cache invalidation before merging. No user-management endpoints/tables or
+  lifecycle behavior are implemented by this port.

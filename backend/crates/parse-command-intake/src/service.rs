@@ -13,6 +13,7 @@ pub struct Service {
     pub journal: Journal,
     host: ParserHost,
     config: Config,
+    demo: Option<crate::demo::Catalog>,
 }
 impl Service {
     pub fn open(config: Config) -> Result<Self> {
@@ -25,10 +26,16 @@ impl Service {
         let host =
             ParserHost::new(registry, config.parser).map_err(|_| IntakeError("parser_config"))?;
         let journal = Journal::open(&config)?;
+        let demo = if config.demo_fixture_assignments {
+            Some(crate::demo::Catalog::load()?)
+        } else {
+            None
+        };
         Ok(Self {
             journal,
             host,
             config,
+            demo,
         })
     }
     pub fn poll(&mut self, password: &str, cancelled: &AtomicBool) -> Result<usize> {
@@ -141,10 +148,11 @@ impl Service {
                 .identify_body(&job.receipt_id, &email.body, &self.config.revision)?;
             let at =
                 UtcTimestamp::new(&job.received_at).map_err(|_| IntakeError("receipt_time"))?;
+            let assignment = self.demo.as_ref().and_then(|c| c.assignment(&email.body));
             let context = ParseContext {
                 revision: &self.config.revision,
                 recorded_at: &at,
-                command_ids: &[],
+                command_ids: assignment.map(|f| f.command_ids.as_slice()).unwrap_or(&[]),
                 security_override: None,
                 reference_time: None,
                 budget: &budget,
@@ -158,11 +166,16 @@ impl Service {
             );
             match parsed {
                 Ok(value) => {
+                    let core = value.core.into_inner();
+                    let mut audit: Vec<_> = value.audit.into_iter().map(|e| e.into_inner()).collect();
+                    if let (Some(catalog), Some(fixture)) = (&self.demo, assignment) {
+                        audit.push(catalog.audit(fixture, &core, &at));
+                    }
                     if let Err(error) = self.journal.finish(
                         &self.config,
                         &job,
-                        value.core.into_inner(),
-                        value.audit.into_iter().map(|e| e.into_inner()).collect(),
+                        core,
+                        audit,
                         email,
                     ) {
                         self.journal.record_retry(&job.receipt_id, error.0)?;

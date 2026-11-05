@@ -2,7 +2,9 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 import type { CalendarView } from "./calendar-time";
 
 // Zoom only the time grid. Source timestamps, date selection and slot precision
-// are unchanged. A native non-passive listener prevents wheel scrolling/page zoom.
+// are unchanged. A plain wheel scrolls as usual; Ctrl/⌘+wheel (and trackpad pinch,
+// which browsers report as ctrlKey wheel) zooms. A native non-passive listener
+// prevents browser page zoom for those gestures only.
 export function useCalendarZoom(
   root: RefObject<HTMLDivElement | null>,
   view: CalendarView,
@@ -72,8 +74,7 @@ export function useCalendarZoom(
     }
     function wheel(event: WheelEvent) {
       if (
-        event.ctrlKey ||
-        event.metaKey ||
+        !(event.ctrlKey || event.metaKey) ||
         event.shiftKey ||
         event.deltaY === 0 ||
         Math.abs(event.deltaX) > Math.abs(event.deltaY)

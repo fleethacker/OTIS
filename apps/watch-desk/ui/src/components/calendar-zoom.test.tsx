@@ -45,7 +45,8 @@ for (const view of ["day", "week"] as const) {
       scroller.dispatchEvent(event);
       return event;
     };
-    expect(wheel(-120).defaultPrevented).toBe(true);
+    const zoom = { ctrlKey: true };
+    expect(wheel(-120, zoom).defaultPrevented).toBe(true);
     await waitFor(() =>
       expect(
         Number.parseFloat(root.style.getPropertyValue("--calendar-slot-height"))
@@ -53,25 +54,25 @@ for (const view of ["day", "week"] as const) {
     );
     expect((scroller.scrollTop + 120) / scroller.scrollHeight).toBeCloseTo(before, 6);
     const current = root.style.getPropertyValue("--calendar-slot-height");
-    expect(wheel(-120, { ctrlKey: true }).defaultPrevented).toBe(false);
-    expect(wheel(-120, { metaKey: true }).defaultPrevented).toBe(false);
-    expect(wheel(-120, { shiftKey: true }).defaultPrevented).toBe(false);
-    expect(wheel(-10, { deltaX: 120 }).defaultPrevented).toBe(false);
+    // A plain wheel scrolls the grid; only Ctrl/⌘ (or pinch) zooms.
+    expect(wheel(-120).defaultPrevented).toBe(false);
+    expect(wheel(-120, { ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(wheel(-10, { ctrlKey: true, deltaX: 120 }).defaultPrevented).toBe(false);
     expect(root.style.getPropertyValue("--calendar-slot-height")).toBe(current);
     for (let index = 0; index < 5; index += 1) {
-      wheel(-240);
+      wheel(-240, zoom);
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     }
     expect(Number.parseFloat(root.style.getPropertyValue("--calendar-slot-height"))).toBe(192);
     for (let index = 0; index < 5; index += 1) {
-      wheel(240);
+      wheel(240, zoom);
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     }
     expect(Number.parseFloat(root.style.getPropertyValue("--calendar-slot-height"))).toBeCloseTo(
       480 / slots
     );
     rendered.unmount();
-    expect(wheel(-120).defaultPrevented).toBe(false);
+    expect(wheel(-120, zoom).defaultPrevented).toBe(false);
   });
 }
 

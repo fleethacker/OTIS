@@ -13,8 +13,8 @@ const fields: [ContextField, string][] = [
 ];
 function Citation({ source, returnTo }: { source: ContextCitation; returnTo: string }) {
   if (!source.messageKey) return <span>Source unavailable</span>;
-  return <Link to={messageHref(source.messageKey, returnTo)}>
-    {source.setId} · {source.messageKey} · lines {source.lineStart}–{source.lineEnd}
+  return <Link to={messageHref(source.messageKey, returnTo)} title={`${source.setId} · ${source.messageKey}`}>
+    {source.setId} message · lines {source.lineStart}–{source.lineEnd}
   </Link>;
 }
 function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, returnTo, save }: {
@@ -72,10 +72,10 @@ function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, retu
               <input type="checkbox" checked={values.includes(key)} onChange={(e) => set(field, e.target.checked ? [...values, key] : values.filter((v) => v !== key))} />{name}
             </label>)}</div> : <input className="input input-sm" aria-label={label} value={values[0]} placeholder="Not set" maxLength={field === "turnoverUtc" ? 192 : 128} onChange={(e) => set(field, [e.target.value])} />}
             {field === "defaultShips" && values.length === 0 && <p className="context-empty">Not set</p>}
-            {field === "shipName" && <p>Display override only; does not change roster IDs, tasking or acknowledgement authority.</p>}
-            {field === "turnoverUtc" && <p>Comma-separated UTC values, e.g. 0000Z, 0400Z. Does not change the calendar display zone.</p>}
-            {field === "defaultShips" && <p>Applied explicitly with “Use app defaults” in the sidebar; shared URLs retain their own selection.</p>}
-            {field === "defaultShips" && hides && <label htmlFor={id} className="context-hide-confirm"><input id={id} type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />I confirm hiding Unassigned from app-wide defaults.</label>}
+            {field === "shipName" && <p title="Display override only; roster IDs and acknowledgement authority are unchanged.">Name shown in the header.</p>}
+            {field === "turnoverUtc" && <p>Enter Zulu times separated by commas, e.g. 0000Z, 0400Z.</p>}
+            {field === "defaultShips" && <p title="Shared Calendar links keep their own ship selection.">Select “Use app defaults” in Ships to apply this list.</p>}
+            {field === "defaultShips" && hides && <label htmlFor={id} className="context-hide-confirm"><input id={id} type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />I confirm hiding Unassigned from the default ship list.</label>}
           </fieldset>
           {confirmation && <p className="context-confirmation">Confirmed by {confirmation.actor} · {confirmation.recordedAt}
             {(confirmation.sources ?? []).map((source) => <span key={`${source.auditId}:${source.startByte}`}> · <Citation source={source} returnTo={returnTo} /></span>)}
@@ -91,13 +91,13 @@ function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, retu
     </form>
     {error && <p role="alert">{error}</p>}
     <section className="context-suggestions" aria-label="Source suggestions">
-      <h2>Source suggestions — human confirmation required</h2>
-      <p>Verified EXER/OPER metadata only. Own ship, Group / command and default ships are manual; sender/addressees are not applicability.</p>
-      <p>{data.suggestionScope}{data.suggestionsLimited ? " · Limited results" : ""}</p>
-      {dirty && <p>Save or cancel manual changes before using or dismissing a suggestion.</p>}
-      {data.suggestionState === "unavailable" && <p role="status">Source suggestions unavailable; manual context remains editable.</p>}
-      {data.suggestionState === "available" && data.suggestions.length === 0 && <p>No suggestions in the returned metadata.</p>}
-      {data.suggestions.filter((s) => s.values[0] !== data.context.operationName).length > 1 && <p className="context-conflict">Conflicting source values; choose explicitly. No automatic overwrite.</p>}
+      <h2>Suggestions from messages</h2>
+      <p>Operation and exercise names found in messages. An administrator can choose Use to apply one.</p>
+      <p title={data.suggestionScope}>Suggestions cover recent messages only.{data.suggestionsLimited ? " More suggestions may be available." : ""}</p>
+      {dirty && <p>Save or cancel your changes before using or dismissing a suggestion.</p>}
+      {data.suggestionState === "unavailable" && <p role="status">Suggestions are unavailable. Saved settings are still shown.</p>}
+      {data.suggestionState === "available" && data.suggestions.length === 0 && <p>No suggestions found in recent messages.</p>}
+      {data.suggestions.filter((s) => s.values[0] !== data.context.operationName).length > 1 && <p className="context-conflict">Different names were found. Choose the one for this watch.</p>}
       {data.suggestions.map((suggestion) => <article key={suggestion.id} className="context-suggestion">
         <h3>{suggestion.values.join(", ")}{suggestion.values[0] === data.context.operationName && <small> · matches current</small>}</h3>
         {suggestion.sources?.[0] ? <Citation source={suggestion.sources[0]} returnTo={returnTo} /> : <p>Source unavailable</p>}
@@ -119,15 +119,15 @@ export default function Settings() {
   const data = context.data;
   return <section className="watch-settings" aria-labelledby="settings-heading">
     <Link className="back-link" to={returnTo}>Return to Calendar</Link>
-    <h1 id="settings-heading">Settings / watch context</h1>
+    <h1 id="settings-heading">Watch settings</h1>
     <button className="btn btn-sm" disabled={context.isFetching || update.isPending} onClick={() => { void context.refetch(); }}>Refresh context and suggestions</button>
-    <p>App-wide display defaults, not tasking, access control or acknowledgement authority. Concurrent edits are last-write-wins for changed fields; no durable change history in this demo. Refresh preserves unsaved edits; Cancel resets them to the latest loaded settings.</p>
-    {context.isPending && <p role="status">Loading watch context…</p>}
-    {context.isError && <p role="alert">Context unavailable. <button className="btn btn-sm" onClick={() => { void context.refetch(); }}>Retry context</button></p>}
+    <p title="Display settings only, not tasking, access control or acknowledgement authority. Changed fields use last-write-wins; no durable edit history. Refresh preserves unsaved edits; Cancel resets them to the latest loaded settings.">Shared ship and watch settings.</p>
+    {context.isPending && <p role="status">Loading settings…</p>}
+    {context.isError && <p role="alert">Settings could not be loaded. <button className="btn btn-sm" onClick={() => { void context.refetch(); }}>Retry settings</button></p>}
     {data && <div key={context.identityKey}>
-      {!context.canEdit && <p>Read only. A platform administrator must change shared context.</p>}
-      <p>{data.updatedBy ? `Last update: ${data.updatedBy} · ${data.updatedAt}` : `Unconfirmed ${data.demoRoster === true ? "demo defaults" : "defaults"} · ${data.defaultsSource}`}</p>
-      {roster.isError && <p role="alert">Roster unavailable; ship selection cannot be edited.</p>}
+      {!context.canEdit && <p className="settings-view-only">View only. A platform administrator can change these settings.</p>}
+      <p className="settings-provenance">{data.updatedBy ? `Last updated by ${data.updatedBy} · ${data.updatedAt}` : <span className="settings-defaults" title={data.defaultsSource}>{data.demoRoster === true ? "Demo defaults" : "Defaults"}</span>}</p>
+      {roster.isError && <p role="alert">Ship list unavailable. Ship selections cannot be changed.</p>}
       <ContextForm data={data} commands={roster.isError ? [] : roster.data?.commands ?? []}
         canEdit={context.canEdit && !context.isError} rosterUnavailable={roster.isError || !roster.data}
         pending={update.isPending} returnTo={returnTo} save={(request) => update.mutateAsync(request)} />

@@ -1,6 +1,6 @@
 import "../route-registry";
 import { expect, spyOn, test } from "bun:test";
-import { act, fireEvent, waitFor } from "@testing-library/react";
+import { act, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouterTransport } from "@connectrpc/connect";
 import { TransportProvider } from "@connectrpc/connect-query";
@@ -17,7 +17,7 @@ function setup(role = "platform_admin", denyWrites = false, missingSources = fal
     demoRoster: demo,
     confirmations: {}, updatedBy: null, updatedAt: null, canEdit: role === "platform_admin",
     suggestions: [{ id: "context:fictional-copper", field: "operationName", values: ["FICTIONAL COPPER"], sources: missingSources ? undefined : [source, { ...source, messageKey: `sha256:${"b".repeat(64)}@fictional-r1`, auditId: "fictional-other" }] }],
-    suggestionState: "available", suggestionsLimited: false, suggestionScope: "Bounded fictional metadata", defaultsSource: "fictional config",
+    suggestionState: "available", suggestionsLimited: false, suggestionScope: "Bounded fictional metadata", defaultsSource: "backend/config/watchdesk-demo.json",
   };
   const requests: ContextUpdate[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
@@ -54,7 +54,23 @@ test("demo-off header and Settings do not imply a fictional own ship", async () 
     await waitFor(() => expect(view.getByRole("link", { name: "Own ship not set · Operation not set · Defaults" })).toBeTruthy());
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(view.queryByRole("option", { name: "USS Meridian" })).toBeNull();
-    expect(view.queryByText(/Unconfirmed demo defaults/)).toBeNull();
+    expect(view.queryByText("Demo defaults")).toBeNull();
+  } finally { close(); }
+});
+
+test("Settings uses plain copy and compact provenance without exposing configuration or revision IDs", async () => {
+  const { view, client, close } = setup("user");
+  try {
+    await waitFor(() => expect(view.getByText("View only. A platform administrator can change these settings.")).toBeTruthy());
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    const settings = view.getByRole("region", { name: "Watch settings" });
+    const badge = within(settings).getByText("Demo defaults");
+    expect(badge).toHaveClass("settings-defaults");
+    expect(badge).toHaveAttribute("title", "backend/config/watchdesk-demo.json");
+    for (const internal of ["backend/config/", "last-write-wins", "not tasking", "access control", "acknowledgement authority", "sha256:", "fictional-r1"]) {
+      expect(settings.textContent).not.toContain(internal);
+    }
+    expect(within(settings).getByRole("heading", { name: "Suggestions from messages" })).toBeTruthy();
   } finally { close(); }
 });
 
@@ -81,7 +97,8 @@ test("Use sends only a group ID and renders confirmed context/citations; Dismiss
   try {
     await waitFor(() => expect(view.getByRole("button", { name: "Use FICTIONAL COPPER" })).not.toBeDisabled());
     expect(view.getByText("+1 more sources")).toBeTruthy();
-    const source = view.getAllByRole("link", { name: /EXER · sha256:/ })[0];
+    const source = view.getAllByRole("link", { name: "EXER message · lines 2–2" })[0];
+    expect(source.getAttribute("title")).toContain(`sha256:${"a".repeat(64)}@fictional-r1`);
     expect(new URL(source.getAttribute("href")!, "http://localhost").searchParams.get("record")).toBe(`sha256:${"a".repeat(64)}@fictional-r1`);
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Use FICTIONAL COPPER" })); });
     await waitFor(() => expect(view.getByLabelText("Operation / exercise")).toHaveValue("FICTIONAL COPPER"));
@@ -128,18 +145,18 @@ test("Unassigned defaults require explicit manual confirmation in the actual req
     await waitFor(() => expect(view.getByRole("checkbox", { name: "Unassigned / needs applicability review" })).not.toBeDisabled());
     await act(async () => { fireEvent.click(view.getByRole("checkbox", { name: "Unassigned / needs applicability review" })); });
     expect(view.getByRole("button", { name: "Save settings" })).toBeDisabled();
-    await act(async () => { fireEvent.click(view.getByRole("checkbox", { name: "I confirm hiding Unassigned from app-wide defaults." })); });
+    await act(async () => { fireEvent.click(view.getByRole("checkbox", { name: "I confirm hiding Unassigned from the default ship list." })); });
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Save settings" })); });
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(requests[0]).toEqual({ changes: [{ field: "defaultShips", values: ["unit:demo-meridian"], confirmHideUnassigned: true }] });
-    await waitFor(() => expect(view.queryByRole("checkbox", { name: "I confirm hiding Unassigned from app-wide defaults." })).toBeNull());
+    await waitFor(() => expect(view.queryByRole("checkbox", { name: "I confirm hiding Unassigned from the default ship list." })).toBeNull());
   } finally { close(); }
 });
 
 test("user is read-only, missing citation arrays do not crash, and revoked writes retain the draft", async () => {
   const reader = setup("user", false, true);
   try {
-    await waitFor(() => expect(reader.view.getByText(/Read only/)).toBeTruthy());
+    await waitFor(() => expect(reader.view.getByText("View only. A platform administrator can change these settings.")).toBeTruthy());
     expect(reader.view.getByRole("button", { name: "Save settings" })).toBeDisabled();
     expect(reader.view.getByRole("button", { name: "Use FICTIONAL COPPER" })).toBeDisabled();
     expect(reader.view.getByText("Source unavailable")).toBeTruthy();

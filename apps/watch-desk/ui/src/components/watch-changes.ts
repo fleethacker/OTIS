@@ -8,8 +8,11 @@ export interface WatchChange {
   sequence: number | null;
   title: string;
   commandIds: string[];
+  /** Source issue time (message DTG): when the originator sent it. */
+  issuedAt: string | null;
+  /** First receipt by this desk; custody metadata, not send time. */
   recordedAt: string | null;
-  basis: "first_custody_recording" | "custody_time_unavailable";
+  basis: "source_issue_time" | "issue_time_unavailable";
 }
 export interface ChangePage {
   items: WatchChange[];
@@ -42,7 +45,7 @@ export async function readChanges(request: ChangeRequest, signal?: AbortSignal):
       ![result.returnedNewCount, result.hiddenCount, result.unknownHiddenCount, result.watermark].every((v) => Number.isSafeInteger(v) && v >= 0) ||
       result.items.length + result.hiddenCount !== result.returnedNewCount ||
       !(result.nextBefore === null || (Number.isSafeInteger(result.nextBefore) && result.nextBefore > 0)) ||
-      result.items.some((row) => !row.recordedAt || !Number.isFinite(Date.parse(row.recordedAt)))) {
+      result.items.some((row) => !row.issuedAt || !Number.isFinite(Date.parse(row.issuedAt)))) {
     throw new Error("Turnover response is invalid");
   }
   return result;

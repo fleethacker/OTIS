@@ -1,4 +1,5 @@
-//! Read-only turnover evidence. Receipt recording time is not issue/schedule/publication time.
+//! Read-only turnover evidence, windowed and ordered by source issue time (the message DTG).
+//! First receipt time is kept as custody metadata only; it is not when the message was sent.
 use crate::{Error, Result, api::App, private::timestamp};
 use axum::{Json, extract::State, http::HeaderMap};
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -45,6 +46,7 @@ pub struct Change {
     pub sequence: Option<i64>,
     pub title: String,
     pub command_ids: Vec<String>,
+    pub issued_at: Option<String>,
     pub recorded_at: Option<String>,
     pub basis: &'static str,
 }
@@ -63,6 +65,7 @@ const SOURCE: &str = r#"
       CASE WHEN r.sequence IS NULL THEN p.message_id||'@'||p.revision
            WHEN original.message_id IS NOT NULL THEN p.message_id||'@'||r.revision ELSE NULL END AS message_key,
       r.id AS receipt_id,r.sequence,r.received_at,
+      json_extract(coalesce(original.core,p.core),'$.issued_at') AS issued_at,
       substr(CASE WHEN r.sequence IS NULL THEN coalesce(json_extract(p.core,'$.subject'),json_extract(p.core,'$.type'),'Source record')
         ELSE coalesce(r.subject,json_extract(p.core,'$.type'),'Source record') END,1,256) AS title,
       json_extract(coalesce(original.core,p.core),'$.command_ids') AS command_ids
@@ -75,18 +78,20 @@ const SOURCE: &str = r#"
       AND (r.sequence IS NULL OR r.sequence<=?1)
   )
 "#;
-fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<(String, Option<String>, Option<String>, Option<i64>, Option<String>, String, String)> {
-    Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?))
+type Raw = (String, Option<String>, Option<String>, Option<i64>, Option<String>, Option<String>, String, String);
+fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Raw> {
+    Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?))
 }
-fn change(raw: (String, Option<String>, Option<String>, Option<i64>, Option<String>, String, String), unknown: bool) -> Result<Change> {
-    let (id, key, receipt, sequence, at, title, ids) = raw;
+fn change(raw: Raw, unknown: bool) -> Result<Change> {
+    let (id, key, receipt, sequence, received, issued, title, ids) = raw;
     parse_command_types::validate_hash_id(&id, "message_id").map_err(|_| Error::unavailable())?;
     if ids.len() > 16384 { return Err(Error::new("resource_exhausted", "Command metadata exceeds bound")); }
     let ids: Vec<String> = serde_json::from_str(&ids).map_err(|_| Error::unavailable())?;
     if ids.len() > 32 || ids.iter().any(|id| id.is_empty() || id.len()>256) { return Err(Error::unavailable()); }
     Ok(Change { id, message_key: key, receipt_id: receipt, sequence, title, command_ids: ids,
-        recorded_at: if unknown { None } else { Some(timestamp(at.as_deref().ok_or_else(Error::unavailable)?)?) },
-        basis: if unknown { "custody_time_unavailable" } else { "first_custody_recording" },
+        issued_at: if unknown { None } else { Some(timestamp(issued.as_deref().ok_or_else(Error::unavailable)?)?) },
+        recorded_at: received.as_deref().and_then(|at| timestamp(at).ok()),
+        basis: if unknown { "issue_time_unavailable" } else { "source_issue_time" },
     })
 }
 pub fn read(path: &Path, request: &Request) -> Result<Value> {
@@ -111,7 +116,7 @@ pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
     let until = end.to_rfc3339_opts(SecondsFormat::Millis, true);
     // SQLite dates prune coarsely; chrono enforces the exact half-open boundary below.
     // Keep the cursor over candidate rows so excluded submillisecond edges cannot stall paging.
-    let sql = format!("{SOURCE} SELECT message_id,message_key,receipt_id,sequence,received_at,title,command_ids FROM sources WHERE julianday(received_at)>=julianday(?2)-1.0/86400 AND julianday(received_at)<julianday(?3)+1.0/86400 AND (?4 IS NULL OR sequence<?4) ORDER BY sequence DESC LIMIT 201");
+    let sql = format!("{SOURCE} SELECT message_id,message_key,receipt_id,sequence,received_at,issued_at,title,command_ids FROM sources WHERE julianday(issued_at)>=julianday(?2)-1.0/86400 AND julianday(issued_at)<julianday(?3)+1.0/86400 AND (?4 IS NULL OR sequence<?4) ORDER BY sequence DESC LIMIT 201");
     let mut q = db.prepare(&sql)?;
     let mut candidates = Vec::new();
     for r in q.query_map(params![watermark,since,until,request.before], row)? { candidates.push(change(r?, false)?); }
@@ -120,9 +125,11 @@ pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
     let next = if more { candidates.last().and_then(|r| r.sequence) } else { None };
     let mut dated = Vec::new();
     for candidate in candidates {
-        let at = DateTime::parse_from_rfc3339(candidate.recorded_at.as_deref().ok_or_else(Error::unavailable)?).map_err(|_| Error::unavailable())?.with_timezone(&Utc);
+        let at = DateTime::parse_from_rfc3339(candidate.issued_at.as_deref().ok_or_else(Error::unavailable)?).map_err(|_| Error::unavailable())?.with_timezone(&Utc);
         if at >= start && at < end { dated.push(candidate); }
     }
+    // Pages follow receipt sequence (stable cursor); within a page, newest sent first.
+    dated.sort_by(|a, b| b.issued_at.cmp(&a.issued_at).then(b.sequence.cmp(&a.sequence)));
     let returned = dated.len();
     let mut hidden = 0usize;
     let mut hidden_ships = BTreeSet::new();
@@ -136,7 +143,7 @@ pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
         }
     }
     // Unknown evidence has no position within [since,until); keep it outside dated counts.
-    let sql = format!("{SOURCE} SELECT message_id,message_key,receipt_id,sequence,received_at,title,command_ids FROM sources WHERE julianday(received_at) IS NULL ORDER BY message_id LIMIT 51");
+    let sql = format!("{SOURCE} SELECT message_id,message_key,receipt_id,sequence,received_at,issued_at,title,command_ids FROM sources WHERE julianday(issued_at) IS NULL ORDER BY message_id LIMIT 51");
     let mut q = db.prepare(&sql)?;
     let mut unknown = Vec::new();
     for r in q.query_map([watermark], row)? { unknown.push(change(r?, true)?); }
@@ -149,7 +156,7 @@ pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
         "returnedNewCount":returned,"hiddenCount":hidden,"hiddenShipIds":hidden_ships,
         "nextBefore":next,"watermark":watermark,"since":since,"until":until,
         "availability":{"newRecords":"available","amended":"not_available","cancelled":"not_available","reviewTransitions":"not_available"},
-        "scope":"Published custody projections, first receipt recording; counts cover returned pages only. Unknown times are outside watch counts.",
+        "scope":"Published messages by source issue time (DTG); counts cover returned pages only. Messages without an issue time are listed separately.",
     }))
 }
 static CHANGE_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);

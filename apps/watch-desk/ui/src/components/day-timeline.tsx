@@ -11,10 +11,16 @@ import {
   useRef,
   createContext,
   useContext,
+  type CSSProperties,
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import { Calendar, type EventProps, type EventWrapperProps } from "react-big-calendar";
+import {
+  Calendar,
+  type EventProps,
+  type EventWrapperProps,
+  type DayLayoutFunction,
+} from "react-big-calendar";
 import type { MessageRecord, ExtractedEvent } from "../gen/app/v1/models_pb";
 import { instant, geometry, type CalendarView } from "./calendar-time";
 import { calendarLocalizer } from "./calendar-localizer";
@@ -26,6 +32,8 @@ import { ShipMarker } from "./ship-marker";
 import { OptaskIcon } from "./optask-icons";
 import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";
+import { useCalendarZoom } from "./calendar-zoom";
+import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -64,6 +72,9 @@ function sourceType(message: MessageRecord) {
   const value = structuredPayload(message)?.type;
   return typeof value === "string" ? value : undefined;
 }
+function eventKey(row: ScheduleEntry) {
+  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}`;
+}
 function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const { format: utc } = useDisplayTime();
   const disclose = useContext(WeekDisclosure);
@@ -92,6 +103,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     <button
       type="button"
       className="week-event calendar-event-card"
+      data-calendar-event={eventKey(row)}
       aria-label={`${row.title}, event details`}
       title={information}
       onClick={() => disclose(row)}
@@ -101,6 +113,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   ) : (
     <Link
       className="calendar-event-card"
+      data-calendar-event={eventKey(row)}
       to={row.href}
       aria-label={`${row.title}, source record`}
       title={information}
@@ -138,6 +151,9 @@ export function DayTimeline({
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
   const dialog = useRef<HTMLDialogElement>(null);
+  const calendarRoot = useRef<HTMLDivElement>(null);
+  useCalendarZoom(calendarRoot, view, interval, `${from}:${to}`);
+  const measurements = useCalendarMeasurements(calendarRoot);
   const [selected, setSelected] = useState<ScheduleEntry | null>(null);
   const [showIndex, setShowIndex] = useState(false);
   function disclose(row: ScheduleEntry) {
@@ -227,10 +243,56 @@ export function DayTimeline({
             ];
           })
           .sort((a, b) => +a.start - +b.start);
+  const minimumHeight = (row: ScheduleEntry) => measurements.titles.get(eventKey(row)) ?? 40;
+  const columns = Math.max(
+    1,
+    ...calendarLanes(
+      rows.map((row) => ({
+        event: row,
+        top: Math.max(from, +row.start),
+        height: Math.max(
+          +row.end - Math.max(from, +row.start),
+          (minimumHeight(row) / measurements.height) * 86400000
+        ),
+      }))
+    ).map((row) => row.columns)
+  );
+  const layout: DayLayoutFunction<ScheduleEntry> = ({ events, slotMetrics }) => {
+    // The library's public hook types slotMetrics as any; narrow it at this boundary.
+    const metrics = slotMetrics as {
+      getRange: (start: Date, end: Date) => { top: number; height: number };
+    };
+    return calendarLanes(
+      events.map((event) => {
+        const range = metrics.getRange(event.start, event.end);
+        return {
+          event,
+          top: range.top,
+          height: Math.max(range.height, (minimumHeight(event) / measurements.height) * 100),
+        };
+      })
+    ).map(({ event, top, height, lane, columns: count }) => ({
+      event,
+      style: {
+        top,
+        height,
+        width: `calc(${100 / count}% - 4px)`,
+        xOffset: `calc(${(lane * 100) / count}% + 2px)`,
+      },
+    }));
+  };
   const midnight = civilHour(civilDate(new Date(from), zone), 0, zone);
   return (
     <>
       <div
+        ref={calendarRoot}
+        style={
+          view === "month"
+            ? undefined
+            : ({
+                "--calendar-grid-min-width": `${52 + (view === "week" ? 7 : 1) * columns * 128}px`,
+              } as CSSProperties)
+        }
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}
         role="region"
         aria-label={`${mode === "utc" ? "Zulu UTC" : label} calendar, scrollable`}
@@ -257,7 +319,7 @@ export function DayTimeline({
               }}
               selectable={false}
               showMultiDayTimes
-              dayLayoutAlgorithm="no-overlap"
+              dayLayoutAlgorithm={layout}
               popup
               step={interval}
               timeslots={1}

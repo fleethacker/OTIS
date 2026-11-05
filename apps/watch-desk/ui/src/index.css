@@ -427,3 +427,18 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .ship-calendar .rbc-event .calendar-event-card { display: flex; flex-direction: row; align-items: center; gap: 5px; width: 100%; height: 100%; min-height: 0; line-height: 1.2; text-align: left; }
 .calendar-event-card .optask-icon { flex: none; width: 14px; height: 14px; }
 .calendar-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Wheel zoom changes the time scale inside the fixed calendar viewport. */
+.calendar-scroll[data-time-zoom] .rbc-time-content { overflow-y: auto; overscroll-behavior: contain; }
+.calendar-scroll[data-time-zoom] .ship-calendar .rbc-timeslot-group { min-height: var(--calendar-slot-height); flex: 1 0 var(--calendar-slot-height); }
+
+/* Readable collision lanes; minimum visual height does not imply event duration. */
+.calendar-scroll .ship-calendar .rbc-time-view { min-width: var(--calendar-grid-min-width); }
+.ship-calendar .rbc-event-label { display: none; }
+.calendar-event-title { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.calendar-scroll .ship-calendar .rbc-day-slot .rbc-event { display: block; overflow: clip; }
+.calendar-scroll .ship-calendar .rbc-day-slot .rbc-event-content { height: 100%; overflow: visible; }
+.calendar-scroll .ship-calendar .rbc-day-slot .calendar-event-card { position: sticky; top: 0; height: auto; align-items: flex-start; padding-block: 2px; }
+.calendar-scroll .rbc-day-slot .calendar-event-card .optask-icon { margin-top: 1px; }
+
+.calendar-event-card .calendar-event-title { flex: 1 1 auto; }

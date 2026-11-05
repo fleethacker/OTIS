@@ -13,7 +13,8 @@ import {
   type CalendarView,
 } from "../components/calendar-time";
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
-import { readShips } from "../components/ship-calendars";
+import { readShips, selectedShipFilters } from "../components/ship-calendars";
+import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
 import { useCommands } from "../components/command-roster";
 import { ShipsSidebar } from "../components/ships-sidebar";
 
@@ -45,15 +46,7 @@ export default function Calendar() {
     mode: "hybrid",
     from: new Date(from).toISOString(),
     to: new Date(to).toISOString(),
-    filters: ships
-      ? {
-          commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
-          unassignedOnly: ships.has("unassigned:"),
-          noCommands:
-            ships.size === 0 ||
-            [...ships].some((v) => !v.startsWith("unit:") && v !== "unassigned:"),
-        }
-      : {},
+    filters: selectedShipFilters(ships),
   });
   const messages = result.data?.messages ?? [];
   const refreshing = result.isPending || result.isFetching || query !== debounced;
@@ -95,6 +88,11 @@ export default function Calendar() {
         }}
       />
       <div className="calendar-main">
+      {dataset === "canonical" && <WatchTurnoverPanel
+        turnovers={roster.isError ? undefined : roster.data?.turnoverUtc}
+        commands={roster.isError ? [] : roster.data?.commands}
+        returnTo={returnTo}
+      />}
       <section className="calendar-controls" aria-label="Calendar controls">
         <label className="schedule-search">
           Search schedule

@@ -4,6 +4,7 @@ pub mod proto {
 }
 pub mod access;
 pub mod commands;
+pub mod changes;
 pub mod context_metadata;
 pub mod watch_context;
 pub mod config;

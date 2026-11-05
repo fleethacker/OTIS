@@ -30,7 +30,8 @@ async fn roster_reads_and_shared_write_check_use_server_sessions() {
         Ok(Json(serde_json::json!({"actor":actor.username})))
     }
     let routes = axum::Router::new().route("/commands/list", post(commands::list)).route("/write-probe", post(write))
-        .route("/watch-context/{operation}", post(parse_command_server::watch_context::handle)).with_state(app.clone());
+        .route("/watch-context/{operation}", post(parse_command_server::watch_context::handle))
+        .route("/changes/list", post(parse_command_server::changes::list)).with_state(app.clone());
     for (role, expected) in [("user", StatusCode::FORBIDDEN), ("platform_admin", StatusCode::OK)] {
         let session = app.store().unwrap().create_session(role).unwrap();
         for path in ["/commands/list", "/watch-context/get", "/write-probe", "/watch-context/update"] {
@@ -58,6 +59,15 @@ async fn roster_reads_and_shared_write_check_use_server_sessions() {
             }
         }
     }
+    let bounds = r#"{"since":"2026-11-05T04:00:00Z","until":"2026-11-05T08:00:00Z"}"#;
+    let response = routes.clone().oneshot(Request::post("/changes/list").header("content-type", "application/json").body(Body::from(bounds)).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let session = app.store().unwrap().create_session("user").unwrap();
+    let response = routes.clone().oneshot(Request::post("/changes/list").header("content-type", "application/json")
+        .header("cookie", format!("parse_command_session={session}"))
+        .header("origin", "http://localhost").header("host", "localhost").body(Body::from(bounds)).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE); // missing custody is not an empty watch
+    assert!(!app.config.intake.journal.exists()); // read-only handler did not create a database
     let actor: String = app.store().unwrap().db.query_row("SELECT json_extract(document,'$.updatedBy') FROM watch_context", [], |r| r.get(0)).unwrap();
     assert_eq!(actor, "dev-admin");
     let response = routes.clone().oneshot(Request::post("/watch-context/update").header("content-type", "application/json").body(Body::from(r#"{"field":"operationName","values":["NO SESSION"]}"#)).unwrap()).await.unwrap();

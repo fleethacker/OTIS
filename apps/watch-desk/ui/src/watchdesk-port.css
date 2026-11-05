@@ -71,3 +71,19 @@
 .context-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .context-conflict { border-left: 3px solid var(--color-warning); padding-left: 10px; }
 .watch-settings [role="alert"] { color: var(--color-error); font-size: 13px; }
+
+/* P5: source-owned turnover, independent of scheduled date/search and existing inbox. */
+.watch-turnover { flex: none; margin-bottom: 10px; background: var(--color-base-100); border: 1px solid var(--color-base-300); font-size: 12px; }
+.watch-turnover summary { cursor: pointer; padding: 8px 12px; font-weight: 600; }
+.turnover-content { max-height: 32vh; overflow: auto; padding: 0 12px 12px; overflow-wrap: anywhere; }
+.turnover-content p { margin: 8px 0; }
+.turnover-boundary { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.turnover-boundary label { display: grid; gap: 4px; }
+.turnover-boundary input { font-variant-numeric: tabular-nums; width: min(290px, 100%); }
+.turnover-content ul { list-style: none; padding: 0; }
+.turnover-content li { border-top: 1px solid var(--color-base-300); padding: 8px 0; }
+.turnover-content a { color: var(--color-primary); text-decoration: underline; }
+.turnover-content small { color: var(--color-bc-muted); }
+.turnover-content h3 { font-weight: 600; margin-top: 12px; }
+.turnover-hidden { border-left: 3px solid var(--color-warning); padding-left: 8px; }
+.turnover-content [role="alert"] { color: var(--color-error); }

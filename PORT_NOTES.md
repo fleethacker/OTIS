@@ -274,6 +274,61 @@ Static diff check only here; the Rust container rerun remains outstanding.
   its finding text has not yet been supplied, so no mechanism or fix is inferred.
   P5 work remains uncommitted and outside this review-fix commit.
 
+## P5 — Since last watch from custody evidence
+
+- **Files:** server `changes.rs`, route/module wiring, `tests/changes.rs` and session
+  contract tests; UI `watch-boundary.ts`, `watch-changes.ts`, `watch-turnover-panel.tsx`,
+  tests, Calendar integration, shared ship-filter helper and port-only CSS.
+  `commands/list` now exposes the stored UTC turnover schedule without another
+  identity/settings query in Calendar.
+- **API:** authenticated read-only `POST /api/v1/changes/list` with ISO UTC
+  `{since,until,filters?,before?,watermark?}`. Bounds are `[since,until)`, positive,
+  at most 42 days, with millisecond request precision. Strict fields; no actor/role
+  input and no new application write. Two concurrent read jobs, seven-second read
+  deadline, 2 MiB output cap. No raw-body transfer or OpenSearch fan-out.
+- **Evidence:** new **body records**, not new tasking. The immutable first receipt
+  sequence supplies `received_at`, never issue time, event time, indexing time or
+  fetch time. Repeated receipts/parser revisions do not create another new body.
+  A changed fixture body has a different message hash and is a separate record,
+  not an amendment. Scope is published custody projections, not every inbox/search
+  document. SQL does coarse date pruning; chrono applies exact inclusive/exclusive
+  comparisons, including submillisecond source timestamps.
+- **Citations:** first receipt ID/time and the exact first-receipt revision when it
+  has a published projection. If that revision is unavailable, no fallback revision
+  link is fabricated. Explicit projection `command_ids` alone determine visibility;
+  source metadata uses that original projection where present, otherwise the latest
+  published projection. Shared records remain single records, not per-ship copies.
+- **Bounds/unknowns:** up to 200 candidate rows per page, descending receipt sequence,
+  with a receipt watermark and exclusive `before` cursor. Near-boundary candidates
+  excluded by the exact comparison still advance the cursor. Counts cover returned
+  pages; hidden counts never imply a whole-watch total. Up to 50 unknown-time records
+  are separate, outside date counts; unknown clipping is labelled. Unavailable is
+  distinct from empty. Amendment/cancellation/review-transition producers remain
+  **not available**, not zero. No optional inbox producer was added; undated evidence
+  cannot create a turnover bell signal through this slice.
+- **UI:** collapsed automatic watch by default, configured UTC boundaries inclusive
+  at turnover, validated `05 NOV 2026 1600Z` picker (optional seconds/milliseconds),
+  pinned ISO URL or `closed:<auto|ISO>` preserving the selection. Invalid input does
+  not change URL/counts. Automatic watch requires available context, not a fabricated
+  fallback. Ship filters apply; calendar search/scheduled date do not filter custody
+  history. Show clears ship/search URL filters without storing preferences. Exact
+  source links open Lifecycle and preserve Calendar return state. Turnover URL edits
+  no longer retrigger calendar opening scroll. A 30-second clock refresh resets the
+  bounded read/paging window; durable incremental watch snapshots are deferred.
+- **Tests added:** exact boundaries and submillisecond edges, shared/hidden/none,
+  unknown times, duplicate/revision deduplication, absent source revision, pagination
+  watermark and strict requests; HTTP authentication/unavailable versus empty;
+  rendered UTC validation, source/return links, hidden Show, unknown separation and
+  unavailable UI. Existing console-error guard stays enabled; network/React work is
+  mocked and settled.
+- **Validation here:** static diff check and in-memory Node SQLite checks for coarse
+  SQL bounds, cursor/unknown partition and exact revision links. Rust exact-time
+  logic, TypeScript, UI and live screens have **not** been run here; Claude's container
+  gate remains required. No builds, application tests, fixture loading or volume resets.
+- **TODOs:** authoritative amendment/cancellation/review-transition lineage, optional
+  dated-only inbox integration, retention and stable cross-poll pagination. Existing
+  demo read authorization applies; this is not a production command ACL implementation.
+
 ## Next slice order
 
 Finish P5, then **P5b recurrence** under Addenda R/R2, then P6. No new crates or
@@ -284,6 +339,32 @@ add a baseline crypto fixture, schema/types/mapping updates and expansion tests.
 Parker must run the external OPTASK regression against his unavailable samples.
 
 ## P6 queue from live review (not yet implemented)
+
+Sonnet's live review at `e4c7ddc`, in priority order (the supplied `/tmp/claude-1000/
+computer-use.0ZEvmL/out/report.md` is not mounted here; this records Neal's summary):
+
+1. Month: 05 NOV shows one event and a clipped second; the `+4 more` control is
+   clipped/inaccessible. Keep show-more visible/clickable regardless of cell overflow.
+2. Burst typing in Calendar search keeps only the last character (`q=s`); 20ms gaps
+   work. Check controlled-input/navigation timing and `update()` snapshots, including
+   `60ac735`, before attributing a cause. Fix inherited behavior too and note ownership.
+3. Search `communications` hides two matching visible titles; `radio rehearsal`
+   returns the same set. Verify indexing/query fields and hard-coded hybrid behavior;
+   show the executed mode. Do not treat semantic top-k as a match predicate for every
+   query. A lexical requirement / calibrated semantic threshold is Parker's policy
+   call; no arbitrary relevance threshold is approved by this report.
+4. Clear all in Combined must say “No ships selected”, not a blank grid beside an
+   apparent all-clear review message. Keep explicit none fail-closed in every view.
+5. At 400px, collapse Ships initially and keep roughly 420px minimum calendar height;
+   prevent header clock/bell overlap. Open disclosure currently leaves a 16px grid.
+6. Week lane labels reach 1–2 characters at 1280–1440px. Prefer ellipsis + full tooltip
+   or a bounded minimum lane width / overflow indicator, preserving seven-day Fit.
+7. Verify server authorization for Send Acknowledgement. Do not infer its policy
+   from Settings admin permissions. If ordinary users cannot send, disable with a
+   reason; otherwise explain the actual authorization rather than inventing a ban.
+8. Note only: reported dev React bundle / ~20k profiling logs. Inspect production
+   builder invocation/configuration; it may be the container build, not app code.
+   Do not edit the read-only Ark pipeline to hide symptoms.
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live
   Rust/OpenSearch stack. Screenshots: `specs/watchdesk/port/e4c7ddc/` in the handoff repo.

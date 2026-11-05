@@ -17,6 +17,7 @@ export interface CommandRoster {
   provenance: string;
   assignmentEnabled: boolean;
   defaultShips?: string[];
+  turnoverUtc?: string[];
   contextUpdatedBy?: string | null;
 }
 export async function readCommands(signal?: AbortSignal): Promise<CommandRoster> {
@@ -35,6 +36,9 @@ export async function readCommands(signal?: AbortSignal): Promise<CommandRoster>
   }
   if (payload.defaultShips !== undefined && (!Array.isArray(payload.defaultShips) || !payload.defaultShips.every((v) => typeof v === "string"))) {
     throw new Error("Default ship selection is invalid");
+  }
+  if (payload.turnoverUtc !== undefined && (!Array.isArray(payload.turnoverUtc) || !payload.turnoverUtc.every((v) => typeof v === "string"))) {
+    throw new Error("UTC watch turnover configuration is invalid");
   }
   const roster = payload as unknown as CommandRoster;
   if (new Set(roster.commands.map((c) => c.id)).size !== roster.commands.length) {

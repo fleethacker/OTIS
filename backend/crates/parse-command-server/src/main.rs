@@ -159,6 +159,10 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 get(parse_command_server::api::status),
             )
             .route(
+                "/api/v1/changes/list",
+                post(parse_command_server::changes::list),
+            )
+            .route(
                 "/api/v1/watch-context/{operation}",
                 post(parse_command_server::watch_context::handle),
             )

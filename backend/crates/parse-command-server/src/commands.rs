@@ -34,6 +34,7 @@ pub async fn list(
     Ok(Json(json!({
         "commands": catalog.commands,
         "defaultShips": snapshot.context.default_ships,
+        "turnoverUtc": snapshot.context.turnover_utc,
         "contextUpdatedBy": snapshot.updated_by,
         "source": if demo { CONFIG_SOURCE } else { "No command roster configured" },
         "version": catalog.version,

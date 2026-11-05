@@ -399,6 +399,16 @@ Parker must run the external OPTASK regression against his unavailable samples.
   2 overlapping per-ship facts, full titles/tooltips, header/body alignment, keyboard
   overflow controls, 1280/1440/400px and zoom. Attach dense Week/Side screenshots.
 
+## Polish 9 — Side-by-side ship identity
+
+- Ship-coloured header chips plus subtle per-resource event fill identify Side Day
+  columns without relying on a thin border. Full ship names remain in tooltips;
+  Unassigned says Unassigned. Named ships never use amber; review/revised cues do.
+- Files: DayTimeline, calendar-resources test, port CSS. No API changes.
+- Tests assert distinct header and event identity colours without changing title-only
+  controls or shared-event source URLs. Static diff check only; attach Side light/dark
+  screenshots and check text contrast in Claude's browser/container gate.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

@@ -59,6 +59,10 @@
 /* Day resources and Week Fit only; Expanded keeps Parker's lane-proportional width. */
 .calendar-with-ships .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
 .calendar-with-ships .ship-calendar-resources .rbc-time-header-content { min-width: 0; }
+.resource-ship-chip { display: inline-block; margin: 3px; padding: 2px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: 650; }
+.calendar-with-ships .ship-calendar-resources .rbc-event { background: color-mix(in srgb, var(--ship-color) 14%, var(--color-base-100)); color: var(--color-base-content); }
+.calendar-with-ships .ship-calendar-resources .rbc-event.calendar-revised { border-color: var(--color-warning); }
+/* Applicability amber is only the explicitly Unassigned review resource; named ships never use it. */
 /* Match zoom specificity so Parker's later data-time-zoom rule still wins. */
 .calendar-with-ships .week-fit .ship-calendar-week .rbc-timeslot-group { min-height: 44px; flex: 1 0 44px; }
 .calendar-with-ships .week-fit .rbc-time-content { overflow-y: auto; }

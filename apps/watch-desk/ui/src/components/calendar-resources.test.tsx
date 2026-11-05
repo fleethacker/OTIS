@@ -49,8 +49,11 @@ test("Day resource links duplicate shared points; Combined and Week remain dedup
     expect(url.searchParams.get("record")).toBe(key);
     expect(url.searchParams.get("returnTo")).toBe(common.returnTo);
   }
-  expect(side.getByTitle("USNS Tern")).toBeTruthy();
-  expect(side.getByTitle("USS Halyard")).toBeTruthy();
+  expect(side.getByTitle("USNS Tern")).toHaveClass("resource-ship-chip");
+  expect(side.getByTitle("USS Halyard")).toHaveClass("resource-ship-chip");
+  expect((side.getByTitle("USNS Tern") as HTMLElement).style.backgroundColor).not.toBe((side.getByTitle("USS Halyard") as HTMLElement).style.backgroundColor);
+  const fills = links.map((link) => (link.closest(".rbc-event") as HTMLElement).style.getPropertyValue("--ship-color"));
+  expect(new Set(fills).size).toBe(2);
   side.unmount();
   const combined = renderWithProviders(<DayTimeline {...common} shipLayout="combined" />);
   expect(combined.getAllByRole("link", { name: `${item.title}, source record` })).toHaveLength(1);

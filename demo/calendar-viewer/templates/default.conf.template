@@ -1,0 +1,38 @@
+# Rendered by the nginx image's envsubst step into /etc/nginx/conf.d/default.conf.
+# Only defined environment variables are substituted; nginx's own $variables
+# are left alone.
+server {
+    listen 80;
+    server_name _;
+    server_tokens off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Read-only proxy to the calendar. nginx adds the Basic credential, so the
+    # browser never sees it; every method except GET/HEAD is refused.
+    location /dav/ {
+        limit_except GET {
+            deny all;
+        }
+        proxy_pass http://calendar:5232/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization "Basic ${CALENDAR_BASIC_AUTH}";
+        proxy_hide_header WWW-Authenticate;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 5s;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+        add_header Cache-Control "no-cache";
+    }
+}

@@ -43,3 +43,5 @@ Email framing is confirmed: SMTP delivery, IMAP retrieval, body beginning with `
 Detailed USMTF knowledge and manual-derived notes are kept outside Git at `../OPTASK_Messages/knowledge`; they are distributed with the external sample data. Do not recreate a knowledge corpus under this documentation folder.
 
 - [Settings, OIDC and hidden state](integration/settings-oidc.md): implementation contract, roles, configuration and migration.
+
+- [ANCHOR/PB4T calendar integration](integration/anchor-pb4t-calendar.md): explicit message history, current-version review, personnel conflicts and local calendar decisions.

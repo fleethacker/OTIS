@@ -65,8 +65,9 @@ pub async fn session(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<
     } else {
         (None, None)
     };
+    let source_scope = crate::station::effective_scope(&app.private, &identity.owner).await?;
     Ok(Json(
-        json!({"identity":identity,"scope":crate::private::token_hash(&format!("{}\0{}",identity.owner,identity.role)),"expiresAt":expires,"sessionExpiresAt":session_expires,"mode":app.config.auth.mode}),
+        json!({"userId":identity.owner,"identity":identity,"scope":crate::private::token_hash(&format!("{}\0{}\0{}",identity.owner,identity.role,source_scope.fingerprint)),"expiresAt":expires,"sessionExpiresAt":session_expires,"mode":app.config.auth.mode}),
     ))
 }
 pub async fn renew(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Json<Value>> {

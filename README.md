@@ -98,6 +98,15 @@ type. Extracted tasking requires human review, and missing or uncertain values
 remain explicit. Production Outlook/Exchange authentication and TLS integration
 require separate implementation and acceptance; the demo exercises SMTP/IMAP.
 
+## Message changes and personnel planning
+
+The ANCHOR/PB4T integration adds version-specific review, explicit amendment and
+cancellation handling, and reviewed local schedule proposals to the calendar.
+The first scenario is fictional and bounded; it does not infer authority from
+arbitrary incoming text or provide a general crew scheduler. See the
+[integration record](docs/integration/anchor-pb4t-calendar.md) for replay
+instructions, validation and limitations.
+
 ## Repository guide
 
 | Path | Contents |

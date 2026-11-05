@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fromJson, type JsonValue } from "@bufbuild/protobuf";
 import { ReadSchedulesResponseSchema } from "../gen/app/v1/source_data_pb";
 import { sessionFetch } from "./session-access";
+import { isCurrentEvent, type CurrentEventView } from "./anchor-data";
+import type { AccountSession } from "./workflow-session";
 
 export type Dataset = "canonical" | "legacy";
 export type MessageSort = "relevance" | "issued_desc" | "issued_asc";
@@ -62,6 +64,7 @@ export interface SourceMeta {
   windowLimited?: boolean;
   timelineItems?: TimelineItem[];
   reviewItems?: TimelineItem[];
+  currentEvents?: CurrentEventView[];
   matchedExcerpts?: Record<string, { passageId: string; text: string }[]>;
 }
 export async function readSource(operation: string, request: SourceRequest, signal?: AbortSignal) {
@@ -74,6 +77,13 @@ export async function readSource(operation: string, request: SourceRequest, sign
   });
   const payload = await readJson(response);
   const { meta, ...data } = payload;
+  if (
+    isSourceObject(meta) &&
+    Object.prototype.hasOwnProperty.call(meta, "currentEvents") &&
+    (!Array.isArray(meta.currentEvents) || !meta.currentEvents.every(isCurrentEvent))
+  ) {
+    throw new Error("Current event results could not be verified. Please retry.");
+  }
   return {
     ...fromJson(ReadSchedulesResponseSchema, data),
     meta: (meta ?? {}) as unknown as SourceMeta,
@@ -101,7 +111,15 @@ export function useSource(operation: string, request: SourceRequest, enabled = t
     gcTime: 60_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
   });
+}
+export function sourceScopeKey(session: AccountSession | null) {
+  return session?.scope ?? null;
+}
+export function isSourceObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 export function useDebounced(value: string) {
   const [debounced, setDebounced] = useState(value);

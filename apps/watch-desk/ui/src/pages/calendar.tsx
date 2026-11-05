@@ -15,6 +15,9 @@ import {
 } from "../components/calendar-time";
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
 import { readShips } from "../components/ship-calendars";
+import { AnchorEvents } from "../components/anchor-history";
+import { PersonnelPlanning } from "../components/personnel-planning";
+import { usePlanning } from "../components/personnel-planning-data";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
@@ -42,6 +45,12 @@ export default function Calendar() {
       ? new Set((shared?.settings.commandIds ?? []).map((id) => `unit:${id}`))
       : null;
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
+  const showPlanning =
+    dataset === "canonical" &&
+    (ships === null || ships === undefined || ships.has("unit:demo-meridian")) &&
+    from < Date.parse("2026-11-11T00:00:00Z") &&
+    to > Date.parse("2026-11-10T00:00:00Z");
+  const planning = usePlanning(showPlanning);
   const result = useSource("timeline", {
     dataset,
     query: debounced,
@@ -65,6 +74,37 @@ export default function Calendar() {
   canonical.set("interval", String(interval));
   canonical.delete("hours");
   const returnTo = `/calendar?${canonical.toString()}`;
+  const localEvents =
+    showPlanning && !planning.isError && !planning.isFetching
+      ? (planning.data?.inputs?.events ?? []).flatMap((event) =>
+          !event.fixed &&
+          event.sourceRef.startsWith("local:") &&
+          event.interval !== null &&
+          (debounced.trim() === "" ||
+            [event.title, ...event.personIds]
+              .join(" ")
+              .toLowerCase()
+              .includes(debounced.toLowerCase()))
+            ? [
+                {
+                  id: event.id,
+                  title: event.title,
+                  start: event.interval.start,
+                  end: event.interval.end,
+                  unit: "demo-meridian",
+                  href: `${returnTo}#personnel-planning-heading`,
+                  reviewRequired: !event.validated,
+                },
+              ]
+            : []
+        )
+      : [];
+  const showWorkflow =
+    showPlanning ||
+    (dataset === "canonical" &&
+      !result.isError &&
+      !result.isFetching &&
+      (result.data?.meta.currentEvents?.length ?? 0) > 0);
   function update(key: string, value: string) {
     const next = new URLSearchParams(canonical);
     next.set(key, value);
@@ -126,6 +166,18 @@ export default function Calendar() {
         <AppButton size="sm" onClick={() => update("date", today)}>
           Today
         </AppButton>
+        <AppButton
+          size="sm"
+          disabled={result.isFetching || planning.isFetching}
+          onClick={() => {
+            void result.refetch();
+            if (showPlanning) {
+              void planning.refetch();
+            }
+          }}
+        >
+          Refresh calendar
+        </AppButton>
         <AppButton size="sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
           Next →
         </AppButton>
@@ -152,52 +204,66 @@ export default function Calendar() {
           </AppButton>
         </Notice>
       )}
-      <section
-        className={`timeline-section ${date === today ? "is-today" : ""}`}
-        aria-labelledby="schedule-heading"
-      >
-        {result.data?.meta.windowLimited === true && !result.isFetching && !result.isError && (
-          <p role="status">Result limit reached. Narrow the range or search.</p>
+      <div className={`calendar-workspace${showWorkflow ? " has-workflow" : ""}`}>
+        <section
+          className={`timeline-section ${date === today ? "is-today" : ""}`}
+          aria-labelledby="schedule-heading"
+        >
+          {result.data?.meta.windowLimited === true && !result.isFetching && !result.isError && (
+            <p role="status">Result limit reached. Narrow the range or search.</p>
+          )}
+          <div className="timeline-toolbar">
+            <h2 id="schedule-heading">
+              {week
+                ? `${moment.tz(from, zone).format("DD MMM YYYY")} – ${moment.tz(to, zone).subtract(1, "day").format("DD MMM YYYY")}`
+                : new Date(midnight).toLocaleDateString("en-GB", {
+                    timeZone: zone,
+                    weekday: month ? undefined : "long",
+                    day: month ? undefined : "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+              {date === today && <span className="revision">Today</span>}
+            </h2>
+          </div>
+          <DayTimeline
+            localEvents={localEvents}
+            messages={result.isError || result.isFetching ? [] : messages}
+            sourceItems={
+              dataset === "canonical"
+                ? result.isError || result.isFetching
+                  ? []
+                  : (result.data?.meta.timelineItems ?? [])
+                : undefined
+            }
+            from={from}
+            to={to}
+            interval={interval}
+            returnTo={returnTo}
+            view={view}
+            expanded={params.get("layout") === "expanded"}
+            startHour={0}
+            endHour={24}
+            onDay={(chosen) => {
+              const next = new URLSearchParams(canonical);
+              next.set("date", chosen);
+              next.set("view", "day");
+              setParams(next);
+            }}
+          />
+        </section>
+        {showWorkflow && (
+          <aside
+            className="calendar-workflow-sidebar"
+            aria-label="Calendar changes and personnel planning"
+          >
+            {!result.isError && !result.isFetching && (
+              <AnchorEvents items={result.data?.meta.currentEvents ?? []} />
+            )}
+            {showPlanning && <PersonnelPlanning returnTo={returnTo} />}
+          </aside>
         )}
-        <div className="timeline-toolbar">
-          <h2 id="schedule-heading">
-            {week
-              ? `${moment.tz(from, zone).format("DD MMM YYYY")} – ${moment.tz(to, zone).subtract(1, "day").format("DD MMM YYYY")}`
-              : new Date(midnight).toLocaleDateString("en-GB", {
-                  timeZone: zone,
-                  weekday: month ? undefined : "long",
-                  day: month ? undefined : "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-            {date === today && <span className="revision">Today</span>}
-          </h2>
-        </div>
-        <DayTimeline
-          messages={result.isError || result.isFetching ? [] : messages}
-          sourceItems={
-            dataset === "canonical"
-              ? result.isError || result.isFetching
-                ? []
-                : (result.data?.meta.timelineItems ?? [])
-              : undefined
-          }
-          from={from}
-          to={to}
-          interval={interval}
-          returnTo={returnTo}
-          view={view}
-          expanded={params.get("layout") === "expanded"}
-          startHour={0}
-          endHour={24}
-          onDay={(chosen) => {
-            const next = new URLSearchParams(canonical);
-            next.set("date", chosen);
-            next.set("view", "day");
-            setParams(next);
-          }}
-        />
-      </section>
+      </div>
     </div>
   );
 }

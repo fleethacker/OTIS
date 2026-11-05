@@ -3,7 +3,8 @@ import { beginSessionAccess } from "./session-access";
 import { SessionVisibility } from "./session-visibility";
 import otisIcon from "../assets/otis/otis-logo.png";
 import { AppButton } from "./ui";
-interface Session {
+import { SessionContext, workflowSession, type NativeWorkflowIdentity } from "./workflow-session";
+interface Session extends NativeWorkflowIdentity {
   scope: string;
   expiresAt: number | null;
   sessionExpiresAt: number | null;
@@ -151,7 +152,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       {session && (state === "ready" || state === "checking") ? (
         <SessionVisibility.Provider value={state === "ready"}>
           <div style={{ display: state === "ready" ? "contents" : "none" }}>
-            <Fragment key={session.scope}>{children}</Fragment>
+            <Fragment key={session.scope}>
+              <SessionContext.Provider value={{ session: workflowSession(session) }}>
+                {children}
+              </SessionContext.Provider>
+            </Fragment>
           </div>
         </SessionVisibility.Provider>
       ) : null}

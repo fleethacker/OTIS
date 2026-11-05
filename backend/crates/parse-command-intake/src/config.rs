@@ -1,5 +1,6 @@
 use crate::{IntakeError, Result};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::{io::Read, path::PathBuf};
 
 #[derive(Clone, Deserialize)]
@@ -36,6 +37,8 @@ pub struct Config {
     pub parser: parse_command_core::HostLimits,
     pub enabled_types: Vec<String>,
     pub subject_policy: SubjectPolicy,
+    #[serde(default, rename = "sourceRouting")]
+    pub source_routing: Option<SourceRouting>,
 }
 fn default_search() -> String {
     std::env::var("PARSE_COMMAND_OPENSEARCH_URL")
@@ -44,6 +47,38 @@ fn default_search() -> String {
 fn default_index() -> String {
     std::env::var("PARSE_COMMAND_CUSTODY_INDEX")
         .unwrap_or_else(|_| ".parse-command-custody-v1".into())
+}
+/// Operator-approved applicability for every message received from this source.
+/// This never derives recipient authority or access grants from message contents.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceRouting {
+    pub policy_id: String,
+    pub command_ids: Vec<String>,
+}
+impl SourceRouting {
+    fn validate(&self) -> Result<()> {
+        parse_command_types::validate_revision(&self.policy_id, "policy_id")
+            .map_err(|_| IntakeError("source_routing_policy_id"))?;
+        if self.command_ids.is_empty()
+            || self.command_ids.len() > 32
+            || self.command_ids.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 256
+                    || id.trim() != id
+                    || id.chars().any(char::is_control)
+            })
+            || self
+                .command_ids
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != self.command_ids.len()
+        {
+            return Err(IntakeError("source_routing_command_ids"));
+        }
+        Ok(())
+    }
 }
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -84,6 +119,9 @@ impl Config {
             .map_err(|_| IntakeError("account_id"))?;
         parse_command_types::validate_revision(&self.revision, "revision")
             .map_err(|_| IntakeError("revision"))?;
+        if let Some(routing) = &self.source_routing {
+            routing.validate()?;
+        }
         // This explicit demo transport never sends credentials to a remote Exchange host.
         if matches!(self.transport, Transport::PlaintextDemo)
             && !matches!(self.host.as_str(), "127.0.0.1" | "::1" | "mailserver")
@@ -152,6 +190,28 @@ impl Config {
             return Err(IntakeError("parser_limits"));
         }
         Ok(())
+    }
+    pub fn command_ids(&self) -> Vec<String> {
+        let mut ids = self
+            .source_routing
+            .as_ref()
+            .map(|v| v.command_ids.clone())
+            .unwrap_or_default();
+        ids.sort();
+        ids
+    }
+    pub fn routing_fingerprint(&self) -> String {
+        format!(
+            "{:x}",
+            Sha256::digest(
+                serde_json::json!({
+                    "policyId": self.source_routing.as_ref().map(|v| &v.policy_id),
+                    "commandIds": self.command_ids(),
+                })
+                .to_string()
+                .as_bytes()
+            )
+        )
     }
 }
 

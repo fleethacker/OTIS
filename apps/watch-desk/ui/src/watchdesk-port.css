@@ -9,6 +9,8 @@
 .calendar-review-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
 .calendar-review-content small { color: var(--color-bc-muted); }
 .calendar-result-limit { padding: 8px 16px; font-size: 12px; color: var(--color-base-content); }
+.calendar-search-status { flex: none; font-size: 12px; margin: 0 0 8px; overflow-wrap: anywhere; }
+.calendar-search-status a { color: var(--color-primary); text-decoration: underline; }
 .calendar-review-limit { font-weight: 600; }
 .calendar-review :is(summary, a, button):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 /* Never inherit RBC's white gutter in the dark theme. */
@@ -35,17 +37,54 @@
   .ships-sidebar { max-height: 30vh; }
 }
 
+/* Narrow view scrolls the page rather than crushing the calendar below wrapped chrome. */
+@media (max-width: 900px) {
+  #root:has(.calendar-page.calendar-with-ships) { height: auto; min-height: 100dvh; }
+  main:has(.calendar-page.calendar-with-ships) { flex: none; }
+  .calendar-page.calendar-with-ships { height: auto; grid-template-rows: auto auto; }
+  .calendar-with-ships .calendar-main .timeline-section { flex: none; }
+  .calendar-page.calendar-with-ships .calendar-scroll { flex: none; height: 460px; min-height: 420px; }
+  .calendar-page.calendar-with-ships .calendar-scroll .ship-calendar { min-height: 420px; }
+}
+@media (max-width: 640px) {
+  #root .desk-header { height: auto; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
+  .desk-header .header-start { grid-column: 1; gap: 8px; }
+  .desk-header .account { grid-column: 2; grid-row: 1; gap: 4px; }
+  .desk-header .header-clock { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
+  .desk-header .wordmark { gap: 8px; }
+}
+.desk-header .popover-trigger { color: white; }
+.desk-header .avatar > div { background: oklch(78% 0.08 190); color: oklch(25% 0.04 250); }
+
 /* Day resources and Week Fit only; Expanded keeps Parker's lane-proportional width. */
 .calendar-with-ships .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
 .calendar-with-ships .ship-calendar-resources .rbc-time-header-content { min-width: 0; }
+.resource-ship-chip { display: inline-block; margin: 3px; padding: 2px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: 650; }
+.calendar-with-ships .ship-calendar-resources .rbc-event { background: color-mix(in srgb, var(--ship-color) 14%, var(--color-base-100)); color: var(--color-base-content); }
+.calendar-with-ships .ship-calendar-resources .rbc-event.calendar-revised { border-color: var(--color-warning); }
+/* Applicability amber is only the explicitly Unassigned review resource; named ships never use it. */
 /* Match zoom specificity so Parker's later data-time-zoom rule still wins. */
 .calendar-with-ships .week-fit .ship-calendar-week .rbc-timeslot-group { min-height: 44px; flex: 1 0 44px; }
 .calendar-with-ships .week-fit .rbc-time-content { overflow-y: auto; }
 .calendar-with-ships .week-fit .rbc-time-gutter .rbc-label { display: block; }
-.calendar-with-ships .ship-calendar-week .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-with-ships .ship-calendar:is(.ship-calendar-week, .ship-calendar-resources) .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-overflow { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 12px; font-size: 12px; border-top: 1px solid var(--color-base-300); }
+.calendar-with-ships .ship-calendar .rbc-time-content > * + * > * { border-left-color: var(--color-base-300); }
 .calendar-with-ships .ship-calendar-week .command-chips { flex-wrap: nowrap; overflow: hidden; max-width: 100%; }
 .calendar-with-ships .ship-calendar-week .command-chip { white-space: nowrap; flex: none; }
 @media (min-width: 1280px) { .calendar-with-ships .week-fit .ship-calendar-week { min-width: 0; } }
+
+/* RBC measures Month capacity with a dummy .rbc-event (no custom content).
+   Real events and +more must occupy that same single line, including ship badges. */
+.calendar-page.calendar-with-ships .calendar-scroll .ship-calendar:has(.rbc-month-view) { min-height: 620px; }
+.calendar-with-ships .ship-calendar .rbc-month-row { min-height: 96px; }
+.calendar-with-ships .ship-calendar .rbc-month-view :is(.rbc-event, .rbc-show-more) { height: 24px; min-height: 24px; max-height: 24px; box-sizing: border-box; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-copy { flex-direction: row; align-items: center; height: 20px; overflow: hidden; position: static; }
+.calendar-with-ships .ship-calendar .rbc-month-view .command-chips { flex: 0 1 auto; flex-wrap: nowrap; max-width: 45%; overflow: hidden; }
+.calendar-with-ships .ship-calendar .rbc-month-view .command-chip { white-space: nowrap; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-card { flex: 1; min-width: 0; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-with-ships .ship-calendar .rbc-month-view .rbc-show-more { display: block; line-height: 24px; position: relative; z-index: 2; }
 
 /* Intrinsic copy height includes sibling badges without changing link/button text. */
 .calendar-event-copy { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: auto; }

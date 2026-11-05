@@ -38,7 +38,7 @@ async fn roster_reads_and_shared_write_check_use_server_sessions() {
             let response = routes.clone().oneshot(Request::post(path).header("content-type", "application/json")
                 .header("cookie", format!("parse_command_session={session}"))
                 .header("origin", "http://localhost").header("host", "localhost")
-                .body(Body::from(if path == "/watch-context/update" { r#"{"field":"operationName","values":["FICTIONAL COPPER"],"includeSuggestions":true}"# } else if path == "/watch-context/get" { r#"{"includeSuggestions":true}"# } else { "{}" })).unwrap()).await.unwrap();
+                .body(Body::from(if path == "/watch-context/update" { r#"{"changes":[{"field":"operationName","values":["FICTIONAL COPPER"]},{"field":"shipName","values":["DISPLAY"]}],"includeSuggestions":true}"# } else if path == "/watch-context/get" { r#"{"includeSuggestions":true}"# } else { "{}" })).unwrap()).await.unwrap();
             assert_eq!(response.status(), if path == "/commands/list" || path == "/watch-context/get" { StatusCode::OK } else { expected });
             if response.status() == StatusCode::OK {
                 let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
@@ -54,6 +54,7 @@ async fn roster_reads_and_shared_write_check_use_server_sessions() {
                     assert_eq!(value["suggestionState"], "unavailable");
                     assert_eq!(value["updatedBy"], "dev-admin");
                     assert_eq!(value["context"]["operationName"], "FICTIONAL COPPER");
+                    assert_eq!(value["context"]["shipName"], "DISPLAY");
                     assert_eq!(value["confirmations"]["operationName"]["actor"], "dev-admin");
                 } else { assert_eq!(value["commands"].as_array().unwrap().len(), if demo { 4 } else { 0 }); }
             }
@@ -70,7 +71,7 @@ async fn roster_reads_and_shared_write_check_use_server_sessions() {
     assert!(!app.config.intake.journal.exists()); // read-only handler did not create a database
     let actor: String = app.store().unwrap().db.query_row("SELECT json_extract(document,'$.updatedBy') FROM watch_context", [], |r| r.get(0)).unwrap();
     assert_eq!(actor, "dev-admin");
-    let response = routes.clone().oneshot(Request::post("/watch-context/update").header("content-type", "application/json").body(Body::from(r#"{"field":"operationName","values":["NO SESSION"]}"#)).unwrap()).await.unwrap();
+    let response = routes.clone().oneshot(Request::post("/watch-context/update").header("content-type", "application/json").body(Body::from(r#"{"changes":[{"field":"operationName","values":["NO SESSION"]}]}"#)).unwrap()).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     let response = routes.clone().oneshot(Request::post("/commands/list").header("content-type", "application/json").body(Body::from("{}")).unwrap()).await.unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);

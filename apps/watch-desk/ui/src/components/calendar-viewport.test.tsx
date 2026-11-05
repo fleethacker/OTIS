@@ -6,19 +6,16 @@ import { calendarGridWidth, openingScrollTime, useOpeningScroll } from "./calend
 
 const from = Date.parse("2026-11-05T00:00:00Z");
 const to = from + 24 * 3_600_000;
-test("seven days and five ships fit a 1280px workspace regardless of collision count", () => {
-  for (const width of [1280, 1440]) {
-    const available = width - 64 - 224 - 16 - 32 - 2; // main padding, sidebar, gap, calendar padding, border
-    expect(calendarGridWidth("week", false, 0, 20)).toBeLessThanOrEqual(available);
-    expect(calendarGridWidth("day", true, 5, 20)).toBeLessThanOrEqual(available);
-  }
-  expect(calendarGridWidth("day", true, 5, 20)).toBe(892);
-  expect(calendarGridWidth("week", false, 0, 20)).toBe(836);
+test("sparse days/ships fit, dense lanes retain 128px rather than shrinking titles", () => {
+  expect(calendarGridWidth("day", true, 5, 1)).toBe(892);
+  expect(calendarGridWidth("day", true, 5, 2)).toBe(52 + 5 * 256);
+  expect(calendarGridWidth("week", false, 0, 1)).toBe(52 + 7 * 128);
+  // Only Thursday grows in Fit; do not multiply the busiest day by seven.
+  expect(calendarGridWidth("week", false, 0, 5, false, [1, 1, 1, 1, 5, 1, 1])).toBe(52 + 6 * 128 + 5 * 128);
 });
-test("Expanded Week retains lane-proportional width while Fit and Day remain bounded", () => {
+test("Expanded Week retains equal lane-proportional columns", () => {
   expect(calendarGridWidth("week", false, 0, 3, true)).toBe(52 + 7 * 3 * 128);
-  expect(calendarGridWidth("week", false, 0, 3, false)).toBe(836);
-  expect(calendarGridWidth("day", true, 5, 3, true)).toBe(892);
+  expect(calendarGridWidth("week", false, 0, 3, false, [1, 1, 1, 1, 3, 1, 1])).toBe(52 + 6 * 128 + 3 * 128);
 });
 test("opening uses earlier of visible source time and now minus one hour; pinned dates use source time", () => {
   const first = from + 14.5 * 3_600_000;

@@ -344,6 +344,15 @@ Parker must run the external OPTASK regression against his unavailable samples.
 - Parker: accept keyword-first default? Server-side exhaustive title/narrative union,
   relevance calibration and cross-page aggregation remain separate search work.
 
+## Polish 5 — Selection is not an empty watch
+
+- Combined/Side/Week/Month explicitly say No ships selected for empty or wholly
+  out-of-roster selections. Suppress timeline/search requests when none is selected;
+  review says not queried, never an all-clear. Filtered empty review has distinct copy.
+- Files: Calendar, CalendarReview and roster/review tests. No API changes.
+- Static diff check only. Container tests pending; attach Clear all and stale-ship URL
+  screenshots in Combined and Side. Mixed known/unknown keys remain preserved, not broadened.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

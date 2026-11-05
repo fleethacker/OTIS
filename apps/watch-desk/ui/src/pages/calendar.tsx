@@ -50,15 +50,17 @@ export default function Calendar() {
             [...ships].some((v) => !v.startsWith("unit:") && v !== "unassigned:"),
         }
       : {};
+  const noShips = ships !== undefined && (filters.noCommands === true ||
+    (!!roster.data && !roster.isError && ![...ships].some((key) => key === "unassigned:" || roster.data.commands.some((c) => key === `unit:${c.id}`))));
   // Fetch the bounded timeline independently: passage retrieval must not hide title hits.
   const result = useSource("timeline", {
     dataset, query: "", mode: "hybrid",
     from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
-  });
+  }, !noShips);
   const searching = dataset === "canonical" && debounced.trim() !== "";
-  const keywords = useSource("search", { dataset, query: debounced, mode: "keyword", filters }, searching && query === debounced);
+  const keywords = useSource("search", { dataset, query: debounced, mode: "keyword", filters }, searching && query === debounced && !noShips);
   const messages = result.data?.messages ?? [];
-  const refreshing = result.isPending || result.isFetching || query !== debounced;
+  const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
   const keywordKeys = new Set(!keywords.isError && !keywords.isFetching ? keywords.data?.messages.map((m) => m.sourceMessageId) : []);
   const timelineItems = calendarSearch(result.data?.meta.timelineItems, messages, debounced, keywordKeys);
   const reviewItems = calendarSearch(result.data?.meta.reviewItems, messages, debounced, keywordKeys);
@@ -167,7 +169,7 @@ export default function Calendar() {
           />
         </label>
       </section>
-      {query.trim() && <div className="calendar-search-status">
+      {!noShips && query.trim() && <div className="calendar-search-status">
         <p>Calendar filtered by “{query}” · local lexical title/header matches are always included within returned records.</p>
         {searching && (keywords.isPending || keywords.isFetching || query !== debounced ? <p role="status">Loading keyword passage matches…</p> : keywords.isError ? <p role="alert">Keyword search unavailable; showing local title/header matches only. <button className="btn btn-xs" onClick={() => { void keywords.refetch(); }}>Retry search</button></p> : <p>Executed passage search: {keywords.data?.meta.executedMode ?? "not reported by server"}. Passage matching may match any query word; all query words must match a local title/header.</p>)}
         {searchLimited && <p>Only the returned keyword page is included; additional matches may exist.</p>}
@@ -175,7 +177,7 @@ export default function Calendar() {
         <span> · Related results are not automatically plotted.</span>
       </div>}
       {refreshing && <p role="status">Loading schedule…</p>}
-      {result.isError && (
+      {!noShips && result.isError && (
         <div className="alert" role="alert">
           Calendar could not be loaded. {result.error.message}
           <button className="btn btn-sm" onClick={() => void result.refetch()}>
@@ -206,7 +208,7 @@ export default function Calendar() {
             {date === today && <span className="revision">Today</span>}
           </h2>
         </div>
-        <DayTimeline
+        {noShips ? <p className="calendar-result-limit">No ships selected. Choose a ship or Unassigned.</p> : <DayTimeline
           commands={roster.isError ? [] : roster.data?.commands}
           shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
           selectedShips={ships}
@@ -231,13 +233,14 @@ export default function Calendar() {
             next.set("date", chosen);
             next.set("view", "day");
           })}
-        />
+        />}
       </section>
-      {dataset === "canonical" && result.data && !refreshing && !result.isError && (
+      {dataset === "canonical" && (noShips || (result.data && !refreshing && !result.isError)) && (
         <CalendarReview
-          items={reviewItems}
+          items={noShips ? undefined : reviewItems}
+          notQueried={noShips}
           commands={roster.isError ? [] : roster.data?.commands}
-          limited={result.data.meta.windowLimited === true || searchLimited}
+          limited={!noShips && (result.data?.meta.windowLimited === true || searchLimited)}
           filtered={ships !== undefined || query.trim() !== ""}
           returnTo={returnTo}
           onShowAll={() => setParams((next) => {

@@ -9,6 +9,7 @@ export function CalendarReview({
   commands = [],
   limited,
   filtered,
+  notQueried = false,
   returnTo,
   onShowAll,
 }: {
@@ -16,13 +17,14 @@ export function CalendarReview({
   commands?: Command[];
   limited: boolean;
   filtered: boolean;
+  notQueried?: boolean;
   returnTo: string;
   onShowAll: () => void;
 }) {
   return (
     <section className="calendar-review" aria-label="Needs review">
       <details open>
-        <summary>Needs review · {items === undefined ? "unavailable" : `${items.length} returned`}</summary>
+        <summary>Needs review · {notQueried ? "not queried" : items === undefined ? "unavailable" : `${items.length} returned`}</summary>
         <div className="calendar-review-content">
           <p>
             Unresolved times are not plotted. These are returned source facts, not a complete
@@ -35,10 +37,12 @@ export function CalendarReview({
               <button className="btn btn-sm" onClick={onShowAll}>Show all ships and clear search</button>
             </p>
           )}
-          {items === undefined ? (
+          {notQueried ? (
+            <p>No ships selected; review was not queried.</p>
+          ) : items === undefined ? (
             <p>Review data unavailable.</p>
           ) : items.length === 0 ? (
-            <p>No unresolved times in the returned records.</p>
+            <p>{filtered ? "No review items match the current filters in returned records." : "No unresolved times in the returned records."}</p>
           ) : (
             <ul>
               {items.map((item) => (

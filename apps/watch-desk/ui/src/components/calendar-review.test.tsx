@@ -56,6 +56,17 @@ test("missing evidence has no borrowed link; empty and unavailable are distinct"
   expect(unknown.queryByText(/No unresolved times/)).toBeNull();
 });
 
+test("unqueried selection and filtered empty review never imply an all-clear", () => {
+  const view = renderWithProviders(<CalendarReview items={[]} notQueried limited={false} filtered returnTo={returnTo} onShowAll={() => {}} />);
+  expect(view.getByText(/Needs review · not queried/)).toBeTruthy();
+  expect(view.getByText("No ships selected; review was not queried.")).toBeTruthy();
+  expect(view.queryByText(/No unresolved times/)).toBeNull();
+  view.unmount();
+  const filtered = renderWithProviders(<CalendarReview items={[]} limited={false} filtered returnTo={returnTo} onShowAll={() => {}} />);
+  expect(filtered.getByText(/No review items match the current filters/)).toBeTruthy();
+  expect(filtered.queryByText(/No unresolved times/)).toBeNull();
+});
+
 test("Calendar consumes reviewItems separately from points and hides stale review on failed refresh", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const request = {

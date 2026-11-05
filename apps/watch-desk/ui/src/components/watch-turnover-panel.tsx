@@ -10,6 +10,7 @@ import { recurrenceCadence, recurrenceTimes } from "./watch-recurrence";
 import { needsWatchReview, reviewKnown, useWatchCatchup, type WatchCatchup } from "./watch-catchup";
 import { addedEventInstant, showOnCalendar } from "./watch-calendar-link";
 import { useDisplayTime } from "./display-time";
+import { AppButton, TextInput } from "./ui";
 import { useCalendarParams } from "./calendar-params";
 import { useCalendarPreference } from "./calendar-preferences";
 
@@ -25,10 +26,10 @@ function BoundaryEditor({ boundary, now, apply, automatic, sessionAvailable, ses
     if (at > now || now + 1 - at > 42 * 86400000) { setError("Since must be within the last 42 days and not in the future."); return; }
     setError(""); apply(at);
   }}>
-    <label>Since (UTC)<input className="input input-sm" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="05 NOV 2026 1600Z" /></label>
-    <button className="btn btn-sm" type="submit">Apply UTC</button>
-    <button className="btn btn-sm" type="button" onClick={automatic}>{sessionAvailable ? "Use latest turnover" : "Use automatic watch"}</button>
-    {sessionAvailable && <button className="btn btn-sm" type="button" onClick={session}>Use session start</button>}
+    <label>Since (UTC)<TextInput className="input-sm" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="05 NOV 2026 1600Z" /></label>
+    <AppButton size="sm" type="submit">Apply UTC</AppButton>
+    <AppButton size="sm" type="button" onClick={automatic}>{sessionAvailable ? "Use latest turnover" : "Use automatic watch"}</AppButton>
+    {sessionAvailable && <AppButton size="sm" type="button" onClick={session}>Use session start</AppButton>}
     {error && <p role="alert">{error}</p>}
   </form>;
 }
@@ -131,22 +132,22 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
               automatic={() => changeSince("auto")} sessionAvailable={model.sessionAvailable} session={() => changeSince("session")} />
           </details>
           {first && <div className="turnover-actions">
-            <button className="btn btn-sm" disabled={query.isFetching || mark.isPending} onClick={model.refresh}>Refresh messages</button>
-            {tracked && <button className="btn btn-primary btn-sm" disabled={mark.isPending || query.isFetching || !model.unreviewed.length || !completeReviewData || !sharedWatermark || model.tracked.length > 200 || query.hasNextPage}
-              onClick={() => mark.mutate({ watermark: first.watermark, since: first.since, until: first.until, filters: model.filters })}>Mark all reviewed</button>}
+            <AppButton size="sm" disabled={query.isFetching || mark.isPending} onClick={model.refresh}>Refresh messages</AppButton>
+            {tracked && <AppButton variant="primary" size="sm" disabled={mark.isPending || query.isFetching || !model.unreviewed.length || !completeReviewData || !sharedWatermark || model.tracked.length > 200 || query.hasNextPage}
+              onClick={() => mark.mutate({ watermark: first.watermark, since: first.since, until: first.until, filters: model.filters })}>Mark all reviewed</AppButton>}
           </div>}
         </div>
         {!valid && <p>{model.invalid ? "Invalid since value in URL." : "A valid watch boundary is unavailable. Configure UTC turnovers in Settings or pin a UTC time under Change…"}</p>}
-        {query.isError && <p role="alert">Turnover evidence unavailable. {query.error.message} <button className="btn btn-sm" onClick={() => { void query.refetch(); }}>Retry turnover</button></p>}
+        {query.isError && <p role="alert">Turnover evidence unavailable. {query.error.message} <AppButton size="sm" onClick={() => { void query.refetch(); }}>Retry turnover</AppButton></p>}
         {mark.isError && <p role="alert">Could not mark reviewed. {mark.error.message} Try again.</p>}
         {valid && query.isPending && <p aria-live="polite">Loading messages…</p>}
         {first && <>
           <p className="turnover-note" title={`${first.scope} Through ${formatSinceUTC(model.until - 1)}. Review count covers the messages shown, including undated messages.`}>Sorted by sent time (DTG), newest first · received time shown beneath · ship filters apply</p>
           <p className="turnover-note">Changes and cancellations are not tracked yet.</p>
           {tracked && (query.hasNextPage || !completeReviewData || !sharedWatermark || model.tracked.length > 200) && <p className="turnover-note">{query.hasNextPage ? "Load remaining pages before marking all reviewed." : ""}{!completeReviewData ? " Review tracking is unavailable for some messages." : ""}{!sharedWatermark || model.tracked.length > 200 ? " Review messages individually in this window." : ""}</p>}
-          {(model.hidden > 0 || unknownHidden > 0) && <p className="turnover-hidden">{model.hidden} dated and {unknownHidden} undated records on hidden ships · <button className="btn btn-sm" onClick={() => {
+          {(model.hidden > 0 || unknownHidden > 0) && <p className="turnover-hidden">{model.hidden} dated and {unknownHidden} undated records on hidden ships · <AppButton size="sm" onClick={() => {
             updateParams((next) => { next.set("ships", ALL_SHIPS); next.delete("q"); });
-          }}>Show all ships</button></p>}
+          }}>Show all ships</AppButton></p>}
           <div className="turnover-groups">
           <section aria-label="New tasking"><h3>New tasking</h3>
             {newTasking.length ? <ul>{newTasking.map(row)}</ul> : <p>No new tasking for the selected ships.</p>}
@@ -161,7 +162,7 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
             {!needsReview.length && !unknown.length && !first.unknownLimited && <p>No undated or unassigned messages in the returned records.</p>}
           </section>
           </div>
-          {query.hasNextPage && <button className="btn btn-sm" disabled={query.isFetchingNextPage || mark.isPending} onClick={() => { void query.fetchNextPage(); }}>Load more messages</button>}
+          {query.hasNextPage && <AppButton size="sm" disabled={query.isFetchingNextPage || mark.isPending} onClick={() => { void query.fetchNextPage(); }}>Load more messages</AppButton>}
         </>}
       </div>
     </details>

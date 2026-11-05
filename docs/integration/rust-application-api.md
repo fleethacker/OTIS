@@ -160,3 +160,39 @@ the OpenSearch defaults; no relevance gain is claimed without a judged query set
 The read-only `backend/search/verify_application_search.py` checks both clauses,
 identical filters and actual RRF score arithmetic against the deployed cluster.
 See the [OpenSearch score ranker documentation](https://docs.opensearch.org/latest/search-plugins/search-pipelines/score-ranker-processor/).
+
+### Message-reader source sets and acknowledgement drafts
+
+A canonical detail read adds `sets` and `source_profile` to its presentation-only
+`structuredPayloadJson`. These are projected from the matching revision's
+`parse_completed` audit record, not stored again in the canonical index. Each
+set contains `set_id`, ordered `fields: [{position, value}]`, and ordered
+`rows: [{fields: [{position, value}]}]`. Every value is checked against its UTF-8
+byte span in the hash-verified decoded body. Audit/rule IDs and spans stay out
+of this projection. Repeated sets, free text, source placeholders and columnar
+cells retain their original values. Missing source sets produce an unavailable
+state; the browser does not reparse raw USMTF or render internal facts as sets.
+
+The viewer uses compact source-set cards and a review pill. Metadata and
+narrative cards have layouts for their content; frequency plans use a channel
+table. Labels select the baseline or observed-extension layout explicitly.
+Unregistered positions retain their source value with a neutral field label.
+The previous technical lifecycle/actions sidebar is no longer displayed.
+
+`Send Acknowledgement` opens a modal that generates and privately saves an
+**unsent** draft through the existing preparation API. The only editable form
+control is an unselected acknowledgement-type dropdown. The selected response
+chooses ACTAGCY or ICVALID exclusively; generating the reviewed draft is the
+explicit response/authority confirmation. Source type, originator, serial and
+verified issue date supply REF; receipt/current dates are never substituted.
+REF represents the source issue minute in its required DTG form; original
+second precision remains in the source MSGID card and raw body. Missing
+mandatory reference data blocks generation with a compact field error.
+
+Outgoing command and responding authority temporarily use the user-approved
+`FLEETHACKER` placeholder. Shared Settings must replace both independently;
+tracked in GitHub issue #6. Saving/copying a draft never records a sent or
+acknowledged state. The status pill distinguishes existing externally recorded
+acknowledgement, a saved unsent draft, and no acknowledgement. No SMTP sending
+is added by this change. Private state remains isolated by the existing verified
+identity/session cache boundary.

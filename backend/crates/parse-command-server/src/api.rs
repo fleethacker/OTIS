@@ -402,7 +402,11 @@ impl App {
             .audit_records(
                 id,
                 revision,
-                Some(vec!["source_preserved", "email_received"]),
+                Some(vec![
+                    "source_preserved",
+                    "email_received",
+                    "parse_completed",
+                ]),
                 None,
             )
             .await?;
@@ -426,7 +430,14 @@ impl App {
         {
             return Err(Error::unavailable());
         }
-        let record = presentation::message(&core, &*self.store()?, true, raw, received)?;
+        let mut record = presentation::message(&core, &*self.store()?, true, raw, received)?;
+        let mut payload = core.clone();
+        if let Some(source) = raw {
+            let (profile, sets) = presentation::source_sets(&audits, source)?;
+            payload["source_profile"] = json!(profile);
+            payload["sets"] = sets;
+        }
+        record["structuredPayloadJson"] = json!(payload.to_string());
         Ok(envelope(
             vec![record],
             "Canonical parsed record; evidence is separate and all extraction/review states are preserved",

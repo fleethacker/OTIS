@@ -25,6 +25,7 @@ test("resource projection duplicates only visible explicit assignments and leave
   expect(inShipColumns(input, only)).toHaveLength(1);
   expect(inShipColumns(input, shipResources(commands, input, new Set()))).toHaveLength(0);
   expect(shipResources(commands, [], new Set(["invalid-selection:"]))).toHaveLength(0);
+  // Deliberate legacy/adversarial input, not a canonical presentation mock.
   expect(inShipColumns([{ commandIds: [], unit: "demo-tern" }], resources)[0].resourceId).toBe("unassigned:");
   // Parker's lane partition is applied independently to each resource, including points.
   const collisions = calendarLanes([{ event: "first", top: 10, height: 20 }, { event: "second", top: 15, height: 20 }]);

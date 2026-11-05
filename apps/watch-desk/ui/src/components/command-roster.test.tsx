@@ -54,7 +54,7 @@ test("canonical chips use all explicit command IDs, never unit or sender", () =>
   expect(commandKeys([])).toEqual(["unassigned:"]);
   expect(commandKeys(["demo-tern", "demo-halyard", "demo-tern"])).toEqual(["unit:demo-tern", "unit:demo-halyard"]);
   const key = "fictional-only@r1";
-  const message = create(MessageRecordSchema, { sourceMessageId: key, sender: "USS Meridian", events: [{ sourceEventId: "point", unit: "demo-meridian" }] });
+  const message = create(MessageRecordSchema, { sourceMessageId: key, sender: "USS Meridian", events: [{ sourceEventId: "point" }] });
   const view = renderWithProviders(<DayTimeline
     messages={[message]} commands={roster.commands}
     sourceItems={[{ key: `${key}#point`, messageKey: key, factId: "point", commandIds: [], kind: "point", at: "2026-11-05T08:00:00Z", title: "Fictional check", reviewRequired: true }]}
@@ -62,9 +62,22 @@ test("canonical chips use all explicit command IDs, never unit or sender", () =>
   />);
   const card = view.getByRole("link", { name: "Fictional check, source record" });
   expect(card.textContent).toBe("Fictional check");
+  expect(card.title).toContain("Applicability: Unassigned");
+  expect(card.title).not.toContain("Reported unit");
   expect(card.closest(".calendar-event-copy")?.textContent).toContain("REVIEW");
   expect(view.queryByText("MERIDIAN")).toBeNull();
   expect(message.events[0].startAt).toBeUndefined(); // presentation must not mutate the cached message
+});
+
+test("canonical sole-command unit is applicability, not a contradictory reported-unit warning", () => {
+  const key = "fictional-assigned@r1";
+  const message = create(MessageRecordSchema, { sourceMessageId: key, events: [{ sourceEventId: "assigned", unit: "demo-meridian" }] });
+  const view = renderWithProviders(<DayTimeline messages={[message]} commands={roster.commands}
+    sourceItems={[{ key: `${key}#assigned`, messageKey: key, factId: "assigned", commandIds: ["demo-meridian"], kind: "point", at: "2026-11-05T08:00:00Z", title: "Assigned check", reviewRequired: true }]}
+    from={Date.parse("2026-11-05T00:00:00Z")} to={Date.parse("2026-11-06T00:00:00Z")} interval={60} returnTo="/calendar" />);
+  const card = view.getByRole("link", { name: "Assigned check, source record" });
+  expect(card.title).toContain("Applicability: USS Meridian");
+  expect(card.title).not.toContain("Reported unit");
 });
 
 test("roster rejects duplicate identities and never substitutes demo data on failure", async () => {

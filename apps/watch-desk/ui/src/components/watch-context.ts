@@ -38,6 +38,7 @@ export interface ContextResponse {
   suggestionsLimited: boolean;
   suggestionScope: string;
   defaultsSource: string;
+  demoRoster?: boolean;
 }
 export interface ContextUpdate {
   field?: ContextField;

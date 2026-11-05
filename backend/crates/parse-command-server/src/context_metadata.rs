@@ -37,8 +37,11 @@ pub fn read(path: &Path) -> Result<Metadata> {
     db.execute_batch("BEGIN")?;
     read_connection(&db)
 }
+fn unsigned(value: i64) -> Result<u64> {
+    u64::try_from(value).map_err(|_| Error::unavailable())
+}
 pub fn read_connection(db: &Connection) -> Result<Metadata> {
-    let count: u64 = db.query_row("SELECT count(*) FROM (SELECT 1 FROM projections WHERE delivery_state='published' LIMIT 201)", [], |r| r.get(0))?;
+    let count: i64 = db.query_row("SELECT count(*) FROM (SELECT 1 FROM projections WHERE delivery_state='published' LIMIT 201)", [], |r| r.get(0))?;
     // Only EXER/OPER first fields from supported profiles, matched byte-for-byte to
     // the same revision's source-preserved audit. No participant/originator candidates.
     let mut query = db.prepare(r#"
@@ -79,13 +82,14 @@ pub fn read_connection(db: &Connection) -> Result<Metadata> {
     let records = query.query_map([], |r| Ok((
         r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?,
         r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, String>(5)?,
-        r.get::<_, u64>(6)?, r.get::<_, u64>(7)?, r.get::<_, u64>(8)?, r.get::<_, u64>(9)?,
+        r.get::<_, i64>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?,
     )))?;
     let mut groups: BTreeMap<String, Suggestion> = BTreeMap::new();
     let mut limited = count > 200;
     for (index, record) in records.enumerate() {
         if index == 400 { limited = true; break; }
         let (id, revision, audit, recorded, set, raw_value, start, end, line_start, line_end) = record?;
+        let (start, end, line_start, line_end) = (unsigned(start)?, unsigned(end)?, unsigned(line_start)?, unsigned(line_end)?);
         let value = raw_value.split_whitespace().collect::<Vec<_>>().join(" ");
         if value.is_empty() || value == "-" || value.len() > 128 { continue; }
         parse_command_types::validate_hash_id(&id, "message_id").map_err(|_| Error::unavailable())?;
@@ -132,6 +136,12 @@ mod tests {
             let doc = json!({"id":audit,"kind":kind,"recorded_at":format!("2026-11-05T{index:02}:00:00Z"),"payload":payload});
             db.execute("INSERT INTO audit_outbox VALUES(?,?,'r1',?,'published')", rusqlite::params![audit,id,doc.to_string()]).unwrap();
         }
+    }
+    #[test]
+    fn sqlite_signed_bounds_are_checked_without_exposing_input() {
+        assert_eq!(unsigned(0).unwrap(), 0);
+        assert_eq!(unsigned(i64::MAX).unwrap(), 9_223_372_036_854_775_807u64);
+        assert_eq!(unsigned(-1).err().unwrap().code, "unavailable");
     }
     #[test]
     fn grouped_metadata_verifies_spans_counts_unicode_lines_and_caps_citations() {

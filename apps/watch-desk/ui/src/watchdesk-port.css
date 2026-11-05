@@ -47,6 +47,18 @@
 .calendar-with-ships .ship-calendar-week .command-chip { white-space: nowrap; flex: none; }
 @media (min-width: 1280px) { .calendar-with-ships .week-fit .ship-calendar-week { min-width: 0; } }
 
+/* RBC measures Month capacity with a dummy .rbc-event (no custom content).
+   Real events and +more must occupy that same single line, including ship badges. */
+.calendar-with-ships .ship-calendar:has(.rbc-month-view) { min-height: 600px; }
+.calendar-with-ships .ship-calendar .rbc-month-row { min-height: 96px; }
+.calendar-with-ships .ship-calendar .rbc-month-view :is(.rbc-event, .rbc-show-more) { height: 24px; min-height: 24px; max-height: 24px; box-sizing: border-box; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-copy { flex-direction: row; align-items: center; height: 20px; overflow: hidden; position: static; }
+.calendar-with-ships .ship-calendar .rbc-month-view .command-chips { flex: 0 1 auto; flex-wrap: nowrap; max-width: 45%; overflow: hidden; }
+.calendar-with-ships .ship-calendar .rbc-month-view .command-chip { white-space: nowrap; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-card { flex: 1; min-width: 0; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-with-ships .ship-calendar .rbc-month-view .rbc-show-more { display: block; line-height: 24px; position: relative; z-index: 2; }
+
 /* Intrinsic copy height includes sibling badges without changing link/button text. */
 .calendar-event-copy { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: auto; }
 .calendar-with-ships .ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }

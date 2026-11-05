@@ -15,7 +15,16 @@ test("month projection and source round trip", async ({ page }) => {
     const monthEnd = calendarEvent(page, "Fictional month-end watch", ".rbc-month-view");
     await expect(monthEnd).toContainText("Continues later");
     await expect(calendarEvent(page, "Fictional inspection — needs review", ".rbc-month-view")).toHaveCount(0);
-    await page.locator(".rbc-month-view .rbc-show-more").first().click();
+    const more = page.locator(".rbc-month-view .rbc-show-more").first();
+    await expect(more).toBeVisible();
+    // Visibility alone misses overflow:hidden clipping. Assert containment and hit testing.
+    expect(await more.evaluate((button) => {
+      const box = button.getBoundingClientRect();
+      const row = button.closest(".rbc-month-row")!.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return box.top >= row.top && box.bottom <= row.bottom && !!hit && button.contains(hit);
+    })).toBe(true);
+    await more.click();
     await expect(calendarEvent(page, "Fictional revised replenishment", ".rbc-overlay")).toContainText("Revised");
     await page.keyboard.press("Escape");
     await page.locator(".timeline-toolbar").click();

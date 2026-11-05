@@ -33,7 +33,7 @@ function BoundaryEditor({ boundary, now, apply, automatic, sessionAvailable, ses
 }
 function AddedEventLine({ event, commands }: { event: AddedEvent; commands: Command[] }) {
   const at = addedEventInstant(event);
-  const clock = (value: string) => formatSinceUTC(Date.parse(value)).split(" ").at(-1);
+  const clock = (value: string) => formatSinceUTC(Date.parse(value)).split(" ").slice(-1)[0];
   const recurrence = typeof event.recurrence === "object" ? event.recurrence : undefined;
   const recurring = event.recurring || event.recurrence;
   return <p className="turnover-addition">
@@ -118,7 +118,7 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
         {model.hidden > 0 ? ` · ${model.hidden} hidden` : ""}{unknown.length + unknownHidden > 0 ? ` · ${unknown.length + unknownHidden} without sent time` : ""}{first && query.hasNextPage ? " · more pages" : ""}
       </summary>
       <div className="turnover-content">
-        {boundary !== undefined && <p className="turnover-since" title={formatSinceUTC(boundary)}>{model.basis === "last_seen" ? `Since you were last here · ${formatSinceUTC(boundary)}` : model.basis === "default_24h" ? "Last 24 hours" : model.basis === "turnover" ? `Since ${formatSinceUTC(boundary).split(" ").at(-1)} turnover` : `Since ${formatSinceUTC(boundary)}`}</p>}
+        {boundary !== undefined && <p className="turnover-since" title={formatSinceUTC(boundary)}>{model.basis === "last_seen" ? `Since you were last here · ${formatSinceUTC(boundary)}` : model.basis === "default_24h" ? "Last 24 hours" : model.basis === "turnover" ? `Since ${formatSinceUTC(boundary).split(" ").slice(-1)[0]} turnover` : `Since ${formatSinceUTC(boundary)}`}</p>}
         <BoundaryEditor key={`${model.choice}:${boundary}`} boundary={boundary} now={now} apply={(at) => changeSince(new Date(at).toISOString())}
           automatic={() => changeSince("auto")} sessionAvailable={model.sessionAvailable} session={() => changeSince("session")} />
         <p>Messages by sent time (source DTG), newest first; received time is shown beneath. Ship filters apply; calendar search/date do not filter this history.</p>

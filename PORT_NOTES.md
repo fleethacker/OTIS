@@ -329,14 +329,81 @@ Static diff check only here; the Rust container rerun remains outstanding.
   dated-only inbox integration, retention and stable cross-poll pagination. Existing
   demo read authorization applies; this is not a production command ACL implementation.
 
-## Next slice order
+## P5b — Source-anchored recurrence (Addenda R/R2)
 
-Finish P5, then **P5b recurrence** under Addenda R/R2, then P6. No new crates or
-lockfile change. R2 permits additive baseline crypto recurrence with explicit source
-periods; preserve existing activity fields/IDs, retain unresolved behavior without
-an anchor, and never use issue/receipt time. Keep the synthetic radio-check path and
-add a baseline crypto fixture, schema/types/mapping updates and expansion tests.
-Parker must run the external OPTASK regression against his unavailable samples.
+- **Contract:** ICD 1.2.0 adds optional `message.recurrences` and `rN` fact IDs, with
+  `type`, RRULE `rule`, explicit `dtstart`, optional `until`/`count`, `exdates`,
+  `activity_id`, scope/status. Existing activity fields and IDs are unchanged.
+  Schema → generator → Rust DTOs/validation → bounded SDK sink/host → nested mapping.
+  Rule/source-span provenance stays in `fact_interpreted` audit, not core. No new
+  crate, dependency, lockfile, Settings UI or general CSS changes.
+- **Real hook:** `optask/crypto_recurrence.rs` collects baseline daily-shift activity
+  evidence and emits companion facts after ordinary parsing. Descriptor version is
+  0.3.0. Exactly one unambiguous message-wide PERIOD must have a fully explicit
+  source start (including year) and complete end or declared UFN. No period, missing
+  source date/zone, receipt-year-defaulted period, or multiple message-wide periods
+  leave the original activity unresolved. The original activity is not mutated.
+  `optask.crypto.recurrence.v1` cites the existing crypto locator plus both source
+  record spans and activity/period IDs. Periods occurring later in the message work.
+- **Synthetic path:** demo-only wrapper `optask-watchdesk-demo` delegates real parsing
+  unchanged and emits one exact-hash-allowlisted radio-check companion. New
+  `recurring-radio.txt`: Tern + Halyard, 0800Z/2000Z on 05–08 NOV 2026. New
+  `baseline-crypto.txt`: Meridian, baseline CRYPTDAT 1330Z with the explicit period.
+  The latter receives an explicitly configured, **unvalidated fictional-only**
+  security override because baseline headers lack a marking; no other body gains
+  that policy. The existing demo assignment audit records this exception. Demo flag
+  off means no wrapper/assignment/security override. `watchdesk-demo-v3` includes
+  both LF/CRLF hashes; original six bodies/hashes are unchanged. No fixtures loaded.
+- **Expansion:** new server `recurrence.rs`, no RFC crate. Zulu HOURLY/DAILY/WEEKLY,
+  positive INTERVAL, BYHOUR/BYMINUTE, unnumbered weekly BYDAY, COUNT/UNTIL and EXDATE.
+  Monday-based weekly phase; inclusive UNTIL; half-open request window; COUNT is
+  consumed before exclusions. Unsupported parts/combinations and absent anchors
+  produce visible review, never a clock/issue/receipt anchor. Open-ended rules are
+  marked ongoing. Closed-form seeking/counting avoids walking from an old anchor.
+  Maximum request window 42 days; output consumes the existing shared 2,048-fact
+  bound and fails explicitly rather than presenting an unlabelled truncated watch.
+- **Important bounded-rule convention:** R2's `dtstart` is a source-period lower
+  bound/phase anchor. Do not emit midnight when the daily check is 0800Z. Only
+  matching clock positions count. This defines the nonmatching-DTSTART case that
+  RFC 5545 leaves undefined; it is a documented subset rule convention, not a full
+  iCalendar component implementation. Durations are not invented: these occurrences
+  are points. Each presentation ID is `rN@UTC-instant`; `sourceFactId=rN` retains the
+  audited rule identity. No occurrence amendment/cancellation/ack write is added.
+- **Timeline/index:** source selection now includes recurrence-only/unanchored
+  records in every view, still under the existing 100-message bound and limited
+  label. The publisher checks existing schema/mapping then adds only the recurrence
+  field and updates version metadata, preserving other properties/metadata and
+  index identity. Unknown/incompatible mappings require operator migration; no
+  delete/recreate/reset. Fresh definitions use 1.2. Existing older strict readers
+  require coordinated upgrade before receiving new fields.
+- **UI-only changes:** `source-data.ts` metadata and `day-timeline.tsx` occurrence
+  identity, ↻ marker, plain-language rule tooltip/Week details, exact source link.
+  Week index keys use full source-event identity instead of the missing legacy
+  numeric ID shared by new occurrences. Day/Week/Month/side tests added. No P6 polish.
+- **Tests:** pure expansion boundaries, source-period lower bound, inclusive UNTIL,
+  global COUNT/exclusions, old hourly anchors, Monday phase, property-style window
+  partitions, unsupported/unanchored review, shared fact bound and stable IDs;
+  baseline activity byte-equality/source audit checks; exact demo intake and security
+  opt-in; fixture hashes and all calendar views. Parker must run ignored
+  `external_optask_regression` against his external samples; those were not accessed.
+- **Validation/status:** static JSON/ref/mapping-field/hash checks (eight LF/CRLF
+  fixtures), Python AST and diff checks passed. DTOs were regenerated with rustfmt
+  in the toolchain container; the +79-line generated diff was reviewed against the
+  schema, including unchanged existing activity declarations. Rust/UI/tsc/live gates
+  remain outstanding. Generation is not application or indexing validation.
+- **Deployment/TODO:** do not reinterpret previously published baseline bodies under
+  an old revision. New fictional bodies do not require resetting the current journal;
+  production reprocessing needs an explicit new host revision and controlled journal
+  migration/isolation, not edits to its identity guard. **Parker to map real OPTASK
+  sets (other crypto forms, recurring COMCHECK) to this fact.** Full RFC 5545, local
+  timezone/DST rules, ambiguous period precedence, duration recurrence, durable
+  occurrence edits/cancellation/ack targeting, retention and audit history are deferred.
+
+## Remaining ownership
+
+P5 is committed as `9577a82`. This agent finishes P5b as one commit, then stops.
+All P6 polish below is delegated to a second agent on a separate branch. Coordinate
+its `day-timeline.tsx`/search-template changes with the minimal recurrence wiring.
 
 ## P6 queue from live review (not yet implemented)
 

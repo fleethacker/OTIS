@@ -134,6 +134,40 @@ fn watchdesk_fixtures_have_four_intervals_three_points_two_reviews_and_narrative
 }
 
 #[test]
+fn recurrence_fixtures_use_bounded_parser_output_and_exact_demo_security_policy() {
+    let mut config = TestConfig::new(); config.0.demo_fixture_assignments = true;
+    let radio = include_str!("../../../config/watchdesk-fixtures/recurring-radio.txt");
+    let crypto = include_str!("../../../config/watchdesk-fixtures/baseline-crypto.txt");
+    let mut service = Service::open(config.0.clone()).unwrap();
+    stage(&mut service, &config.0, 40, 1, &email("SUBJ: Fictional recurring radio check", radio));
+    stage(&mut service, &config.0, 40, 2, &email("SUBJ: Fictional baseline crypto", crypto));
+    service.process(&AtomicBool::new(false)).unwrap();
+    let mut bytes=Vec::new(); service.journal.export(&mut bytes).unwrap();
+    let docs: Vec<serde_json::Value> = std::str::from_utf8(&bytes).unwrap().lines().map(|line|serde_json::from_str(line).unwrap()).collect();
+    assert_eq!(docs.len(),2);
+    for doc in &docs {
+        assert_eq!(doc["recurrences"].as_array().unwrap().len(),1);
+        assert_eq!(doc["recurrences"][0]["dtstart"],"2026-11-05T00:00:00Z"); // not the January receipt
+        assert_eq!(doc["recurrences"][0]["until"],"2026-11-08T23:59:00Z");
+    }
+    let baseline=docs.iter().find(|d|d["type"]=="OPTASK LINK").unwrap();
+    assert_eq!(baseline["activities"][0]["time"],"13:30Z");
+    assert!(baseline["activities"][0].get("at").is_none());
+    assert_eq!(baseline["security"]["policy"],"FICTIONAL_DEMO_ONLY");
+    drop(service);
+    let db=rusqlite::Connection::open(&config.0.journal).unwrap();
+    let links: i64=db.query_row("SELECT count(*) FROM audit_outbox WHERE json_extract(document,'$.subject_id')='r1' AND json_extract(document,'$.kind')='fact_interpreted'",[],|r|r.get(0)).unwrap();
+    assert_eq!(links,2); drop(db);
+    let disabled=TestConfig::new(); let mut service=Service::open(disabled.0.clone()).unwrap();
+    stage(&mut service,&disabled.0,40,1,&email("SUBJ: Fictional disabled recurrence",radio));
+    stage(&mut service,&disabled.0,40,2,&email("SUBJ: No implicit security override",crypto));
+    service.process(&AtomicBool::new(false)).unwrap();
+    let mut bytes=Vec::new(); service.journal.export(&mut bytes).unwrap();
+    let doc:serde_json::Value=serde_json::from_slice(&bytes).unwrap();
+    assert!(doc.get("recurrences").is_none());
+    assert_eq!(service.journal.status().unwrap()["receipts"]["quarantined"],1);
+}
+#[test]
 fn staged_bytes_survive_reopen_and_parsing_commits_with_outbox() {
     let config = TestConfig::new();
     let c = &config.0;

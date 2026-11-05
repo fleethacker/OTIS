@@ -1,6 +1,7 @@
 //! Durable, bounded IMAP receipt intake and parser staging. No downstream delivery claim.
 pub mod config;
 pub mod demo;
+mod demo_recurrence;
 pub mod journal;
 pub mod mailbox;
 pub mod mime;

@@ -1,6 +1,6 @@
 {
   "provenance": "FICTIONAL DEMO CONFIG — not an operational roster or tasking policy",
-  "version": "watchdesk-demo-v2",
+  "version": "watchdesk-demo-v3",
   "commands": [
     {"id":"demo-meridian","name":"USS Meridian","shortLabel":"MERIDIAN","group":"Fictional own ship","colorIndex":0,"isOwnShip":true},
     {"id":"demo-halyard","name":"USS Halyard","shortLabel":"HALYARD","group":"Fictional strike group","colorIndex":1,"isOwnShip":false},
@@ -13,6 +13,8 @@
     {"file":"tern.txt","bodyHashes":["sha256:91476a40402ff5908acae65c7f5a5c28b522a445160323977bb2a8dcd8782649","sha256:0a2a3b252ca488f81de5da6df54c7d6e9ddc01334fe6980448dec04eb16bc2f3"],"commandIds":["demo-tern"]},
     {"file":"halyard.txt","bodyHashes":["sha256:7749519b5d738756e67cca814fe1b93654182c3c423fc89de044efddb9f03b4d","sha256:672419886cca23cbd256ec76d90120d283cfe90109db34c39fb536ef01ad287a"],"commandIds":["demo-halyard"]},
     {"file":"shared.txt","bodyHashes":["sha256:64c11c4bc8b562c767b9789b3e511a8572361d933ec5388f261cc98e9e737b8d","sha256:057d95160c96eb2e01c7ba13516290921b021d5db19bc13dafafb193649279bb"],"commandIds":["demo-tern","demo-halyard"]},
-    {"file":"unassigned.txt","bodyHashes":["sha256:b7a5321675b9108ed3286fc4330c1dc05f114627ce6647b473f4f8f6267ad8a8","sha256:911188f5ea18907c118f5e37a2f0c5b074f449dd3b2b83c74d3ecc9158ed6e08"],"commandIds":[]}
+    {"file":"unassigned.txt","bodyHashes":["sha256:b7a5321675b9108ed3286fc4330c1dc05f114627ce6647b473f4f8f6267ad8a8","sha256:911188f5ea18907c118f5e37a2f0c5b074f449dd3b2b83c74d3ecc9158ed6e08"],"commandIds":[]},
+    {"file":"recurring-radio.txt","bodyHashes":["sha256:0380cbb3598315a22b94225565789211284f056d6ff3d6a0529ab4a56f3db993","sha256:3b90c9fd27156cb0f381e2f15caaf65b85970b1ab2933b7c13c2a05e32fb5169"],"commandIds":["demo-tern","demo-halyard"],"recurrence":"daily_radio_check"},
+    {"file":"baseline-crypto.txt","bodyHashes":["sha256:7c450897a89cf82248137f54fd4dd64f5fa2c34893ec9a3dfe463b9daf7871d6","sha256:28a4a705ae4a33777ce4a5b631dee70b3edfc357f99c5bb97a1d6e62e48e8c29"],"commandIds":["demo-meridian"],"baselineSecurity":true}
   ]
 }

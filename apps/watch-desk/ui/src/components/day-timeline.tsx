@@ -49,6 +49,7 @@ interface ScheduleEntry {
   reviewRequired?: boolean;
   sourceType?: string;
   commandIds?: string[];
+  recurrence?: TimelineItem["recurrence"];
   commands: Command[];
   resourceId?: string;
 }
@@ -85,6 +86,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const information = [
     row.title,
     row.sourceType,
+    row.recurrence ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}` : undefined,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
@@ -99,6 +101,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     .join("\n");
   const content = (
     <>
+      {row.recurrence && <span aria-hidden="true" title="Recurring source fact">↻</span>}
       <OptaskIcon type={row.sourceType} />
       <span className="calendar-event-title">{row.title}</span>
     </>
@@ -259,6 +262,7 @@ export function DayTimeline({
                 reviewRequired: item.reviewRequired,
                 sourceType: item.sourceType,
                 commandIds: item.commandIds ?? [],
+                recurrence: item.recurrence,
                 commands,
               },
             ];
@@ -443,7 +447,7 @@ export function DayTimeline({
               {showIndex ? (
                 <ul>
                   {rows.map((row) => (
-                    <li key={String(row.event.id)}>
+                    <li key={eventKey(row)}>
                       <button
                         className="btn btn-ghost"
                         onClick={() => {
@@ -472,6 +476,10 @@ export function DayTimeline({
                         : `${format(selected.event.startAt)} → ${format(selected.event.endAt)}`}
                       {selected.reviewRequired === true && " · Requires review"}
                     </p>
+                    {selected.recurrence && <>
+                      <p>↻ {selected.recurrence.description}</p>
+                      <p>Rule: <code>{selected.recurrence.rule}</code><br />Audited fact: {selected.recurrence.ruleFactId}<br />Occurrence: {selected.recurrence.occurrenceId}</p>
+                    </>}
                     {selected.before && <p>Continues from earlier than a selected window.</p>}
                     {selected.after && <p>Continues later than a selected window.</p>}
                     {selected.event.isRevised && (

@@ -132,6 +132,12 @@ impl Publisher {
                 }
                 Err(error) => return Err(error),
             };
+            if name == MESSAGES {
+                let expected: Value = serde_json::from_str(body).map_err(|_| Error::config("Index definition"))?;
+                if let Some(update) = recurrence_mapping_update(&document[name]["mappings"], &expected["mappings"]["properties"]["recurrences"])? {
+                    self.request(reqwest::Method::PUT, &format!("/{name}/_mapping"), update)?;
+                }
+            }
             let uuid = document[name]["settings"]["index"]["uuid"]
                 .as_str()
                 .ok_or_else(Error::unavailable)?;
@@ -630,6 +636,21 @@ pub fn chunks(
     }
     Ok(output)
 }
+fn recurrence_mapping_update(mapping: &Value, expected: &Value) -> Result<Option<Value>> {
+    let current = &mapping["properties"]["recurrences"];
+    if !current.is_null() && current != expected {
+        return Err(Error::config("Existing recurrence mapping is incompatible; operator migration required"));
+    }
+    let version = mapping["_meta"]["icd_version"].as_str();
+    if !matches!(version, Some("1.1.0" | "1.2.0")) {
+        return Err(Error::config("Verify canonical message schema before recurrence mapping upgrade"));
+    }
+    if !current.is_null() && version == Some(parse_command_types::ICD_VERSION) { return Ok(None); }
+    // Add only this field; preserve all other properties and metadata keys.
+    let mut metadata = mapping["_meta"].as_object().cloned().unwrap_or_default();
+    metadata.insert("icd_version".into(), json!(parse_command_types::ICD_VERSION));
+    Ok(Some(json!({"properties":{"recurrences":expected},"_meta":metadata})))
+}
 fn templates(model: Option<&str>) -> Vec<(String, String)> {
     let filters = json!({"bool":{"filter":"__FILTERS__"}});
     let lexical =
@@ -656,7 +677,9 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
     templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
     templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
     templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
-    templates.push(("parse-command-timeline-v1".into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","must":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}}]}},"sort":["id","revision"]}).to_string()));
+    // Recurrences include unsupported/unanchored rules for review in every view;
+    // their occurrences are bounded in Rust, never by issue/receipt time.
+    templates.push(("parse-command-timeline-v1".into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","should":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}},{"nested":{"path":"recurrences","query":{"match_all":{}}}}],"minimum_should_match":1}},"sort":["id","revision"]}).to_string()));
     templates.push(("parse-command-evidence-list-v1".into(),json!({"size":65,"timeout":"5s","query":{"bool":{"filter":"__FILTERS__"}},"sort":["id"],"search_after":"__AFTER__"}).to_string()));
     templates.push(("parse-command-source-status-v1".into(),json!({"size":0,"track_total_hits":true,"aggs":{"embedding_states":{"terms":{"field":"embedding_status","size":3}}}}).to_string()));
     templates
@@ -687,4 +710,30 @@ pub fn journal_counts(path: &Path) -> Result<Value> {
     let mut counts = Vec::new();
     for row in q.query_map([],|r|Ok(json!({"kind":r.get::<_,String>(0)?,"state":r.get::<_,String>(1)?,"count":r.get::<_,i64>(2)?})))?{counts.push(row?);}
     Ok(json!(counts))
+}
+#[cfg(test)]
+mod recurrence_tests {
+    use super::*;
+    #[test]
+    fn mapping_upgrade_is_additive_and_rejects_unknown_or_conflicting_schemas() {
+        let schema: Value=serde_json::from_str(include_str!("../../../../docs/opensearch/messages.ui-index.json")).unwrap();
+        let field=&schema["mappings"]["properties"]["recurrences"];
+        let original=json!({"_meta":{"icd_version":"1.1.0","operator_note":"preserve"},"properties":{"subject":{"type":"text"}}});
+        let update=recurrence_mapping_update(&original,field).unwrap().unwrap();
+        assert_eq!(update["_meta"]["operator_note"],"preserve");
+        assert_eq!(update["properties"].as_object().unwrap().len(),1);
+        assert!(original["properties"].get("recurrences").is_none());
+        assert!(recurrence_mapping_update(&schema["mappings"],field).unwrap().is_none());
+        assert!(recurrence_mapping_update(&json!({"_meta":{"icd_version":"9.0.0"}}),field).is_err());
+        assert!(recurrence_mapping_update(&json!({"_meta":{"icd_version":"1.1.0"},"properties":{"recurrences":{"type":"text"}}}),field).is_err());
+    }
+    #[test]
+    fn timeline_keeps_recurrence_only_and_unanchored_candidates_with_the_same_filters_and_bound() {
+        let (_,template)=templates(None).into_iter().find(|(name,_)| name=="parse-command-timeline-v1").unwrap();
+        let value:Value=serde_json::from_str(&template.replace("{{#toJson}}filters{{/toJson}}","[]").replace("{{to}}","2026-11-06T00:00:00Z")).unwrap();
+        assert_eq!(value["size"],101);
+        assert_eq!(value["query"]["bool"]["filter"],json!([]));
+        assert_eq!(value["query"]["bool"]["minimum_should_match"],1);
+        assert!(value["query"]["bool"]["should"].as_array().unwrap().iter().any(|q| q["nested"]["path"]=="recurrences" && q["nested"]["query"]["match_all"]==json!({})));
+    }
 }

@@ -69,6 +69,7 @@ pub async fn app_with_demo(demo: bool) -> Arc<App> {
         listen: "127.0.0.1:0".into(),
         auto_role: Some("viewer".into()),
         allow_fixtures: false,
+        demo_calendar: None,
     };
     Arc::new(App {
         search: Search::new(config.search.clone()).unwrap(),
@@ -106,6 +107,7 @@ pub fn offline_app(demo: bool) -> Arc<App> {
         listen: "127.0.0.1:0".into(),
         auto_role: None,
         allow_fixtures: false,
+        demo_calendar: None,
     };
     Arc::new(App {
         search: Search::new(config.search.clone()).unwrap(),

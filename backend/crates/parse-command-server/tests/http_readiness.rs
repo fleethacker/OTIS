@@ -40,6 +40,7 @@ fn inert_native_app() -> Arc<App> {
         listen: "127.0.0.1:0".into(),
         auto_role: None,
         allow_fixtures: false,
+        demo_calendar: None,
     };
     Arc::new(App {
         auth: auth::Auth::new(config.auth.clone(), state.clone()).unwrap(),

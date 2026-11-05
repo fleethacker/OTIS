@@ -61,6 +61,8 @@ impl IntoResponse for Error {
             "permission_denied" => StatusCode::FORBIDDEN,
             "aborted" => StatusCode::CONFLICT,
             "not_found" => StatusCode::NOT_FOUND,
+            "calendar_unavailable" => StatusCode::BAD_GATEWAY,
+            "payload_too_large" => StatusCode::PAYLOAD_TOO_LARGE,
             "resource_exhausted" => StatusCode::TOO_MANY_REQUESTS,
             "failed_precondition" => StatusCode::PRECONDITION_FAILED,
             _ => StatusCode::SERVICE_UNAVAILABLE,

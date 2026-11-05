@@ -5,6 +5,8 @@ import type { RouteMeta } from "../route-registry";
 import { calendarReturn } from "../components/calendar-links";
 import { useSource, useDebounced } from "../components/source-data";
 import { MessageReader } from "../components/message-reader";
+import { messageSearchState, type MessageFilters } from "../components/message-search-state";
+import { MessageSearchControls, MessagePagination } from "../components/message-search-controls";
 import { MessageSearchCard } from "../components/message-search-card";
 
 export const route: RouteMeta = { path: "/messages", label: "Message records", order: 1 };
@@ -12,15 +14,24 @@ export const route: RouteMeta = { path: "/messages", label: "Message records", o
 export default function Messages() {
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
-  const [query, setQuery] = useState(params.get("q") ?? "");
+  const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const [pageToken, setPageToken] = useState<string>();
-  const result = useSource(debounced.trim() ? "search" : "list", {
-    query: debounced,
-    mode: "hybrid",
-    dataset: "canonical",
-    pageToken,
-  });
+  const criteria = JSON.stringify(
+    ["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) => params.get(key))
+  );
+  const [page, setPage] = useState<{ criteria: string; token?: string }>({ criteria: "" });
+  const pageToken = page.criteria === criteria ? page.token : undefined;
+  function setPageToken(token?: string) {
+    setPage({ criteria, token });
+  }
+  const search = messageSearchState(params, debounced, pageToken);
+  const waiting = query !== debounced;
+  const result = useSource(
+    debounced.trim() ? "search" : "list",
+    search.request,
+    !waiting && search.error === undefined
+  );
+  const options = useSource("options", { dataset: "canonical" });
   const matches = result.data?.messages ?? [];
   const messages = matches;
   const detail = useSource(
@@ -38,17 +49,10 @@ export default function Messages() {
     update("record", "");
   }
   function update(key: string, value: string) {
-    if (key === "q") {
+    if (key !== "record") {
       setPageToken(undefined);
-      setQuery(value);
-      return;
     }
     const next = new URLSearchParams(params);
-    if (query) {
-      next.set("q", query);
-    } else {
-      next.delete("q");
-    }
     if (value) {
       next.set(key, value);
     } else {
@@ -56,13 +60,42 @@ export default function Messages() {
     }
     setParams(next, { replace: key === "q" });
   }
+  function applyFilters(fields: MessageFilters) {
+    const next = new URLSearchParams(params);
+    for (const key of ["messageType", "sender", "fromDate", "throughDate"] as const) {
+      const value = fields[key];
+      if (value === "") {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+    }
+    setPageToken(undefined);
+    setParams(next);
+  }
+  function retryResults() {
+    if (pageToken === undefined) {
+      void result.refetch();
+    } else {
+      setPageToken(undefined);
+    }
+  }
   return (
     <>
       <Link className="back-link" to={calendarReturn(params.get("returnTo"))}>
         <span aria-hidden="true">← </span>Return to Calendar
       </Link>
-      <div className="search-region">
-        <label htmlFor="record-search">Search Message records</label>
+      <div className="search-region message-search-toolbar">
+        <div className="message-search-label">
+          <label htmlFor="record-search">Search Message records</label>
+          <MessagePagination
+            meta={result.data?.meta}
+            count={matches.length}
+            pending={result.isPending || waiting}
+            failed={result.isError || search.error !== undefined}
+            onPage={setPageToken}
+          />
+        </div>
         <input
           id="record-search"
           className="input"
@@ -71,16 +104,32 @@ export default function Messages() {
           placeholder="Message ID, subject, event or raw text"
           onChange={(e) => update("q", e.target.value)}
         />
-        <button className="btn btn-ghost btn-sm" onClick={() => update("q", "")}>
-          Clear search
-        </button>
+        <div className="message-search-actions">
+          <button className="btn btn-ghost btn-sm" onClick={() => update("q", "")}>
+            Clear search
+          </button>
+          <MessageSearchControls
+            fields={search.fields}
+            sort={search.sort}
+            query={query}
+            activeFilters={search.activeFilters}
+            options={options.data?.meta.filterOptions}
+            optionsPending={options.isPending}
+            optionsFailed={options.isError}
+            retryOptions={() => void options.refetch()}
+            onApply={applyFilters}
+            onSort={(value) => update("sort", value)}
+          />
+        </div>
       </div>
-      {result.isPending ? (
-        <p role="status">Loading Message records…</p>
-      ) : result.isError ? (
+      {search.error !== undefined ? (
+        <div role="alert" className="alert">
+          {search.error}
+        </div>
+      ) : result.isPending || waiting ? null : result.isError ? (
         <div role="alert" className="alert">
           Message records could not be loaded. {result.error.message} No schedule data is confirmed.
-          <button className="btn btn-sm" onClick={() => void result.refetch()}>
+          <button className="btn btn-sm" onClick={retryResults}>
             Retry
           </button>
         </div>
@@ -90,7 +139,7 @@ export default function Messages() {
             <div className="unfinished">
               <h2>No Message records available</h2>
               <p>The source returned an empty dataset.</p>
-              <button className="btn btn-sm" onClick={() => void result.refetch()}>
+              <button className="btn btn-sm" onClick={retryResults}>
                 Retry
               </button>
             </div>
@@ -102,26 +151,6 @@ export default function Messages() {
               aria-label="Message record list"
               className="record-list"
             >
-              <h2>{matches.length} records in this result window</h2>
-              {result.data.meta.windowLimited === true && (
-                <p>Search candidate limit reached. Narrow your search.</p>
-              )}
-              {(pageToken ?? "") !== "" && (
-                <button className="btn btn-sm" onClick={() => setPageToken(undefined)}>
-                  First page
-                </button>
-              )}
-              {(result.data.meta.nextPageToken ?? "") !== "" && (
-                <button
-                  className="btn btn-sm"
-                  onClick={() => setPageToken(result.data.meta.nextPageToken)}
-                >
-                  Next page
-                </button>
-              )}
-              {matches.length === 0 && messages.length > 0 && (
-                <p>No search matches. Clear search to restore all records.</p>
-              )}
               {matches.map((m) => (
                 <MessageSearchCard
                   key={m.sourceMessageId}
@@ -161,7 +190,7 @@ export default function Messages() {
                       The requested record {record} is unavailable. No other record has been
                       substituted.
                     </p>
-                    <button className="btn btn-sm" onClick={() => void result.refetch()}>
+                    <button className="btn btn-sm" onClick={retryResults}>
                       Retry
                     </button>
                   </section>

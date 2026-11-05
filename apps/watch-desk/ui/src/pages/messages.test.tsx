@@ -8,6 +8,7 @@ import { MessageRecordSchema } from "../gen/app/v1/models_pb";
 import { MessageReader } from "../components/message-reader";
 import { messageTitle, structuredIdentifiers } from "../components/structured-message-format";
 import Messages from "./messages";
+import { messageSearchState } from "../components/message-search-state";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouterTransport } from "@connectrpc/connect";
 import { TransportProvider } from "@connectrpc/connect-query";
@@ -367,7 +368,7 @@ test("message search opens a compact reader on selection and closes back to full
     [
       "parse-command-source",
       "search",
-      { query: "preview", mode: "hybrid", dataset: "canonical", pageToken: undefined },
+      messageSearchState(new URLSearchParams("q=preview"), "preview").request,
     ],
     {
       messages: [message],
@@ -382,6 +383,10 @@ test("message search opens a compact reader on selection and closes back to full
       },
     }
   );
+  client.setQueryData(["parse-command-source", "options", { dataset: "canonical" }], {
+    messages: [],
+    meta: { filterOptions: { messageTypes: ["OPTASK COMMS"], originators: ["TRAINING COMMAND"] } },
+  });
   client.setQueryData(["parse-command-source", "detail", { key, dataset: "canonical" }], {
     messages: [message],
     meta: {},

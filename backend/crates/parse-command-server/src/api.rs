@@ -1,6 +1,7 @@
 use crate::{
     Error, Result,
     config::Config,
+    pagination::{self, PAGE_SIZE, SEARCH_DEPTH, Sort},
     presentation,
     private::{Private, now, text, timestamp},
     publisher::{Status, journal_counts},
@@ -10,7 +11,6 @@ use axum::{
     extract::{Json, Path, State},
     http::HeaderMap,
 };
-use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -119,7 +119,8 @@ impl App {
         }
         match op {
             "list" => self.list(request, filters, owner).await,
-            "search" => self.search_messages(request, filters).await,
+            "options" => self.options(filters).await,
+            "search" => self.search_messages(request, filters, owner).await,
             "detail" => {
                 self.detail(
                     request
@@ -129,104 +130,146 @@ impl App {
                 )
                 .await
             }
-            "timeline" => self.timeline(request, filters).await,
+            "timeline" => self.timeline(request, filters, owner).await,
             "evidence" => self.evidence_request(request).await,
             _ => Err(Error::new("not_found", "Unknown read operation")),
         }
     }
-    async fn list(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
-        let fingerprint = format!(
-            "{:x}",
-            Sha256::digest(
-                json!({"owner":owner,"filters":filters})
-                    .to_string()
-                    .as_bytes()
+    async fn options(&self, filters: Value) -> Result<Value> {
+        let result = self
+            .search
+            .template(
+                MESSAGE_ALIAS,
+                "parse-command-message-options-v1",
+                json!({"filters":filters}),
+                false,
             )
-        );
-        let (pit, after) = if let Some(token) = request.page_token {
-            if token.len() != 64 {
-                return Err(Error::invalid("Invalid page token"));
-            }
-            let store = self.store()?;
-            let value:Option<(String,String,String)>=store.db.query_row("SELECT pit,after_json,fingerprint FROM cursors WHERE token=? AND expires>=unixepoch()",[token],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
-            let (pit, after, expected) =
-                value.ok_or_else(|| Error::invalid("Page expired; restart browsing"))?;
-            if expected != fingerprint {
-                return Err(Error::invalid(
-                    "Page token does not match the query and identity",
-                ));
-            }
+            .await?;
+        let values = |name: &str| {
+            result["aggregations"][name]["buckets"]
+                .as_array()
+                .map(|v| {
+                    v.iter()
+                        .filter_map(|b| b["key"].as_str().map(str::to_owned))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        };
+        Ok(envelope(
+            vec![],
+            "Source metadata filter options",
+            json!({"filterOptions":{"messageTypes":values("types"),"originators":values("originators")}}),
+        ))
+    }
+    async fn list(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
+        let fingerprint = read_fingerprint("browse", owner, &request, &filters);
+        let (id, page, mut state) = if let Some(value) = &request.page_token {
+            let (id, page) = pagination::split_token(value)?;
             (
-                pit,
-                serde_json::from_str(&after).map_err(|_| Error::unavailable())?,
+                id.to_owned(),
+                page,
+                self.store()?.read_window(id, &fingerprint)?,
             )
         } else {
             let value = self
                 .search
                 .post(
-                    &format!("/{MESSAGE_ALIAS}/_search/point_in_time?keep_alive=60s"),
+                    &format!("/{MESSAGE_ALIAS}/_search/point_in_time?keep_alive=120s"),
                     json!({}),
                 )
                 .await?;
-            (
-                value["pit_id"]
-                    .as_str()
-                    .ok_or_else(Error::unavailable)?
-                    .to_owned(),
-                json!([]),
-            )
+            let pit = value["pit_id"]
+                .as_str()
+                .ok_or_else(Error::unavailable)?
+                .to_owned();
+            let state = json!({"kind":"browse","pit":pit,"anchors":[[]]});
+            let stored = { self.store()?.put_read_window(&fingerprint, &state) };
+            match stored {
+                Ok(id) => (id, 0, state),
+                Err(error) => {
+                    let _ = self
+                        .search
+                        .request(
+                            reqwest::Method::DELETE,
+                            "/_search/point_in_time",
+                            Some(json!({"pit_id":[pit]})),
+                        )
+                        .await;
+                    return Err(error);
+                }
+            }
         };
-        let response=self.search.template("","parse-command-messages-list-v1",json!({"filters":filters,"pit_id":pit,"after":after,"has_after":after.as_array().is_some_and(|v|!v.is_empty())}),false).await?;
+        if state["kind"] != "browse" {
+            return Err(Error::invalid("Invalid result page"));
+        }
+        let pit = state["pit"]
+            .as_str()
+            .ok_or_else(Error::unavailable)?
+            .to_owned();
+        let after = state["anchors"]
+            .as_array()
+            .and_then(|v| v.get(page))
+            .ok_or_else(|| Error::invalid("Result page is not available"))?
+            .clone();
+        let response=self.search.template("","parse-command-messages-list-v2",json!({"filters":filters,"pit_id":pit,"after":after,"has_after":after.as_array().is_some_and(|v|!v.is_empty()),"sort":request.sort.browse()}),false).await?;
         let hits = response["hits"]["hits"]
             .as_array()
             .ok_or_else(Error::unavailable)?;
-        let more = hits.len() > 20;
+        let more = hits.len() > PAGE_SIZE;
+        if more {
+            let anchor = hits[PAGE_SIZE - 1]["sort"].clone();
+            let anchors = state["anchors"]
+                .as_array_mut()
+                .ok_or_else(Error::unavailable)?;
+            if anchors.len() == page + 1 {
+                anchors.push(anchor);
+            } else if anchors.get(page + 1) != Some(&anchor) {
+                return Err(Error::unavailable());
+            }
+        }
+        self.store()?.save_read_window(&id, &fingerprint, &state)?;
+        let total = response["hits"]["total"]["value"]
+            .as_u64()
+            .ok_or_else(Error::unavailable)?;
+        let relation = response["hits"]["total"]["relation"]
+            .as_str()
+            .ok_or_else(Error::unavailable)?;
         let mut messages = Vec::new();
         let mut headers = serde_json::Map::new();
         {
             let store = self.store()?;
-            for hit in hits.iter().take(20) {
+            for hit in hits.iter().take(PAGE_SIZE) {
                 let core = &hit["_source"];
                 headers.insert(
                     format!("{}@{}", text(core, "id"), text(core, "revision")),
                     presentation::message_header(core),
                 );
-                messages.push(presentation::message(
-                    &hit["_source"],
-                    &store,
-                    false,
-                    None,
-                    None,
-                )?);
+                messages.push(presentation::message(core, &store, false, None, None)?);
             }
         }
-        let next = if more {
-            let sort = hits[19]["sort"].clone();
-            let token = self.store()?.cursor(&pit, &sort, &fingerprint)?;
-            Some(token)
-        } else {
-            let _ = self
-                .search
-                .request(
-                    reqwest::Method::DELETE,
-                    "/_search/point_in_time",
-                    Some(json!({"pit_id":[pit]})),
-                )
-                .await;
-            None
-        };
-        Ok(envelope(
-            messages,
-            "Canonical messages from OpenSearch; extraction and command assignments require review",
-            json!({"dataset":"canonical","executedMode":"browse","nextPageToken":next,"limit":20,"messageHeaders":headers}),
-        ))
+        let mut meta = pagination::metadata(&id, page, total, relation, more, "records");
+        meta["dataset"] = json!("canonical");
+        meta["executedMode"] = json!("browse");
+        meta["messageHeaders"] = json!(headers);
+        Ok(envelope(messages, "Canonical message page", meta))
     }
-    async fn search_messages(&self, request: ReadRequest, filters: Value) -> Result<Value> {
+    async fn search_messages(
+        &self,
+        request: ReadRequest,
+        filters: Value,
+        owner: &str,
+    ) -> Result<Value> {
         if request.query.trim().is_empty() {
             return Err(Error::invalid("Use message browsing for an empty query"));
         }
         if request.query.len() > 240 {
             return Err(Error::invalid("Search query exceeds 240 UTF-8 bytes"));
+        }
+        let fingerprint = read_fingerprint("search", owner, &request, &filters);
+        if let Some(value) = &request.page_token {
+            let (id, page) = pagination::split_token(value)?;
+            let state = self.store()?.read_window(id, &fingerprint)?;
+            return self.search_page(id, page, &state);
         }
         let mode = request.mode.as_str();
         let _permit = if mode != "keyword" {
@@ -265,7 +308,7 @@ impl App {
             let revision = text(src, "revision");
             validate_key(id, revision)?;
             let key = format!("{id}@{revision}");
-            if !excerpts.contains_key(&key) && candidates.len() < 20 {
+            if !excerpts.contains_key(&key) && candidates.len() < SEARCH_DEPTH {
                 candidates.push((id.to_owned(), revision.to_owned(), hit["_score"].clone()));
                 excerpts.insert(key.clone(), json!([]));
             }
@@ -287,39 +330,70 @@ impl App {
             self.search.post(&format!("/{MESSAGES}/_mget?_source_includes=id,revision,type,originator,subject,status,review_flags,issued_at,expires_at,command_ids,security"),json!({"ids":candidates.iter().map(|(id,r,_)|format!("{id}:{r}")).collect::<Vec<_>>()})).await?
         };
         let docs = hydrated["docs"].as_array().ok_or_else(Error::unavailable)?;
+        let mut documents = Vec::new();
+        let mut stale = 0;
+        for ((id, revision, _), doc) in candidates.iter().zip(docs) {
+            if doc["found"] != true
+                || doc["_source"]["id"] != *id
+                || doc["_source"]["revision"] != *revision
+                || !request.filters.matches(&doc["_source"])?
+            {
+                stale += 1;
+                continue;
+            }
+            documents.push(doc["_source"].clone());
+        }
+        pagination::sort_documents(&mut documents, request.sort)?;
+        let state = json!({"kind":"search","documents":documents,"excerpts":excerpts,"mode":mode,"windowLimited":hits.len()>=SEARCH_DEPTH,"staleHitsDropped":stale,"tookMs":response["took"],"snapshotAt":now()});
+        let id = self.store()?.put_read_window(&fingerprint, &state)?;
+        self.search_page(&id, 0, &state)
+    }
+    fn search_page(&self, id: &str, page: usize, state: &Value) -> Result<Value> {
+        if state["kind"] != "search" {
+            return Err(Error::invalid("Invalid result page"));
+        }
+        let docs = state["documents"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        let start = page
+            .checked_mul(PAGE_SIZE)
+            .ok_or_else(|| Error::invalid("Invalid result page"))?;
+        if page > 0 && start >= docs.len() {
+            return Err(Error::invalid("Result page is not available"));
+        }
         let mut messages = Vec::new();
         let mut headers = serde_json::Map::new();
-        let mut stale = 0;
+        let mut excerpts = serde_json::Map::new();
         {
             let store = self.store()?;
-            for ((id, revision, _), doc) in candidates.iter().zip(docs) {
-                if doc["found"] != true
-                    || doc["_source"]["id"] != *id
-                    || doc["_source"]["revision"] != *revision
-                    || !request.filters.matches(&doc["_source"])?
-                {
-                    stale += 1;
-                    continue;
+            for core in docs.iter().skip(start).take(PAGE_SIZE) {
+                let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
+                headers.insert(key.clone(), presentation::message_header(core));
+                if let Some(value) = state["excerpts"].get(&key) {
+                    excerpts.insert(key.clone(), value.clone());
                 }
-                let core = &doc["_source"];
-                headers.insert(
-                    format!("{}@{}", text(core, "id"), text(core, "revision")),
-                    presentation::message_header(core),
-                );
-                messages.push(presentation::message(
-                    &doc["_source"],
-                    &store,
-                    false,
-                    None,
-                    None,
-                )?);
+                messages.push(presentation::message(core, &store, false, None, None)?);
             }
         }
-        Ok(envelope(
-            messages,
-            "Ranked message results from a bounded passage candidate window; no complete result count is claimed",
-            json!({"dataset":"canonical","requestedMode":mode,"executedMode":mode,"limit":20,"candidateLimit":100,"windowLimited":hits.len()>=100,"staleHitsDropped":stale,"matchedExcerpts":excerpts,"messageHeaders":headers,"tookMs":response["took"]}),
-        ))
+        let mut meta = pagination::metadata(
+            id,
+            page,
+            docs.len() as u64,
+            "eq",
+            start + PAGE_SIZE < docs.len(),
+            "ranked_matches",
+        );
+        meta["dataset"] = json!("canonical");
+        meta["snapshotAt"] = state["snapshotAt"].clone();
+        meta["requestedMode"] = state["mode"].clone();
+        meta["tookMs"] = state["tookMs"].clone();
+        meta["executedMode"] = state["mode"].clone();
+        meta["windowLimited"] = state["windowLimited"].clone();
+        meta["candidateLimit"] = json!(SEARCH_DEPTH);
+        meta["messageHeaders"] = json!(headers);
+        meta["matchedExcerpts"] = json!(excerpts);
+        meta["staleHitsDropped"] = state["staleHitsDropped"].clone();
+        Ok(envelope(messages, "Page of ranked message matches", meta))
     }
     pub async fn detail(&self, key: &str) -> Result<Value> {
         let (id, revision) = split_key(key)?;
@@ -437,7 +511,7 @@ impl App {
         }
         Ok(json!({"messageKey":key,"records":audits,"retrievedAt":now(),"state":"available"}))
     }
-    async fn timeline(&self, request: ReadRequest, filters: Value) -> Result<Value> {
+    async fn timeline(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
         let from = timestamp(
             request
                 .from
@@ -471,7 +545,7 @@ impl App {
                 ..ReadRequest::default()
             };
             let results = self
-                .search_messages(search_request, filters.clone())
+                .search_messages(search_request, filters.clone(), owner)
                 .await?;
             search_limited = results["meta"]["windowLimited"] == true
                 || results["messages"]
@@ -550,6 +624,9 @@ impl App {
         )
     }
 }
+fn read_fingerprint(kind: &str, owner: &str, request: &ReadRequest, filters: &Value) -> String {
+    format!("{:x}",Sha256::digest(json!({"kind":kind,"owner":owner,"query":request.query,"mode":request.mode.as_str(),"sort":request.sort.as_str(),"filters":filters}).to_string().as_bytes()))
+}
 fn envelope(messages: Vec<Value>, notice: &str, meta: Value) -> Value {
     json!({"messages":messages,"source":"parse-command-opensearch","notice":notice,"retrievedAt":now(),"meta":meta})
 }
@@ -588,6 +665,7 @@ pub fn session_token(cookie: &str) -> Option<&str> {
 pub struct Filters {
     pub command_ids: Vec<String>,
     pub message_types: Vec<String>,
+    pub originators: Vec<String>,
     pub classifications: Vec<String>,
     pub issued_from: Option<String>,
     pub issued_to: Option<String>,
@@ -600,6 +678,7 @@ impl Filters {
         for (name, values) in [
             ("command_ids", &self.command_ids),
             ("type", &self.message_types),
+            ("originator", &self.originators),
             ("security.classification", &self.classifications),
         ] {
             if values.len() > 32 || values.iter().any(|v| v.trim().is_empty() || v.len() > 256) {
@@ -660,6 +739,11 @@ impl Filters {
         {
             return Ok(false);
         }
+        if !self.originators.is_empty()
+            && !self.originators.iter().any(|v| core["originator"] == *v)
+        {
+            return Ok(false);
+        }
         if !self.classifications.is_empty()
             && !self
                 .classifications
@@ -716,6 +800,7 @@ pub enum Dataset {
 pub struct ReadRequest {
     pub query: String,
     pub mode: Mode,
+    pub sort: Sort,
     pub filters: Filters,
     pub page_token: Option<String>,
     pub key: Option<String>,

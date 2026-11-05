@@ -17,9 +17,11 @@ reads to seven seconds. Failed or partial OpenSearch reads fail the request.
   "query": "communications",
   "mode": "hybrid",
   "dataset": "canonical",
+  "sort": "relevance",
   "filters": {
     "commandIds": [],
     "messageTypes": ["OPTASK COMMS"],
+    "originators": ["TRAINING GROUP 99"],
     "classifications": [],
     "unassignedOnly": false,
     "noCommands": false
@@ -29,8 +31,9 @@ reads to seven seconds. Failed or partial OpenSearch reads fail the request.
 
 | Operation | Inputs and result |
 | --- | --- |
-| `list` | Empty query, typed filters, optional opaque `pageToken`; 20 metadata cards, `meta.nextPageToken` |
-| `search` | Nonempty query, `keyword`, `semantic` or `hybrid`; up to 20 ranked message revisions and two excerpts each from 100 passage candidates |
+| `list` | Empty query, typed filters/sort, optional opaque `pageToken`; at most 20 metadata cards with count and previous/next page tokens |
+| `search` | Nonempty query, `keyword`, `semantic` or `hybrid`; at most 20 message revisions per page from the fixed 100-passage ranked window |
+| `options` | Canonical message-type and originating-command choices from bounded metadata aggregations (32 types / 256 originators) |
 | `detail` | Exact `key`; selected full structured record and preserved raw body, receipt time, evidence availability |
 | `timeline` | Explicit RFC3339 `from`/`to`, positive window up to 42 days; command filters and optional hybrid query; up to 100 source messages / 2,048 facts |
 | `evidence` | Exact `key`, optional `factId` or `passageId`; separate bounded audit records |
@@ -53,6 +56,34 @@ UI aliases; they never replace source identity. Evidence and private state are
 always scoped to the exact revision. Legacy keys have a separate `legacy:`
 namespace. Legacy records only appear when `dataset: "legacy"` is explicitly
 requested and fixture mode is enabled. There is no fixture fallback.
+
+List/search accept `sort: relevance | issued_desc | issued_asc`. Browsing uses
+newest issue time when relevance has no query; missing issue times sort last in
+both date directions. Date ties use source ID and revision for stable ordering.
+Sender filtering means exact MSGID originating commands (`filters.originators`),
+not RFC email senders. The UI's issued-through date includes that entire Zulu day;
+it becomes the next midnight in the exclusive `issuedTo` API parameter.
+
+`meta` supplies `page`, `pageSize: 20`, `totalRecords`, `totalRelation`, optional
+`totalPages`, and opaque `currentPageToken` / `previousPageToken` / `nextPageToken`.
+Tokens bind the owner, query, mode, filters and sort. Any change starts a new
+window. Browsing uses PIT plus `search_after`; counts are exact up to 10,000 and
+then explicitly have relation `gte`. PIT keepalive is 120 seconds. Previous pages
+reuse saved anchors in the same PIT, including after reaching the final page.
+
+Hybrid search keeps an explicit `pagination_depth: 100` and deduplicates all of
+that ranked passage window into message revisions before paging. Relevance order
+comes from OpenSearch RRF. Date sorting applies to the complete deduplicated
+window, not just the visible page. Counts describe **top matches in that ranked
+window**, never the entire semantic match population. Continuation pages reuse
+the ranked snapshot without model inference; `snapshotAt` identifies its time.
+No continuation page enlarges the candidate depth or silently reranks messages.
+
+Read-window state lives in separate ephemeral `read_windows` rows in the private
+SQLite database. It is limited to 64 windows, 512 KiB each, with 110-second idle
+expiry renewed by active paging. It contains bounded metadata/excerpts or PIT
+anchors, never vectors, raw email or audit payloads. Expired/mismatched windows
+fail explicitly; retry starts a fresh search. They do not alter drafts or custody.
 
 Filters support issue-time bounds `issuedFrom` inclusive / `issuedTo` exclusive,
 up to 32 exact values in each metadata list, and unassigned-only selection.

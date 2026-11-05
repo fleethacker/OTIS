@@ -596,7 +596,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
         ("semantic", neural.clone()),
         (
             "hybrid",
-            json!({"hybrid":{"queries":[{"bool":{"must":[lexical],"filter":"__FILTERS__"}},neural]}}),
+            json!({"hybrid":{"pagination_depth":100,"queries":[{"bool":{"must":[lexical],"filter":"__FILTERS__"}},neural]}}),
         ),
     ] {
         if mode != "keyword" && model.is_none() {
@@ -606,6 +606,8 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
     }
     templates.push(("parse-command-message-detail-v1".into(),json!({"size":2,"timeout":"5s","query":{"bool":{"filter":[{"term":{"id":"__ID__"}},{"term":{"revision":"__REV__"}}]}}}).to_string()));
     templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
+    templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
+    templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
     templates.push(("parse-command-timeline-v1".into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","must":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}}]}},"sort":["id","revision"]}).to_string()));
     templates.push(("parse-command-evidence-list-v1".into(),json!({"size":65,"timeout":"5s","query":{"bool":{"filter":"__FILTERS__"}},"sort":["id"],"search_after":"__AFTER__"}).to_string()));
     templates.push(("parse-command-source-status-v1".into(),json!({"size":0,"track_total_hits":true,"aggs":{"embedding_states":{"terms":{"field":"embedding_status","size":3}}}}).to_string()));
@@ -619,6 +621,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
                     "{{#has_after}}\"search_after\":{{#toJson}}after{{/toJson}},{{/has_after}}",
                 )
                 .replace("\"__FILTERS__\"", "{{#toJson}}filters{{/toJson}}")
+                .replace("\"__SORT__\"", "{{#toJson}}sort{{/toJson}}")
                 .replace("\"__QUERY__\"", "\"{{query}}\"")
                 .replace("\"__ID__\"", "\"{{message_id}}\"")
                 .replace("\"__REV__\"", "\"{{revision}}\"")

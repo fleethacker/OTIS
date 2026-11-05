@@ -462,3 +462,24 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .message-viewer-close svg { width: 16px; height: 16px; }
 .message-viewer .message-reader > header { padding-right: 24px; }
 .message-viewer > p[role="status"], .message-viewer > [role="alert"] { padding: 24px; }
+
+/* Search controls and compact count/paging subtitle stay outside the cards. */
+.popover-panel[data-align="end"] { left: auto; right: 0; }
+.message-search-toolbar { flex-wrap: wrap; align-items: center; gap: 12px; }
+.message-search-label { min-width: 230px; }
+.message-search-toolbar > .input { flex: 1; min-width: 180px; }
+.message-search-actions { display: flex; align-items: center; gap: 3px; }
+.message-search-actions .popover-trigger { min-height: 32px; height: 32px; padding: 4px 8px; gap: 5px; font-size: 12px; }
+.message-search-actions .popover-trigger svg { width: 15px; height: 15px; }
+.message-filter-form { display: flex; flex-direction: column; gap: 10px; width: 280px; max-width: calc(100vw - 64px); }
+.message-filter-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.message-filter-form .input, .message-filter-form .select { width: 100%; }
+.message-filter-actions { display: flex; justify-content: space-between; gap: 8px; }
+.message-sort-menu { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 220px; }
+.message-sort-menu .btn { justify-content: space-between; white-space: nowrap; }
+.message-search-summary, .message-search-summary nav { display: flex; align-items: center; gap: 4px; }
+.message-search-summary { margin-top: 3px; color: var(--color-bc-muted); font-size: 11px; }
+.message-search-summary nav .btn { width: 22px; height: 22px; min-height: 22px; padding: 3px; }
+.message-search-summary svg { width: 13px; height: 13px; }
+
+.message-search-actions .popover-trigger { min-width: 32px; padding-inline: 7px; }

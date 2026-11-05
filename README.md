@@ -14,7 +14,7 @@ Hackathon Event**.
 
 [View the briefing](https://fleethacker.github.io/OTIS/) ·
 [Documentation](docs/README.md) · [Architecture](docs/integration/architecture.md) ·
-[Operations](docs/integration/combined-stack.md)
+[Operations](docs/integration/combined-stack.md) · [UDS deployment](#uds-deployment)
 
 ## Capabilities
 
@@ -115,7 +115,176 @@ manual-derived knowledge remain outside Git; see the backend and test-data guide
 
 ## UDS deployment
 
-Issue #9 adds an ARM64 [Zarf/UDS packaging workflow](deploy/uds/README.md) with
-native Keycloak OIDC, verified IMAP TLS and explicit retained storage/mesh policy.
-See the [validation record](deploy/uds/VALIDATION.md) for tested revisions and
-the remaining native-profile migration, browser and recovery acceptance gate.
+Deploy the UDS platform first, then install the OTIS application bundle into it.
+The application bundle contains the UI, Rust server, OpenSearch and local model
+bootstrap. It requires **Linux ARM64** nodes and **UDS Core 1.14.3** with Keycloak.
+Use **UDS CLI 0.38.0** and its embedded **Zarf 0.86.0** (`uds zarf`), plus
+`kubectl`, **Python 3.14+** and Helm. Building packages also requires Git and
+Docker/BuildKit with Linux ARM64 support. Pins are recorded in
+[`deploy/uds/versions.json`](deploy/uds/versions.json).
+
+The current native OIDC profile still requires a fresh migration, browser and
+recovery acceptance rehearsal. Read the [validation record](deploy/uds/VALIDATION.md)
+before choosing a release; earlier live results cover the previous architecture.
+The [full UDS runbook](deploy/uds/README.md) covers identity, storage, migration,
+backup and recovery in detail. Run the commands below from the repository root.
+
+### 1. Deploy the UDS platform
+
+For an existing platform, have its operator confirm Core 1.14.3 with either
+`core-base` + `core-identity-authorization` or the standard `core` package, then
+continue to application packaging below. Nodes need working DNS, a default
+StorageClass (or an explicit application override), storage compatible with
+`fsGroup`, and `vm.max_map_count >= 262144`.
+
+For a **new isolated local ARM64 environment**, use the pinned official
+`k3d-core-slim-dev` bundle. Allocate at least 8 CPUs, 16 GiB Docker memory and
+50 GiB free disk for the local validation profile, with ports 80/443 available.
+This slim platform includes base and identity services; see the
+[local profile](deploy/uds/profiles/local-arm64.json) for its scope.
+
+On a connected preparation machine, inspect and download the platform:
+
+```sh
+OTIS_PLATFORM_REF=oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.14.3
+OTIS_PLATFORM_DIR=/absolute/path/to/platform
+mkdir -p "$OTIS_PLATFORM_DIR"
+uds inspect "$OTIS_PLATFORM_REF" --architecture arm64
+uds pull "$OTIS_PLATFORM_REF" --architecture arm64 --output "$OTIS_PLATFORM_DIR"
+```
+
+Transfer the archive and pinned tools to the target if deploying offline. Inspect
+the platform variables, then deploy **once to an unused cluster name**:
+
+```sh
+uds inspect "$OTIS_PLATFORM_DIR/uds-bundle-k3d-core-slim-dev-arm64-1.14.3.tar.zst" \
+  --architecture arm64 --list-variables
+uds deploy "$OTIS_PLATFORM_DIR/uds-bundle-k3d-core-slim-dev-arm64-1.14.3.tar.zst" \
+  --architecture arm64 --set CLUSTER_NAME=parse-command-issue9
+```
+
+**The upstream K3d package deletes a same-named cluster. Never rerun this platform
+deployment over retained application data.** Change `CLUSTER_NAME` if that name
+already exists. Complete platform DNS and certificate trust for `uds.dev`,
+including `sso.uds.dev` and the application hostname, before installing OTIS.
+
+### 2. Build the OTIS application packages
+
+On the connected build machine, choose a new release version and the target
+namespace. The namespace is embedded in the packages and must match deployment
+configuration; changing it requires a rebuild. If you already have a release,
+transfer and verify it as described below, then continue to target configuration.
+
+```sh
+OTIS_VERSION=0.1.0-dev.1
+OTIS_NAMESPACE=parse-command
+python3 -m unittest discover -s deploy/uds/tools/tests -v
+python3 deploy/uds/tools/validate.py
+python3 deploy/uds/tools/build.py --version "$OTIS_VERSION" \
+  --namespace "$OTIS_NAMESPACE" --prepare-assets
+OTIS_RELEASE="deploy/uds/.artifacts/$OTIS_VERSION"
+python3 deploy/uds/tools/verify_artifacts.py --release "$OTIS_RELEASE"
+```
+
+The ignored release directory contains three Zarf packages under `packages/`,
+`uds-bundle-parse-command-arm64-<version>.tar.zst`, `artifact-lock.json` and
+`SHA256SUMS`. It includes all application images, charts, model and native
+libraries needed at runtime. Completed versions cannot be overwritten.
+
+The builder uses a loopback registry at `127.0.0.1:5119`; it does not publish to
+a public registry. When finished, stop it with
+`docker stop parse-command-issue9-registry`. Before a later build, inspect the
+stopped container and explicitly restart it with
+`docker start parse-command-issue9-registry`.
+
+For offline deployment, transfer the complete release directory, the tracked
+files under `deploy/uds/` (preserving their paths), and pinned operator tools to
+the target. Set `OTIS_RELEASE` to the transferred release directory there and
+`OTIS_VERSION` to its version. Verify its `SHA256SUMS` after transfer
+(`sha256sum -c SHA256SUMS` on Linux, or `shasum -a 256 -c SHA256SUMS` on macOS,
+from inside that directory). Development bundles are unsigned; team releases
+require the approved signing and trusted-key distribution process in the runbook.
+
+### 3. Configure the target and provision secrets
+
+For a fresh install, copy the configuration example, then edit it for the target:
+
+```sh
+cp deploy/uds/uds-config.example.yaml deploy/uds/uds-config.yaml
+```
+
+Set `shared.NAMESPACE` to the built namespace. Under `shared.COMMON`, configure
+`domain`, `host`, `clientId`, storage, the real `imapHost`/`imapPort`/`imapCidr`,
+and private Keycloak routing. Set matching mailbox host/port and the real username
+under `shared.SERVER.intake`. The example `.invalid` endpoint cannot be deployed.
+Keep implicit TLS on port 993 unless your verified TLS mailbox uses another port.
+
+Provision Keycloak users in `/Parse Command/Admin` or `/Parse Command/Viewer`;
+keep `COMMON.allowedGroups` aligned with `SERVER.adminGroup`/`viewerGroup`.
+The UDS config package registers the confidential client and creates its Secret.
+Rust handles native OIDC at `https://<host>.<domain>/auth/callback`; leave
+Authservice interception disabled. Both browser and server must reach the trusted
+HTTPS issuer through the configured DNS/private gateway and permitted egress.
+
+Select the target context explicitly (`k3d-parse-command-issue9` for the local
+example) and create a dedicated namespace for a fresh install:
+
+```sh
+OTIS_CONTEXT=k3d-parse-command-issue9
+OTIS_NAMESPACE=parse-command
+kubectl --context "$OTIS_CONTEXT" get nodes
+kubectl --context "$OTIS_CONTEXT" create namespace "$OTIS_NAMESPACE"
+```
+
+Prepare protected files outside Git and release archives, using mode 0600:
+the mailbox password, its trusted CA chain, the issuer CA chain, and an exact
+**32-byte binary session encryption key**. For a fresh install, generate the key
+once with `openssl rand -out /secure/otis/session-key 32` in an existing protected
+directory. Retain and back up that key across upgrades.
+
+Create the Secrets using the chart's default names (adjust names if overridden):
+
+```sh
+kubectl --context "$OTIS_CONTEXT" -n "$OTIS_NAMESPACE" create secret generic parse-command-imap \
+  --from-file=password=/secure/otis/imap-password \
+  --from-file=ca.crt=/secure/otis/mail-ca.crt
+kubectl --context "$OTIS_CONTEXT" -n "$OTIS_NAMESPACE" create secret generic parse-command-sso \
+  --from-file=session-key=/secure/otis/session-key \
+  --from-file=ca.pem=/secure/otis/issuer-ca.pem
+```
+
+Reuse the namespace and retained Secrets for upgrades. Existing SQLite state
+requires the [state adoption and recovery procedure](deploy/uds/README.md#state-adoption-and-recovery)
+before starting the new workers.
+
+### 4. Deploy and verify the application bundle
+
+With `OTIS_VERSION`, `OTIS_RELEASE`, `OTIS_CONTEXT` and the edited config set on
+the target, validate and install the complete bundle:
+
+```sh
+python3 deploy/uds/tools/validate.py --config deploy/uds/uds-config.yaml
+python3 deploy/uds/tools/verify_artifacts.py --release "$OTIS_RELEASE"
+python3 deploy/uds/tools/deploy.py --context "$OTIS_CONTEXT" \
+  --config deploy/uds/uds-config.yaml \
+  --bundle "$OTIS_RELEASE/uds-bundle-parse-command-arm64-$OTIS_VERSION.tar.zst"
+kubectl --context "$OTIS_CONTEXT" -n "$OTIS_NAMESPACE" get packages,pods,pvc
+```
+
+The installer checks the bundle checksum, namespace, ARM64 nodes, pinned Core
+and required Secret keys, deploys the packages in order, and waits for workload
+rollouts. It uses the explicit context without changing your current context.
+
+Open **[OTIS at parse-command.uds.dev](https://parse-command.uds.dev)** for the
+default host/domain, or your configured HTTPS origin, and sign in through
+Keycloak. Verify Package readiness and ready mesh sidecars, then exercise a
+synthetic message through the TLS mailbox, source/detail/audit views, keyword,
+semantic and hybrid search, and save/reopen a private draft. Use
+`python3 deploy/uds/tools/smoke.py --help` for the authenticated mail/API check.
+Health and ready pods alone do not prove the application workflow; complete the
+[native acceptance gates](deploy/uds/README.md#install-and-verify-a-separate-target).
+
+Offline runtime still needs DNS, the private Zarf registry, Keycloak and the
+configured mailbox. Back up OpenSearch state, the session key, configuration and
+artifact lock before upgrades. Preserve search and legacy claims; never delete
+namespaces, clusters or PVCs as a recovery shortcut.

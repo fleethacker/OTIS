@@ -46,7 +46,7 @@ from before the OTIS rebrand.
 | Use | CSS font stack | Treatment |
 | --- | --- | --- |
 | Body and headings | `"Times New Roman", Times, serif` | Reading baseline: 16px with 1.5 line height; headings use size and weight for hierarchy |
-| Raw message text, identifiers, and times | `"Courier New", Courier, monospace` | Preserve source spacing where required; tabular time displays |
+| Raw message text, identifiers, times, and status labels | `"IBM Plex Mono", "Courier New", Courier, monospace` | Bundled regular/bold faces; preserve source spacing where required; tabular time displays |
 | Ship names | `Impact, Eurostile, "Arial Black", sans-serif` | Display face reserved for ship identity |
 | Supplied hull numbers | `"ITC Machine", "Machine ITC", "MachineITC", monospace` | White letters with `2px 2px 0 #11171D` shadow: a crisp offset, with no blur |
 
@@ -56,60 +56,63 @@ New Roman guidance in the
 This is a screen interface, not a claim that its layouts or generated content
 comply with the manual's correspondence-format requirements.
 
-The repository includes no licensed font files or remote font requests. These
-stacks use fonts installed on the reader's device and otherwise fall back in
-order. Naming ITC Machine in CSS does not make the font available; its exact
+IBM Plex Mono 2.5.0 is bundled locally under the SIL Open Font License, with
+regular and bold WOFF2 files. No external font service is required. The About
+page links to the shipped license; see the [font provenance](licenses/ibm-plex-mono.md).
+Other stacks use fonts installed on the reader's device and otherwise fall back
+in order. Naming ITC Machine in CSS does not make the font available; its exact
 letterforms require a licensed local installation or an appropriately licensed
 webfont added to the application. The monospace fallback is not an ITC Machine
 substitute. The same availability constraint applies to the ship display faces.
 
-## Ship identity and signal flags
+## Ship identity
 
 `ShipMarker` combines the existing calendar-series color dot, `ShipSymbol`, and
 `ShipName`. The dot distinguishes calendar series; it does not encode operational
 affiliation. Blank units retain the readable unavailable label without a vessel
 symbol.
 
-`ShipSymbol` uses static MIL-STD-2525D generic sea-surface frame geometry checked
-against milsymbol 2.2.0. The current presentation contract has no verified vessel
-class or affiliation, so markers use the unknown symbol
-(`10013000000000000000`). The component also supports explicitly supplied friendly
-affiliation (`10033000000000000000`); callers must not infer it from a ship name.
-The standard affiliation colors are fixed across themes and are independent of
-calendar colors. This is a bounded symbol implementation, not a full symbology
-renderer, and it loads no runtime CDN code.
+`ShipSymbol` uses MIL-STD-2525D symbol sets 00 (unknown), 30 (sea surface), and
+35 (sea subsurface), with an unspecified entity. Static frames match the pinned
+[milsymbol 2.2.0 geometry](https://github.com/spatialillusions/milsymbol/blob/v2.2.0/src/ms/symbolgeometries.js);
+see its [MIT attribution](licenses/milsymbol.md). The unknown-domain symbol
+includes the standard question mark. Subsurface frames remain open at the top.
 
-`OptaskIcon` also uses this generic unknown symbol for the ASUW and ASW message
-categories. A category does not establish the class or affiliation of a vessel;
-the icon's accessible label retains that distinction. Other message categories
-keep their existing non-vessel icons.
+| Domain | Unknown affiliation SIDC | Explicitly supplied friendly SIDC |
+| --- | --- | --- |
+| Unknown | `10010000000000000000` | `10030000000000000000` |
+| Sea surface | `10013000000000000000` | `10033000000000000000` |
+| Sea subsurface | `10013500000000000000` | `10033500000000000000` |
+
+An unspecified frame is not a class-identifying vessel icon. The current
+presentation contract has no verified vessel domain, class, or affiliation;
+unit names therefore use the unknown-domain/unknown-affiliation symbol. Callers
+can supply verified domain and affiliation to `ShipMarker`; they must not infer
+these facts from a name. Standard affiliation colors remain fixed across themes
+and independent of calendar colors. This bounded implementation loads no runtime
+CDN code.
+
+`OptaskIcon` uses the surface symbol for ASUW and the subsurface symbol for ASW.
+These indicate message-category domains, not a claim that the issuing unit is
+a surface combatant or submarine. Other categories keep their non-vessel icons.
+
+References: [MIL-STD-2525D](https://www.jcs.mil/portals/36/documents/doctrine/other_pubs/ms_2525d.pdf),
+Table I (unknown dimension) and Appendix A Table A-III (symbol sets), and
+[Esri's 2525D surface definitions](https://github.com/Esri/joint-military-symbology-xml/blob/master/instance/jmsml_D_Sea_Surface.xml)
+(`UNSPECIFIED` entity, no internal icon). Do not substitute the standard's
+training-only hierarchy nodes for operational class information.
 
 `HullNumber` accepts only an explicitly supplied hull identifier. The current
 presentation contract has no separate hull-number field, so existing ship names
 are not split or supplemented with invented hull numbers or vessel classes.
 
-`SignalFlag` supports the international signal flags A through H. `SignalHeading`
-uses these as decorative section identifiers alongside readable native `h3`
-headings. Flags do not replace headings, imply a message's operational signal,
-or alter raw source text. Their conventional colors remain fixed across themes.
-Standalone flags have accessible letter and phonetic-name labels; flags beside
-heading text are hidden from assistive technology to avoid redundant narration.
-
 The parsed-message reader preserves the ordered USMTF source-set cards from the
 parser, including repeated sets, narrative titles, unmapped source values, and
-columnar rows. Each card receives a decorative flag in the sequence A–H (Alfa,
-Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel), repeating after H for longer
-messages. The source set ID, full name when known, and supplied title remain the
-readable identifiers. Flag letters are visual section markers, not a replacement
-for source paragraph numbers or an assertion that a paragraph has a supplied
-letter identifier. Missing parsed sets retain the existing unavailable message;
-the interface does not rebuild the former metadata-group cards from internal
-payload fields.
-
-Flag identification follows the
-[Naval History and Heritage Command reference](https://www.history.navy.mil/research/library/online-reading-room/title-list-alphabetically/p/phonetic-alphabet-and-signal-flags.html).
-Original message paragraph identifiers and content remain source data, and the
-raw-message view is unchanged by the flag treatment.
+columnar rows. The source set ID, full name when known, and supplied title remain
+the readable identifiers in native headings. Missing parsed sets retain the
+existing unavailable message; the interface does not rebuild the former
+metadata-group cards from internal payload fields. Original message paragraph
+identifiers, source content, and the raw-message view remain unchanged.
 
 ## Shared implementation
 
@@ -127,14 +130,13 @@ All paths below are relative to the application root.
 | `ui/src/components/ship-symbol.tsx` | `ShipSymbol` and its bounded affiliation mapping |
 | `ui/src/components/ship-marker.tsx` | Shared ship label with separate calendar-series color |
 | `ui/src/components/optask-icons.tsx` | Message category icons, reusing `ShipSymbol` for vessel imagery |
-| `ui/src/components/signal-flag.tsx` | `SignalFlag` and `SignalHeading`; supported letters live in `signal-flag-alphabet.ts` |
-| `ui/src/components/structured-message.tsx` | Source-set cards with decorative flags and preserved source order |
+| `ui/src/components/structured-message.tsx` | Source-set cards with readable headings and preserved source order |
 
 New UI should reuse these components and the existing daisyUI/Ark primitives.
 Use semantic tokens such as `--color-base-content`, `--color-primary`,
 `--color-warning`, and `--brand-focus` instead of adding per-page color literals.
 Extend the common token definitions when a new reusable role is needed, and
-define it for all three appearances. Keep standard symbol/flag colors and
+define it for all three appearances. Keep standard symbol colors and
 calendar-series colors separate from decorative theme accents.
 
 Use the shared field and button shapes, focus treatment, typography, and spacing.

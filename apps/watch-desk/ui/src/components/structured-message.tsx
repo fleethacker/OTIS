@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
 import { structuredPayload } from "./structured-message-format";
-import { SignalHeading } from "./signal-flag";
-import { signalLetters, type SignalLetter } from "./signal-flag-alphabet";
 import {
   sourceSets,
   setFieldLabel,
@@ -14,12 +12,10 @@ import {
 export function UsmtfSetCard({
   name,
   title,
-  flag,
   children,
 }: {
   name: string;
   title?: string;
-  flag: SignalLetter;
   children: ReactNode;
 }) {
   const fullName = setFullName(name);
@@ -29,10 +25,10 @@ export function UsmtfSetCard({
       aria-label={`${name}${title !== undefined && title !== "" ? ` — ${title}` : ""}`}
     >
       <header>
-        <SignalHeading letter={flag}>
+        <h3>
           {name}
           {fullName !== undefined ? ` - ${fullName}` : ""}
-        </SignalHeading>
+        </h3>
         {title !== undefined && title !== "" && <h4>{title}</h4>}
       </header>
       {children}
@@ -83,19 +79,11 @@ function ColumnarSet({ set }: { set: SourceSet }) {
     </div>
   );
 }
-function SetCard({
-  set,
-  examples,
-  flag,
-}: {
-  set: SourceSet;
-  examples: boolean | undefined;
-  flag: SignalLetter;
-}) {
+function SetCard({ set, examples }: { set: SourceSet; examples: boolean | undefined }) {
   const { set_id: name, fields } = set;
   if (name === "GENTEXT") {
     return (
-      <UsmtfSetCard name={name} title={fields[0]?.value} flag={flag}>
+      <UsmtfSetCard name={name} title={fields[0]?.value}>
         {fields.slice(1).map((field, index) => (
           <p className="usmtf-narrative" key={index}>
             {field.value}
@@ -106,7 +94,7 @@ function SetCard({
   }
   if (["AMPN", "NARR", "RMKS"].includes(name)) {
     return (
-      <UsmtfSetCard name={name} flag={flag}>
+      <UsmtfSetCard name={name}>
         {fields.map((field, index) => (
           <p className="usmtf-narrative" key={index}>
             {field.value}
@@ -116,7 +104,7 @@ function SetCard({
     );
   }
   return (
-    <UsmtfSetCard name={name} flag={flag}>
+    <UsmtfSetCard name={name}>
       <Fields fields={fields} set={name} examples={examples} />
       {set.rows.length > 0 && <ColumnarSet set={set} />}
     </UsmtfSetCard>
@@ -137,12 +125,7 @@ export function StructuredMessage({ message }: { message: MessageRecord }) {
   return (
     <div className="usmtf-set-list">
       {sets.map((set, index) => (
-        <SetCard
-          key={index}
-          set={set}
-          examples={examples}
-          flag={signalLetters[index % signalLetters.length]}
-        />
+        <SetCard key={index} set={set} examples={examples} />
       ))}
     </div>
   );

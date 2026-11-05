@@ -7,7 +7,7 @@ function CurrentRoute() {
   return <p>Route: {useLocation().pathname}</p>;
 }
 
-test("burger opens navigation, follows both links and closes after selection", () => {
+test("burger opens navigation, follows links and closes after selection", () => {
   const view = renderWithProviders(
     <>
       <NavigationMenu />
@@ -28,6 +28,10 @@ test("burger opens navigation, follows both links and closes after selection", (
   fireEvent.click(trigger);
   fireEvent.click(view.getByRole("link", { name: "Calendar" }));
   expect(view.getByText("Route: /calendar")).toBeTruthy();
+  expect(view.queryByRole("dialog")).toBeNull();
+  fireEvent.click(trigger);
+  fireEvent.click(view.getByRole("link", { name: "About OTIS" }));
+  expect(view.getByText("Route: /about")).toBeTruthy();
   expect(view.queryByRole("dialog")).toBeNull();
 });
 test("reusable popover dismisses on Escape, outside click and focus departure", () => {

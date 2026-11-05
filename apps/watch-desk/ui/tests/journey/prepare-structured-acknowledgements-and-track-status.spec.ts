@@ -121,11 +121,11 @@ test("prepare private acknowledgements, copy manually and retain external tracki
     const upstreamText = (await upstream.textContent())!;
     await tracking.getByRole("button", { name: "Record external acknowledgement", exact: true }).click();
     await expect(tracking.getByRole("alert")).toContainText("Confirm that acknowledgement occurred outside");
-    await tracking.getByLabel("I confirm acknowledgement occurred outside Watch Desk.", { exact: true }).check();
+    await tracking.getByLabel("I confirm acknowledgement occurred outside OTIS.", { exact: true }).check();
     await tracking.getByLabel("Optional tracking note", { exact: true }).fill("Private manual email report");
     await tracking.getByRole("button", { name: "Record external acknowledgement", exact: true }).click();
     await expect(tracking.getByRole("status")).toHaveText("External acknowledgement recorded.");
-    await expect(tracking).toContainText("Acknowledged · User-reported outside Watch Desk");
+    await expect(tracking).toContainText("Acknowledged · User-reported outside OTIS");
     const recorded = tracking.getByRole("listitem").filter({ hasText: "Private manual email report" });
     await expect(recorded).toContainText("Occurred: Unavailable");
     await expect(recorded).toContainText(/Recorder: .+ · Recorded: \d{4}-/);
@@ -145,7 +145,7 @@ test("prepare private acknowledgements, copy manually and retain external tracki
     await expect(form.getByLabel("Outgoing originator", { exact: true })).toHaveValue("");
     await page.getByRole("tab", { name: "Lifecycle", exact: true }).click();
     await expect(tracking).toContainText("No private activity recorded.");
-    await tracking.getByLabel("I confirm acknowledgement occurred outside Watch Desk.", { exact: true }).check();
+    await tracking.getByLabel("I confirm acknowledgement occurred outside OTIS.", { exact: true }).check();
     await tracking.getByLabel("Occurrence time (RFC3339 with timezone; blank if unknown)", { exact: true }).fill("2026-11-05T00:02:00Z");
     await tracking.getByRole("button", { name: "Record external acknowledgement", exact: true }).click();
     await expect(tracking.getByRole("status")).toHaveText("External acknowledgement recorded.");

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { beginSessionAccess } from "./session-access";
 import { SessionVisibility } from "./session-visibility";
+import otisIcon from "../assets/otis/otis-icon.webp";
 interface Session {
   scope: string;
   expiresAt: number | null;
@@ -155,7 +156,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
       ) : null}
       {state !== "ready" ? (
         <main className="session-gate">
-          <h1>Parse Command</h1>
+          <img className="session-otis-mark" src={otisIcon} width={88} height={88} alt="" />
+          <h1>OTIS</h1>
+          <p>Operational Tasking Integration System</p>
           {state === "loading" || state === "checking" ? (
             <p role="status">Signing in…</p>
           ) : (

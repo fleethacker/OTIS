@@ -1,4 +1,8 @@
-# Ark-generated application
+# OTIS — Operational Tasking Integration System
+
+**Keeping the Watch.** OTIS organizes naval message traffic into operational
+tasking and timelines. The [brand guide](docs/branding/otis/README.md) contains
+the approved otter mascot, original artwork, and asset usage notes.
 
 This application is imported into the Parse Command repository at
 `apps/watch-desk/`. Run the commands below from **this application directory**.
@@ -32,7 +36,7 @@ Application-specific setup and deployment requirements belong in this README
 as the application evolves. Consult the included license files for applicable
 terms.
 
-## Watch Desk data source
+## OTIS data source
 
 Ship schedules currently use persisted, explicitly fictional USS Meridian
 examples, not an operational backend or validated USMTF. See

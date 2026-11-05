@@ -1,4 +1,6 @@
-# Parse Command - FleetHacker 2026
+# OTIS - Operational Tasking Integration System
+
+**Keeping the Watch.** Built for FleetHacker 2026; originally Parse Command.
 
 ## Overview
 Warfare commanders disseminate operational orders via dense, formatted telecommunication messages. Watchstanders must parse hundreds of lines of text to determine when their ship is scheduled for events.
@@ -25,7 +27,9 @@ publishing setup, and the deployment workflow.
 
 ## Local application stack
 
-The imported **Watch Desk** app lives in [`apps/watch-desk/`](apps/watch-desk/).
+The **OTIS** app lives in [`apps/watch-desk/`](apps/watch-desk/), retaining the
+original Watch Desk import directory. Approved mascot artwork and branding
+assets are documented in [the OTIS brand guide](apps/watch-desk/docs/branding/otis/README.md).
 Rust serves the application API, private drafts/preparations and continuous
 IMAP-to-OpenSearch publication. A lightweight static/proxy web container serves
 React. The Go implementation remains as reference source. See the
@@ -41,7 +45,7 @@ Prepare the local model/native assets first using the
 The committed native dependency lock is validated on Linux ARM64. Runtime images
 and the model archive can then be transferred to an offline host.
 
-Build and start Watch Desk, `parse-command-server` and OpenSearch (Docker Compose 2.24.4+ required):
+Build and start OTIS, `parse-command-server` and OpenSearch (Docker Compose 2.24.4+ required):
 
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
@@ -50,7 +54,7 @@ curl http://localhost:8080/api/health
 curl http://localhost:9200
 ```
 
-Open [Watch Desk](http://localhost:8080). This local-demo profile reads parsed
+Open [OTIS](http://localhost:8080). This local-demo profile reads parsed
 OpenSearch messages through Rust. Search combines BM25 and local MiniLM semantic
 retrieval using OpenSearch reciprocal rank fusion. Full structured/raw content
 and audit evidence load on demand. Existing legacy records and private history

@@ -123,14 +123,12 @@ test("rendered composer preserves legacy, handles failures, invalidates output a
     expect(state.acknowledged).toBe(false);
     fireEvent.click(view.getByRole("button", { name: "Record external acknowledgement" }));
     await waitFor(() =>
-      expect(
-        view.getByText("Confirm that acknowledgement occurred outside Watch Desk.")
-      ).toBeTruthy()
+      expect(view.getByText("Confirm that acknowledgement occurred outside OTIS.")).toBeTruthy()
     );
-    fireEvent.click(view.getByLabelText("I confirm acknowledgement occurred outside Watch Desk."));
+    fireEvent.click(view.getByLabelText("I confirm acknowledgement occurred outside OTIS."));
     fireEvent.click(view.getByRole("button", { name: "Record external acknowledgement" }));
     await waitFor(() =>
-      expect(view.getByText("Acknowledged · User-reported outside Watch Desk")).toBeTruthy()
+      expect(view.getByText("Acknowledged · User-reported outside OTIS")).toBeTruthy()
     );
     expect(view.getByText("Occurred: Unavailable")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Reset personal tracking" }));
@@ -233,7 +231,7 @@ test("private preparation and tracking discard late account responses and isolat
     release?.();
   });
   expect((view.getByLabelText("Outgoing originator") as HTMLInputElement).value).toBe("beta-ONE");
-  expect(view.queryByText("Acknowledged · User-reported outside Watch Desk")).toBeNull();
+  expect(view.queryByText("Acknowledged · User-reported outside OTIS")).toBeNull();
   view.rerender(ui("TWO"));
   await waitFor(() =>
     expect((view.getByLabelText("Outgoing originator") as HTMLInputElement).value).toBe("beta-TWO")

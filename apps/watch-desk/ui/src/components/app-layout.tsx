@@ -1,5 +1,6 @@
 import { SettingsProvider } from "./SettingsProvider";
-import { Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
+import otisIcon from "../assets/otis/otis-icon.webp";
 import { HeaderClock } from "./header-clock";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
@@ -26,14 +27,12 @@ function DeskLayout() {
       <header className="desk-header">
         <div className="header-start">
           <NavigationMenu />
-          <div className="wordmark">
-            <span className="desk-mark" aria-hidden="true">
-              W<span>/</span>D
-            </span>
+          <Link className="wordmark" to="/calendar" aria-label="OTIS calendar">
+            <img className="otis-mark" src={otisIcon} width={44} height={44} alt="" />
             <span>
-              Watch Desk<small>Ship schedule workspace</small>
+              OTIS<small>Keeping the Watch</small>
             </span>
-          </div>
+          </Link>
         </div>
         <HeaderClock />
         <div className="account">
@@ -46,7 +45,9 @@ function DeskLayout() {
         <Outlet />
       </main>
       <footer className="desk-footer">
-        <span>Watch Desk · Workspace preview</span>
+        <span>
+          OTIS · <Link to="/about">About OTIS</Link>
+        </span>
         <span>Display: {label} · Source instants retained in UTC</span>
       </footer>
     </>

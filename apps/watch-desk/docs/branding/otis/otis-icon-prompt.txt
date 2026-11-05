@@ -1,0 +1,8 @@
+Use case: logo-brand
+Asset type: square application icon for OTIS, the Operational Tasking Integration System.
+Input image role: identity and style reference. Preserve the exact OTIS sea-otter mascot identity from the supplied patch: facial proportions, brown fur, light tan whiskered muzzle, rounded ears, navy knitted watch cap, focused calm expression, and dark communications headset with boom microphone.
+Primary request: derive a clean matching application icon from this emblem. Show only the otter's head and a small amount of shoulders, centered and filling most of the square, with the same navy cap and headset. Maintain the premium bold military morale-patch illustration style and crisp thick outlines, with a much simpler silhouette that reads at small icon sizes.
+Composition: one finished square icon with a deep navy solid background and generous safe padding. The background fills the entire image. Remove the emblem's outer ring, rope border, clipboard, ribbon and all typography. Do not include a device mockup or an additional icon frame. Muted gold can be used as a thin accent behind the head if needed for separation.
+Color palette: match the reference's navy, brown, light tan and restrained gold. Strong contrast against the navy background.
+Text: none.
+Constraints: preserve the mascot's character and direction of gaze, cap and headset; recognizable SEA OTTER rather than bear, seal, beaver or dog; one boom microphone; calm and competent, not angry or babyish; no extra animals, props, lettering, rank insignia, official seals, weapons, gradients, watermark, fine texture, or tiny decorative details.

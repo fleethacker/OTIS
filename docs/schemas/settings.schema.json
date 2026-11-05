@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://parse-command.local/schemas/settings.schema.json",
+  "title": "Parse Command shared settings",
+  "type": "object", "additionalProperties": false,
+  "required": ["version", "shipName", "unitName", "commandIds", "outgoingCommand", "actionAuthority", "defaultTimezone", "ai"],
+  "properties": {
+    "version": {"const": 1},
+    "shipName": {"type": "string", "maxLength": 120},
+    "unitName": {"type": "string", "maxLength": 120},
+    "commandIds": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+    "outgoingCommand": {"type": "string", "maxLength": 30, "pattern": "^[A-Z0-9 .,'()&+\\-]*$"},
+    "actionAuthority": {"type": "string", "maxLength": 50, "pattern": "^[A-Z0-9 .,'()&+\\-]*$"},
+    "defaultTimezone": {"const": "UTC"},
+    "ai": {"anyOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["endpoint", "model", "secretRef"], "properties": {"endpoint": {"type": "string", "maxLength": 512}, "model": {"type": "string", "minLength": 1, "maxLength": 128}, "secretRef": {"type": "string", "maxLength": 128}}}]}
+  }
+}

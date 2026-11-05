@@ -1,3 +1,4 @@
+import { useDisplayTime } from "../components/display-time";
 import { Link, useSearchParams } from "react-router-dom";
 import { useRef, useState } from "react";
 import { TbX } from "react-icons/tb";
@@ -12,19 +13,23 @@ import { MessageSearchCard } from "../components/message-search-card";
 export const route: RouteMeta = { path: "/messages", label: "Message records", order: 1 };
 
 export default function Messages() {
+  const { zone } = useDisplayTime();
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const criteria = JSON.stringify(
-    ["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) => params.get(key))
-  );
+  const criteria = JSON.stringify([
+    zone,
+    ...["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) =>
+      params.get(key)
+    ),
+  ]);
   const [page, setPage] = useState<{ criteria: string; token?: string }>({ criteria: "" });
   const pageToken = page.criteria === criteria ? page.token : undefined;
   function setPageToken(token?: string) {
     setPage({ criteria, token });
   }
-  const search = messageSearchState(params, debounced, pageToken);
+  const search = messageSearchState(params, debounced, pageToken, zone);
   const waiting = query !== debounced;
   const result = useSource(
     debounced.trim() ? "search" : "list",

@@ -1,3 +1,4 @@
+import { useDisplayTime } from "./display-time";
 import moment from "moment-timezone";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
 import type { MessageHeader } from "./source-data";
@@ -14,6 +15,7 @@ export function MessageSearchCard({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const { zone } = useDisplayTime();
   const type = header?.type ?? "Type unavailable";
   const subjectValue = message.subject?.trim() ?? "";
   const subject = subjectValue.length > 0 ? subjectValue : "Subject unavailable";
@@ -21,7 +23,12 @@ export function MessageSearchCard({
   const issue =
     header?.issuedAt === undefined ? undefined : moment.utc(header.issuedAt, moment.ISO_8601, true);
   const issuedAt =
-    issue?.isValid() === true ? issue.format("DD MMM YYYY HHmmss[Z]").toUpperCase() : undefined;
+    issue?.isValid() === true
+      ? issue
+          .tz(zone)
+          .format(zone === "UTC" ? "DD MMM YYYY HHmmss[Z]" : "DD MMM YYYY HH:mm:ss z")
+          .toUpperCase()
+      : undefined;
   return (
     <button className="record-entry" aria-pressed={selected} onClick={onSelect}>
       <span className="record-card-heading">

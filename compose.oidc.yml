@@ -1,0 +1,18 @@
+# Apply only after registering the confidential client and preparing secret files.
+services:
+  server:
+    environment:
+      PARSE_COMMAND_AUTH_MODE: oidc
+      PARSE_COMMAND_DEMO_AUTO_ROLE: ""
+      PARSE_COMMAND_PUBLIC_URL: https://parse-command.uds.dev
+      PARSE_COMMAND_OIDC_ISSUER: https://sso.uds.dev/realms/uds
+      PARSE_COMMAND_OIDC_CLIENT_ID: parse-command
+      PARSE_COMMAND_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client
+      PARSE_COMMAND_SESSION_KEY_FILE: /run/secrets/session-key
+      PARSE_COMMAND_IDP_CA_FILE: /run/secrets/idp-ca.pem
+      PARSE_COMMAND_ADMIN_GROUP: /Parse Command/Admin
+      PARSE_COMMAND_VIEWER_GROUP: /Parse Command/Viewer
+    volumes:
+      - ${PARSE_COMMAND_SSO_SECRETS:?Set external SSO secret directory}/client-secret:/run/secrets/oidc-client:ro
+      - ${PARSE_COMMAND_SSO_SECRETS}/session-key:/run/secrets/session-key:ro
+      - ${PARSE_COMMAND_SSO_SECRETS}/ca.pem:/run/secrets/idp-ca.pem:ro

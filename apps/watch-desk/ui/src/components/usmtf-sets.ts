@@ -1,3 +1,4 @@
+import { setCatalog } from "./usmtf-catalog";
 import { isObject, type Fields, type Value } from "./structured-message-format";
 
 export interface SetField {
@@ -61,171 +62,62 @@ export function sourceSets(payload: Fields | undefined): SourceSet[] | undefined
   return sets;
 }
 
-// Field labels follow the 2003 set catalog. Observed extension layouts are selected
-// separately: their offsets must never inherit incompatible baseline definitions.
-const baseline: Record<string, string[] | undefined> = {
-  MSGID: ["Message type", "Originator", "Serial", "Month", "Qualifier", "Qualifier serial"],
-  PERIOD: ["Start", "End / qualifier", "Qualified time"],
-  POC: ["Name", "Rank / position", "Unit", "Location"],
-  EXER: ["Exercise", "Additional identifier"],
-  OPER: ["Operation", "Plan", "Option", "Secondary option"],
-  REF: [
-    "Reference",
-    "Message / communication type",
-    "Originator",
-    "Date / time",
-    "Serial",
-    "Notation",
-  ],
-  HEADING: ["Heading"],
-  GEODATUM: ["Datum"],
-  CIRC: ["Center", "Radius"],
-  RNDZVOUS: ["Rendezvous", "Position", "Unit being joined", "Joining unit", "Altitude"],
-  FYPOS: ["Unit", "Position", "Time", "Course / speed"],
-  PIM: ["Position", "Time", "Course / speed", "Duration"],
-  DIVERT: ["Position", "Course"],
-  ANCHOR: ["Unit", "Start", "End", "Position"],
-  DLRPGRID: ["Point type", "Designator", "Position", "Effective time"],
-  LNKISCC: ["Position", "Coordinate center"],
-  MDA: ["Area", "Position", "Mine index"],
-  CHANDAT: [
-    "Point / position designator",
-    "Start position",
-    "End position",
-    "Direction",
-    "Length",
-    "Width",
-    "Tidal course / speed",
-    "Start",
-    "End",
-    "Danbuoy line offset",
-    "Danline direction",
-    "Danbuoys",
-    "Danbuoy spacing",
-  ],
-  CRYPTDAT: [
-    "Callsign document",
-    "Unit document",
-    "Equipment",
-    "Keying material",
-    "Daily changeover",
-  ],
-  IVCCN: ["Net function", "Frequency designator", "Priority"],
-  DALKFREQ: [
-    "Circuit",
-    "Frequency designator / control unit",
-    "Frequency",
-    "Priority",
-    "Emission",
-    "Usage",
-  ],
-  AUTOCAT: ["Station", "Minimum flight level", "Transmit", "Receive"],
-  CVYORG: [
-    "Commodore / OTC callsign",
-    "Commodore / OTC ship",
-    "Vice commodore / alternate callsign",
-    "Vice commodore / alternate ship",
-  ],
-  RASKED: ["Rendezvous", "Position", "Mean line of advance", "Policy"],
-  MTASK: ["Task order", "Unit", "MCM OTC", "Route / area", "Status"],
-  COMMS: ["Unit", "Callsign"],
-  MULCDUTY: ["Unit", "Name", "Rank / position", "Duty"],
+// The observed examples insert/reorder fields in these baseline sets. Keep
+// their verified positions separate; an absent mapping leaves the source value bare.
+const observedPositions: Record<string, (number | undefined)[] | undefined> = {
+  MSGID: [1, undefined, undefined, 2, 3, undefined, 5, 6],
+  REF: [1, 2, undefined, 3, 4, 5, 6, 7],
+  CRYPTDAT: [3, 4, 5],
+  IVCCN: [1, 3, undefined, 2],
+  DALKFREQ: [1, 2, 3, undefined, 4, 5, 6],
+  AUTOCAT: [1, 3, 4, undefined, undefined, 5],
+  COMMS: [1, 2],
 };
-const observed: Record<string, string[] | undefined> = {
-  MSGID: [
-    "Message type",
-    "Standard",
-    "Version",
-    "Originator",
-    "Serial",
-    "Issue time / month",
-    "Qualifier",
-    "Qualifier serial",
-    "Security policy",
-    "Classification",
-    "Release to",
-  ],
-  REF: [
-    "Reference",
-    "Message / communication type",
-    "Type qualifier",
-    "Originator",
-    "Date / time",
-    "Serial",
-    "Notation",
-    "Filing number",
-  ],
-  COMPLAN: ["Plan", "Variant", "Start", "End"],
-  FREQPLAN: ["Plan", "Designator"],
-  COMCHECK: ["Check time", "Unit", "Coordination"],
-  COMGUARD: ["Line", "Mode", "Keying material", "Start", "End"],
-  ESMTASK: ["Unit", "Equipment", "Task"],
-  TASMISSN: ["Mission", "Unit"],
-  SUBMISSN: ["Submarine", "Support", "Mission", "Assignment"],
-  IDP: ["Report", "Responsible party", "As of", "Deadline"],
-  CRYPTDAT: ["Equipment", "Keying material", "Daily changeover"],
-  VOICRYPT: ["Keying material", "Daily changeover"],
-  IVCCN: [
-    "Net function",
-    "Priority",
-    "Bearer / frequency",
-    "Frequency designator",
-    "Keying material",
-    "Callsign",
-  ],
-  DALKFREQ: [
-    "Circuit",
-    "Frequency designator / control unit",
-    "Frequency",
-    "Callsign",
-    "Priority",
-    "Emission",
-    "Usage",
-  ],
-  AUTOCAT: ["Station", "Transmit", "Receive", "Field 4", "Altitude", "Location"],
-  POCLINK: ["Duty", "Unit", "Name", "Rank / position"],
-  AKNLDG: ["Acknowledgement required"],
-  AEWEMPL: ["Field 1", "Field 2", "Field 3", "Frequency", "Channel", "Frequency", "Channel"],
-  FORCEMAR: ["Unit", "Field 2", "Frequency", "Field 4", "Frequency", "Field 6", "TACAN"],
-};
-export function setFieldLabel(set: string, position: number, examples: boolean | undefined) {
+export function setFullName(set: string) {
+  return setCatalog[set]?.name;
+}
+export function setFieldLabel(
+  set: string,
+  position: number,
+  examples: boolean | undefined,
+  value = ""
+): string | undefined {
   if (examples === undefined) {
-    return `Field ${position}`;
+    return;
   }
-  const fields = (examples ? observed[set] : undefined) ?? baseline[set];
-  const label = fields?.[position - 1];
-  if (label !== undefined) {
-    return label;
+  const definition = setCatalog[set];
+  if (definition === undefined) {
+    return;
   }
-  if (
-    (set === "POC" && position > 4) ||
-    ((set === "POCLINK" || set === "MULCDUTY") && position > 4)
-  ) {
-    return "Contact";
+  const remap = examples ? observedPositions[set] : undefined;
+  let selected = remap ? remap[position - 1] : position;
+  if (selected === undefined) {
+    return;
   }
-  if (set === "COMPLAN" && position > 4) {
-    return "Circuit";
+  const last = Math.max(...Object.keys(definition.fields).map(Number));
+  if (selected > last && definition.repeatFrom !== undefined) {
+    selected =
+      definition.repeatFrom +
+      ((selected - definition.repeatFrom) % (last - definition.repeatFrom + 1));
   }
-  if (set === "COMCHECK" && position > 3) {
-    return "Circuit";
+  const alternatives = definition.fields[selected];
+  if (alternatives === undefined || alternatives.length === 0) {
+    return;
   }
-  if (set === "COMGUARD" && position > 5) {
-    return "Unit";
+  const prefix = /^([A-Z][A-Z0-9]*):/.exec(value)?.[1];
+  const matched =
+    prefix !== undefined ? alternatives.filter((field) => field.prefix === prefix) : [];
+  if (matched.length === 1) {
+    return matched[0].name;
   }
-  if (set === "IDP" && position > 4) {
-    return "Delivery";
+  const plain = alternatives.filter((field) => field.prefix === undefined);
+  if (matched.length === 0 && plain.length === 1 && prefix === undefined) {
+    return plain[0].name;
   }
-  if (set === "AREA") {
-    return "Point / location";
+  if (alternatives.length === 1) {
+    return alternatives[0].name;
   }
-  if (set === "CIRC" && position > 1) {
-    return "Radius";
-  }
-  if (set === "CVYORG" && position > 4) {
-    return "Frequency";
-  }
-  if (set === "COMMS" && examples && position > 2) {
-    return ["Frequency / channel", "Priority", "Mode"][(position - 3) % 3];
-  }
-  return `Field ${position}`;
+  // A field can have several format alternatives. Do not claim an unverified
+  // alternative merely because it appears first in the handbook.
+  return;
 }

@@ -1,3 +1,5 @@
+import moment from "moment-timezone";
+import { useDisplayTime } from "./display-time";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { MessageRecord, MessageLifecycleEntry } from "../gen/app/v1/models_pb";
 import { structuredPayload } from "./structured-message-format";
@@ -11,18 +13,21 @@ const labels: Record<string, string | undefined> = {
   ingest_failed: "Ingestion failed",
   acknowledgement_sent: "Acknowledgement sent",
 };
-function time(entry: MessageLifecycleEntry) {
+function time(entry: MessageLifecycleEntry, zone: string) {
   if (!entry.recordedAt) {
     return <span className="lifecycle-time">Time unavailable</span>;
   }
   const at = timestampDate(entry.recordedAt).toISOString();
   return (
     <time className="lifecycle-time" dateTime={at}>
-      {at.slice(0, 10)} {at.slice(11, 19)}Z
+      {moment
+        .tz(at, zone)
+        .format(zone === "UTC" ? "YYYY-MM-DD HH:mm:ss[Z]" : "YYYY-MM-DD HH:mm:ss z")}
     </time>
   );
 }
 export function MessageLifecycle({ message }: { message: MessageRecord }) {
+  const { zone } = useDisplayTime();
   const payload = structuredPayload(message);
   const issued = message.lifecycleEntries.filter((entry) => entry.milestone === "issued");
   const rest = message.lifecycleEntries
@@ -53,7 +58,7 @@ export function MessageLifecycle({ message }: { message: MessageRecord }) {
         {entries.map((entry) => (
           <li key={entry.id} data-failed={entry.milestone === "ingest_failed"}>
             <strong>{labels[entry.milestone] ?? entry.milestone}</strong>
-            {time(entry)}
+            {time(entry, zone)}
             {entry.detail !== "" && (
               <span className="lifecycle-detail">{entry.detail.replace(/_/g, " ")}</span>
             )}

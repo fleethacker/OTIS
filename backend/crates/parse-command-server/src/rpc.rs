@@ -16,17 +16,19 @@ fn encoded<T: DeserializeOwned>(value: Value) -> ServiceResult<T> {
     )
 }
 impl Rpc {
-    fn identity(&self, ctx: &RequestContext) -> crate::Result<crate::api::Identity> {
-        self.0.identity(
-            ctx.header("cookie").and_then(|v| v.to_str().ok()),
-            ctx.header("origin").and_then(|v| v.to_str().ok()),
-            ctx.header("host").and_then(|v| v.to_str().ok()),
-        )
+    async fn identity(&self, ctx: &RequestContext) -> crate::Result<crate::api::Identity> {
+        self.0
+            .identity(
+                ctx.header("cookie").and_then(|v| v.to_str().ok()),
+                ctx.header("origin").and_then(|v| v.to_str().ok()),
+                ctx.header("host").and_then(|v| v.to_str().ok()),
+            )
+            .await
     }
     async fn scope(&self, ctx: &RequestContext, key: &str) -> crate::Result<String> {
-        let id = self.identity(ctx)?;
+        let id = self.identity(ctx).await?;
         self.0.scope(key).await?;
-        Ok(id.username)
+        Ok(id.owner)
     }
 }
 #[allow(refining_impl_trait)]
@@ -54,7 +56,7 @@ impl AppService for Rpc {
         ctx: RequestContext,
         _request: ServiceRequest<'_, GetIdentityRequest>,
     ) -> ServiceResult<GetIdentityResponse> {
-        let identity = self.identity(&ctx).map_err(Error::rpc)?;
+        let identity = self.identity(&ctx).await.map_err(Error::rpc)?;
         encoded(
             serde_json::to_value(identity)
                 .map_err(|_| connectrpc::ConnectError::internal("Identity response"))?,
@@ -65,9 +67,9 @@ impl AppService for Rpc {
         ctx: RequestContext,
         _request: ServiceRequest<'_, ListRolesRequest>,
     ) -> ServiceResult<ListRolesResponse> {
-        self.identity(&ctx).map_err(Error::rpc)?;
+        self.identity(&ctx).await.map_err(Error::rpc)?;
         encoded(
-            json!({"roles":[{"name":"platform_admin","description":"Platform administrator — sees admin-only UI"},{"name":"user","description":"Default user"}]}),
+            json!({"roles":[{"name":"admin","description":"Administrator"},{"name":"viewer","description":"Viewer"}]}),
         )
     }
 }
@@ -78,10 +80,10 @@ impl SourceDataService for Rpc {
         ctx: RequestContext,
         _request: ServiceRequest<'_, ReadSchedulesRequest>,
     ) -> ServiceResult<ReadSchedulesResponse> {
-        let identity = self.identity(&ctx).map_err(Error::rpc)?;
+        let identity = self.identity(&ctx).await.map_err(Error::rpc)?;
         let mut data = self
             .0
-            .execute("list", ReadRequest::default(), &identity.username)
+            .execute("list", ReadRequest::default(), &identity.owner)
             .await
             .map_err(Error::rpc)?;
         data["notice"] = json!(
@@ -109,6 +111,7 @@ impl DraftService for Rpc {
                 .store()
                 .map_err(Error::rpc)?
                 .draft(&owner, request.source_message_id)
+                .await
                 .map_err(Error::rpc)?,
         )
     }
@@ -126,6 +129,7 @@ impl DraftService for Rpc {
                 .store()
                 .map_err(Error::rpc)?
                 .save_draft(&owner, request.source_message_id, request.text)
+                .await
                 .map_err(Error::rpc)?,
         )
     }
@@ -143,6 +147,7 @@ impl DraftService for Rpc {
                 .store()
                 .map_err(Error::rpc)?
                 .preparation(&owner, request.source_message_id)
+                .await
                 .map_err(Error::rpc)?,
         )
     }
@@ -155,6 +160,17 @@ impl DraftService for Rpc {
             .scope(&ctx, request.source_message_id)
             .await
             .map_err(Error::rpc)?;
+        let (settings, _) = crate::settings::shared(&self.0.private.state)
+            .await
+            .map_err(Error::rpc)?;
+        let mut fields: serde_json::Value = serde_json::from_str(request.fields_json)
+            .map_err(|_| Error::invalid("Invalid acknowledgement fields").rpc())?;
+        if !fields.is_object() {
+            return Err(Error::invalid("Invalid acknowledgement fields").rpc());
+        }
+        fields["outgoing"] = serde_json::json!(settings.outgoing_command);
+        fields["authority"] = serde_json::json!(settings.action_authority);
+        let fields_json = fields.to_string();
         encoded(
             self.0
                 .store()
@@ -162,9 +178,10 @@ impl DraftService for Rpc {
                 .save_preparation(
                     &owner,
                     request.source_message_id,
-                    request.fields_json,
+                    &fields_json,
                     request.generate,
                 )
+                .await
                 .map_err(Error::rpc)?,
         )
     }
@@ -189,6 +206,7 @@ impl DraftService for Rpc {
                     request.note,
                     request.occurred_at,
                 )
+                .await
                 .map_err(Error::rpc)?,
         )
     }

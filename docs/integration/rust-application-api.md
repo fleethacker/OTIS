@@ -1,5 +1,7 @@
 # Rust application API
 
+Current authentication, roles and persistence are defined in [Settings, OIDC and hidden state](settings-oidc.md). The parsed-message presentation contract below remains separate from application state.
+
 The React app calls the same-origin Rust server through `web`. OpenSearch DSL,
 index names, model IDs, passage grouping and search templates stay in Rust.
 The browser does not receive vectors, credentials or arbitrary query access.
@@ -79,8 +81,8 @@ window**, never the entire semantic match population. Continuation pages reuse
 the ranked snapshot without model inference; `snapshotAt` identifies its time.
 No continuation page enlarges the candidate depth or silently reranks messages.
 
-Read-window state lives in separate ephemeral `read_windows` rows in the private
-SQLite database. It is limited to 64 windows, 512 KiB each, with 110-second idle
+Read-window state lives in ephemeral `read_window` records in the hidden
+OpenSearch application-state index. It is limited to 64 windows, 512 KiB each, with 110-second idle
 expiry renewed by active paging. It contains bounded metadata/excerpts or PIT
 anchors, never vectors, raw email or audit payloads. Expired/mismatched windows
 fail explicitly; retry starts a fresh search. They do not alter drafts or custody.
@@ -91,9 +93,7 @@ Selected command IDs plus unassigned selection form a union. Unknown or empty
 explicit command selections must not broaden to all commands. Participants and
 originators are not assumed to be locally assigned command IDs.
 
-Browsing uses a 60-second OpenSearch PIT and a server-held opaque cursor expiring
-after 55 seconds. Cursors bind owner and filters; there are at most 64 active
-cursors. Expiry requires restarting browsing. Search preserves passage rank when
+Browsing cursors bind stable owner identity and filters. Expiry requires restarting browsing. Search preserves passage rank when
 hydrating parents, validates IDs/revisions and filters again, and drops stale
 parents. It claims no complete result count or global message-ranking metric.
 `windowLimited` identifies a full candidate window. Empty queries use browsing,
@@ -141,17 +141,17 @@ files; no generated TypeScript or Ark framework code is patched. The legacy
 `SourceDataService/ReadSchedules` RPC returns the first browsing page for the
 existing reminders component; it is not a complete snapshot.
 
-Private SQLite data binds `dev-user` / `dev-admin` to the full revision key.
-Drafts remain unsent. Preparation validation, authority confirmation, response
-families and append-only user-reported acknowledgement history match the old Go
-behavior. Responses include the latest 100 history entries; all history remains
-stored. Canonical existence is checked before private reads/writes. There is no
-message-send operation.
+Private state in the hidden OpenSearch index binds the stable issuer/subject owner
+to the full message revision key. Demo owners remain separate. Drafts and
+preparations remain unsent; the API rejects attempts to record a sent
+acknowledgement before SMTP sending exists. Canonical existence is checked before
+private reads/writes. History is retained with the private aggregate.
 
-This deployment uses an explicit **local_demo** authentication profile. Random,
-HttpOnly, SameSite=Strict session cookies identify demo accounts; only hashes are
-stored. Browser-supplied identity headers are ignored. Production Exchange PKI,
-TLS and operational user authentication remain separate deployment work.
+Authentication has explicit `local_demo` and `oidc` modes; OIDC never falls back to
+demo accounts. Browser-supplied identity headers are ignored. See the
+[authentication contract](settings-oidc.md#keycloak--uds-client-contract) for cookie,
+origin, revocation, expiry and role behavior. Production Exchange PKI remains a
+separate intake transport requirement.
 
 Confirmed UI behavior: one search input invokes BM25 plus local MiniLM semantic
 search in a single hybrid query, fused by OpenSearch RRF. No search-mode or
@@ -200,7 +200,7 @@ identity/session cache boundary.
 ### Lifecycle and parse completion
 
 Canonical detail reads populate the existing `lifecycleEntries` presentation
-contract from the matching body/revision's local custody journal: source issue
+contract from the matching body/revision's hidden OpenSearch custody records: source issue
 instant, ingestion, processing/retry failures, parsing and indexed time.
 Issue time is anchored first; subsequent recorded events are chronological.
 Ingestion time is the durable local receipt time, distinct from mailbox receipt
@@ -211,8 +211,8 @@ successful receipt of the same body. Unattributable pre-receipt/mailbox failures
 are not assigned to an arbitrary message. Historical timestamps that were never
 recorded cannot be reconstructed.
 
-Reads are scoped by body/revision, use indexed queries on a read-only SQLite
-connection, and bound custody/publication selections at 500 entries each.
+Reads are scoped by body/revision, use indexed hidden-state envelope fields,
+and bound custody/publication selections at 500 entries each.
 `lifecycle_state` and `lifecycle_limited` identify unavailable/truncated history.
 Actual acknowledgement-send events use `acknowledgement_sent` with the real
 send timestamp; until SMTP sending is implemented, the viewer shows Pending.
@@ -236,8 +236,8 @@ reprocessing changed interpretation rules requires a new revision per the ICD.
 
 `POST /api/v1/notifications/{operation}` uses the same session identity and
 same-origin checks as message reads. The request never accepts an owner/user ID;
-read state is private to the authenticated username and persists in the existing
-private SQLite volume. It is available across browsers using that identity.
+read state is private to the stable authenticated owner and persists in the hidden
+application-state index. It is available across browsers using that identity.
 
 | Operation | Request | Response |
 | --- | --- | --- |

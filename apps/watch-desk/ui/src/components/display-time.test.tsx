@@ -57,3 +57,20 @@ test("civil days and slots preserve spring and repeated autumn instants", () => 
   );
   expect(first.toISOString()).toBe("2026-11-01T05:30:00.000Z");
 });
+
+test("issue-date filters use the preferred timezone's civil day across DST", async () => {
+  const { messageSearchState } = await import("./message-search-state");
+  for (const [date, hours] of [
+    ["2026-03-08", 23],
+    ["2026-11-01", 25],
+  ] as const) {
+    const state = messageSearchState(
+      new URLSearchParams({ fromDate: date, throughDate: date }),
+      "",
+      undefined,
+      "America/New_York"
+    );
+    const filters = state.request.filters!;
+    expect((Date.parse(filters.issuedTo!) - Date.parse(filters.issuedFrom!)) / 3600000).toBe(hours);
+  }
+});

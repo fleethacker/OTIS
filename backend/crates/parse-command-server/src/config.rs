@@ -4,8 +4,8 @@ use std::path::PathBuf;
 pub struct Config {
     pub intake: parse_command_intake::config::Config,
     pub search: String,
-    pub private: PathBuf,
-    pub legacy: Option<PathBuf>,
+    pub state_index: String,
+    pub auth: crate::auth::Config,
     pub tokenizer: PathBuf,
     pub tokenizer_hash: String,
     pub listen: String,
@@ -15,11 +15,7 @@ pub struct Config {
 impl Config {
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let get = |key: &str, default: &str| std::env::var(key).unwrap_or_else(|_| default.into());
-        if get("PARSE_COMMAND_AUTH_MODE", "disabled") != "local_demo" {
-            return Err(Error::config(
-                "An explicitly configured local_demo identity profile is required; operational authentication is not configured",
-            ));
-        }
+        let auth = crate::auth::Config::load()?;
         let search = get("PARSE_COMMAND_OPENSEARCH_URL", "http://opensearch:9200");
         let url =
             reqwest::Url::parse(&search).map_err(|_| Error::config("invalid search endpoint"))?;
@@ -38,21 +34,20 @@ impl Config {
             ));
         }
         let auto = get("PARSE_COMMAND_DEMO_AUTO_ROLE", "user");
-        if !matches!(auto.as_str(), "" | "user" | "platform_admin") {
+        if !matches!(
+            auto.as_str(),
+            "" | "user" | "platform_admin" | "admin" | "viewer"
+        ) {
             return Err(Error::config("invalid demo role"));
         }
         Ok(Self {
             intake: parse_command_intake::config::Config::load(path)
                 .map_err(|_| Error::config("invalid intake configuration"))?,
             search: search.trim_end_matches('/').into(),
-            private: get(
-                "PARSE_COMMAND_PRIVATE_DB",
-                "/var/lib/parse-command-private/ui.sqlite",
-            )
-            .into(),
-            legacy: std::env::var_os("PARSE_COMMAND_LEGACY_DB")
-                .filter(|v| !v.is_empty())
-                .map(PathBuf::from),
+            state_index: get(
+                "PARSE_COMMAND_STATE_INDEX",
+                parse_command_state::DEFAULT_INDEX,
+            ),
             tokenizer: get(
                 "PARSE_COMMAND_TOKENIZER",
                 "/opt/parse-command/tokenizer.json",
@@ -63,7 +58,8 @@ impl Config {
                 include_str!("../../../config/tokenizer.sha256").trim(),
             ),
             listen: get("PARSE_COMMAND_LISTEN", "0.0.0.0:8081"),
-            auto_role: (!auto.is_empty()).then_some(auto),
+            auto_role: (auth.mode == "local_demo" && !auto.is_empty()).then_some(auto),
+            auth,
             allow_fixtures: get("PARSE_COMMAND_ALLOW_FIXTURES", "false") == "true",
         })
     }

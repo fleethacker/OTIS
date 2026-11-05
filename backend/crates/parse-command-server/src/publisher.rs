@@ -1,10 +1,9 @@
 use crate::{Error, Result, config::Config, private::now, search::*};
-use rusqlite::{Connection, OptionalExtension, params};
+use parse_command_state::{BlockingStore, Document, Record, epoch};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     io::Read,
-    path::Path,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -18,7 +17,7 @@ pub struct Status {
     pub model: Arc<AtomicBool>,
 }
 pub struct Publisher {
-    db: Connection,
+    store: BlockingStore,
     client: reqwest::blocking::Client,
     config: Config,
     tokenizer: tokenizers::Tokenizer,
@@ -41,12 +40,8 @@ impl Publisher {
             .with_truncation(None)
             .map_err(|_| Error::config("Tokenizer limits"))?;
         tokenizer.with_padding(None);
-        let db = Connection::open(&config.intake.journal)?;
-        db.busy_timeout(Duration::from_secs(2))?;
-        db.execute_batch("PRAGMA foreign_keys=ON;PRAGMA synchronous=FULL;PRAGMA cache_size=-512;
-            CREATE TABLE IF NOT EXISTS publication_jobs(kind TEXT NOT NULL,id TEXT NOT NULL,target TEXT NOT NULL,source TEXT NOT NULL,checksum TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_attempt INTEGER NOT NULL DEFAULT 0,last_error TEXT,published_at TEXT,PRIMARY KEY(kind,id));
-            CREATE INDEX IF NOT EXISTS publication_due ON publication_jobs(state,next_attempt);
-            CREATE TABLE IF NOT EXISTS publication_indices(name TEXT PRIMARY KEY,uuid TEXT NOT NULL);")?;
+        let store = BlockingStore::new(&config.search, &config.intake.custody_index)?;
+        store.provision()?;
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(15))
@@ -55,15 +50,8 @@ impl Publisher {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| Error::unavailable())?;
-        crate::lifecycle::initialize(&db)?;
-        // Backfill only actual, still-active published records, using their recorded time.
-        db.execute_batch("INSERT INTO publication_events(message_id,revision,stage,at,code,job_id)
-            SELECT p.message_id,p.revision,'message',j.published_at,'publication_succeeded',p.message_id
-            FROM projections p JOIN publication_jobs j ON j.kind='message' AND j.id=p.message_id||':'||p.revision
-            WHERE j.state='published' AND j.published_at IS NOT NULL
-            AND NOT EXISTS(SELECT 1 FROM publication_events e WHERE e.message_id=p.message_id AND e.revision=p.revision AND e.stage='message' AND e.code='publication_succeeded') ORDER BY j.published_at;")?;
         Ok(Self {
-            db,
+            store,
             client,
             config,
             tokenizer,
@@ -135,26 +123,7 @@ impl Publisher {
             let uuid = document[name]["settings"]["index"]["uuid"]
                 .as_str()
                 .ok_or_else(Error::unavailable)?;
-            let old: Option<String> = self
-                .db
-                .query_row(
-                    "SELECT uuid FROM publication_indices WHERE name=?",
-                    [name],
-                    |r| r.get(0),
-                )
-                .optional()?;
-            if old.as_deref() != Some(uuid) {
-                let tx = self.db.transaction()?;
-                tx.execute("UPDATE publication_jobs SET state='pending',next_attempt=0,published_at=NULL WHERE target=?",[name])?;
-                if name == MESSAGES {
-                    tx.execute("UPDATE projections SET delivery_state='pending'", [])?;
-                }
-                if name == AUDIT {
-                    tx.execute("UPDATE audit_outbox SET delivery_state='pending'", [])?;
-                }
-                tx.execute("INSERT INTO publication_indices VALUES(?,?) ON CONFLICT(name) DO UPDATE SET uuid=excluded.uuid",params![name,uuid])?;
-                tx.commit()?;
-            }
+            self.reset_index(name, uuid)?;
         }
         self.request(reqwest::Method::POST,"/_aliases",json!({"actions":[{"add":{"index":MESSAGES,"alias":MESSAGE_ALIAS}},{"add":{"index":PASSAGES,"alias":"parse-command-search-passages"}}]}))?;
         let model=self.request(reqwest::Method::POST,"/_plugins/_ml/models/_search",json!({"size":10,"query":{"bool":{"filter":[{"term":{"model_content_hash_value":MODEL_HASH}},{"exists":{"field":"model_config"}}]}}})).unwrap_or_else(|_|json!({"hits":{"hits":[]}}));
@@ -195,44 +164,217 @@ impl Publisher {
         );
         Ok(())
     }
-    fn expand(&mut self) -> Result<()> {
-        let projection:Option<(String,String,String)>=self.db.query_row("SELECT message_id,revision,core FROM projections WHERE delivery_state='pending' ORDER BY message_id,revision LIMIT 1",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
-        if let Some((id, revision, source)) = projection {
-            let core: Value = serde_json::from_str(&source)
-                .map_err(|_| Error::config("Corrupt canonical projection"))?;
-            let mut query=self.db.prepare("SELECT document FROM audit_outbox WHERE message_id=? AND revision=? ORDER BY id LIMIT 8193")?;
-            let rows = query.query_map(params![id, revision], |r| r.get::<_, String>(0))?;
+    fn reset_index(&self, target: &str, uuid: &str) -> Result<()> {
+        let previous = self.store.get("publication_index", target)?;
+        if previous
+            .as_ref()
+            .is_some_and(|d| d.record.payload["uuid"] == uuid)
+        {
+            return Ok(());
+        }
+        let mut after = None;
+        loop {
+            let mut q = json!({"size":32,"query":{"bool":{"filter":[{"term":{"kind":"publication"}},{"term":{"owner":target}}]}},"sort":["key"]});
+            if let Some(value) = after {
+                q["search_after"] = value;
+            }
+            let result = self.store.search(q)?;
+            let docs = parse_command_state::hits(&result)?;
+            for doc in &docs {
+                let mut row = doc.record.clone();
+                row.state = "pending".into();
+                row.available = 0;
+                row.payload["published_at"] = Value::Null;
+                self.store.put(&row, Some(doc))?;
+            }
+            if docs.len() < 32 {
+                break;
+            }
+            after = result["hits"]["hits"]
+                .as_array()
+                .and_then(|h| h.last())
+                .map(|h| h["sort"].clone());
+        }
+        self.store.put(
+            &Record::new("publication_index", target, json!({"uuid":uuid})),
+            previous.as_ref(),
+        )?;
+        Ok(())
+    }
+    fn enqueue(&self, kind: &str, id: &str, target: &str, value: &Value) -> Result<()> {
+        let key = format!("{kind}:{id}");
+        let digest = hash(value.to_string().as_bytes());
+        self.store.update("publication", &key, |old| {
+            if let Some(old) = old {
+                if kind == "audit" {
+                    let mut previous = old.payload["document"].clone();
+                    let mut candidate = value.clone();
+                    if candidate["kind"] == "passage_prepared" {
+                        previous
+                            .as_object_mut()
+                            .ok_or(parse_command_state::Error("state_record"))?
+                            .remove("recorded_at");
+                        candidate
+                            .as_object_mut()
+                            .ok_or(parse_command_state::Error("state_record"))?
+                            .remove("recorded_at");
+                    }
+                    if previous != candidate {
+                        return Err(parse_command_state::Error("immutable_audit_conflict"));
+                    }
+                    return Ok(old.clone());
+                }
+                if old.payload["checksum"] == digest {
+                    return Ok(old.clone());
+                }
+            }
+            let message = if kind == "message" {
+                &value["id"]
+            } else {
+                &value["message_id"]
+            };
+            let mut row = old
+                .cloned()
+                .unwrap_or_else(|| Record::new("publication", &key, json!({"events":[]})));
+            row.owner = target.into();
+            row.category = kind.into();
+            row.state = "pending".into();
+            row.available = 0;
+            row.source = format!(
+                "{}@{}",
+                message.as_str().unwrap_or(""),
+                value["revision"].as_str().unwrap_or("")
+            );
+            row.order = match kind {
+                "message" => 0,
+                "passage" => 1,
+                "audit" => 2,
+                _ => 3,
+            };
+            for (key, value) in [
+                ("id", json!(id)),
+                ("document", value.clone()),
+                ("checksum", json!(digest)),
+                ("attempts", json!(0)),
+                ("published_at", Value::Null),
+                ("in_flight", json!(false)),
+            ] {
+                row.payload[key] = value;
+            }
+            row.bytes = row.payload.to_string().len() as u64;
+            Ok(row)
+        })?;
+        Ok(())
+    }
+    fn flush_events(&self, kind: &str, row: &Record) -> Result<()> {
+        let event_kind = if kind == "receipt" {
+            "custody_event"
+        } else {
+            "publication_event"
+        };
+        let events = row.payload["events"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        for (i, event) in events.iter().enumerate() {
+            let key = format!("{}:{i}", row.key);
+            let old = self.store.get(event_kind, &key)?;
+            let mut value = old
+                .as_ref()
+                .map(|d| d.record.clone())
+                .unwrap_or_else(|| Record::new(event_kind, &key, event.clone()));
+            if old.is_none() {
+                value.order = self.store.next(event_kind)?;
+            }
+            value.source = row.source.clone();
+            value.owner = row.key.clone();
+            value.category = row.category.clone();
+            value.state = event["state"].as_str().unwrap_or("").into();
+            if old.as_ref().is_none_or(|d| d.record.source != value.source) {
+                self.store.put(&value, old.as_ref())?;
+            }
+        }
+        Ok(())
+    }
+    fn flush_receipts(&self) -> Result<()> {
+        let rows = self.store.list(
+            "receipt",
+            vec![json!({"terms":{"flags":["events_pending","audit_pending"]}})],
+            4,
+        )?;
+        for doc in rows {
+            self.flush_events("receipt", &doc.record)?;
+            for audit in doc.record.payload["audit"]
+                .as_array()
+                .ok_or_else(Error::unavailable)?
+            {
+                self.enqueue(
+                    "audit",
+                    audit["id"].as_str().ok_or_else(Error::unavailable)?,
+                    AUDIT,
+                    audit,
+                )?;
+            }
+            let mut row = doc.record.clone();
+            row.flags
+                .retain(|f| !matches!(f.as_str(), "audit_pending" | "events_pending"));
+            row.payload["audit_state"] = json!("queued");
+            // A concurrent intake append keeps its flags and will be replayed.
+            match self.store.put(&row, Some(&doc)) {
+                Ok(_) | Err(parse_command_state::Error("state_conflict")) => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        for doc in self.store.list(
+            "publication",
+            vec![json!({"term":{"flags":"events_pending"}})],
+            16,
+        )? {
+            self.flush_events("publication", &doc.record)?;
+            let mut row = doc.record.clone();
+            row.flags.retain(|f| f != "events_pending");
+            self.store.put(&row, Some(&doc))?;
+        }
+        Ok(())
+    }
+    fn expand(&self) -> Result<()> {
+        self.store.refresh()?;
+        self.flush_receipts()?;
+        for doc in self
+            .store
+            .list("projection", vec![json!({"term":{"state":"pending"}})], 1)?
+        {
+            let core = &doc.record.payload["core"];
+            let id = core["id"].as_str().ok_or_else(Error::unavailable)?;
+            let revision = core["revision"].as_str().ok_or_else(Error::unavailable)?;
             let mut raw = None;
             let mut records = std::collections::BTreeMap::new();
-            let mut count = 0;
-            for row in rows {
-                count += 1;
-                if count > 8192 {
-                    return Err(Error::config("Audit selection bound"));
-                }
-                let doc: Value =
-                    serde_json::from_str(&row?).map_err(|_| Error::config("Audit JSON"))?;
-                if doc["kind"] == "source_preserved" {
-                    raw = doc["payload"]["source"]["raw_text"]
+            let audits = doc.record.payload["audits"]
+                .as_array()
+                .ok_or_else(Error::unavailable)?;
+            if audits.len() > 8192 {
+                return Err(Error::config("Audit selection bound"));
+            }
+            for audit in audits {
+                if audit["kind"] == "source_preserved" {
+                    raw = audit["payload"]["source"]["raw_text"]
                         .as_str()
                         .map(str::to_owned);
                 }
                 if matches!(
-                    doc["kind"].as_str(),
+                    audit["kind"].as_str(),
                     Some("record_interpreted" | "fact_interpreted")
                 ) && matches!(
-                    doc["payload"]["set_id"].as_str(),
+                    audit["payload"]["set_id"].as_str(),
                     Some("GENTEXT" | "NARR" | "AMPN")
                 ) {
                     records.insert(
-                        doc["payload"]["record_sequence"]
+                        audit["payload"]["record_sequence"]
                             .as_u64()
                             .ok_or_else(Error::unavailable)?,
-                        doc["payload"].clone(),
+                        audit["payload"].clone(),
                     );
                 }
             }
-            drop(query);
             let raw = raw.ok_or_else(|| Error::config("Preserved source is missing"))?;
             if raw.len() > 524288 || format!("sha256:{}", hash(raw.as_bytes())) != id {
                 return Err(Error::config("Preserved source identity mismatch"));
@@ -285,70 +427,119 @@ impl Publisher {
                     derived.push((passage, audit));
                 }
             }
-            let tx = self.db.transaction()?;
-            let same:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM projections WHERE message_id=? AND revision=? AND core=? AND delivery_state='pending')",params![id,revision,source],|r|r.get(0))?;
-            if same {
-                enqueue(&tx, "message", &format!("{id}:{revision}"), MESSAGES, &core)?;
-                for (passage, audit) in derived {
-                    let pid = passage["id"].as_str().ok_or_else(Error::unavailable)?;
-                    enqueue(&tx, "passage", pid, PASSAGES, &passage)?;
-                    enqueue(&tx, "enrich", pid, PASSAGES, &passage)?;
-                    enqueue(
-                        &tx,
-                        "audit",
-                        audit["id"].as_str().ok_or_else(Error::unavailable)?,
-                        AUDIT,
-                        &audit,
-                    )?;
-                }
-                tx.execute("UPDATE projections SET delivery_state='queued' WHERE message_id=? AND revision=?",params![id,revision])?;
+
+            self.enqueue("message", &format!("{id}:{revision}"), MESSAGES, core)?;
+            for (passage, audit) in derived {
+                let pid = passage["id"].as_str().ok_or_else(Error::unavailable)?;
+                self.enqueue("passage", pid, PASSAGES, &passage)?;
+                self.enqueue("enrich", pid, PASSAGES, &passage)?;
+                self.enqueue(
+                    "audit",
+                    audit["id"].as_str().ok_or_else(Error::unavailable)?,
+                    AUDIT,
+                    &audit,
+                )?;
             }
-            tx.commit()?;
+            for audit in audits {
+                self.enqueue(
+                    "audit",
+                    audit["id"].as_str().ok_or_else(Error::unavailable)?,
+                    AUDIT,
+                    audit,
+                )?;
+            }
+            let mut row = doc.record.clone();
+            row.state = "queued".into();
+            // If intake selected a newer subject while expanding, the newer
+            // projection remains pending and replaces these jobs on the next cycle.
+            match self.store.put(&row, Some(&doc)) {
+                Ok(_) | Err(parse_command_state::Error("state_conflict")) => {}
+                Err(e) => return Err(e.into()),
+            }
         }
-        let pending = {
-            let mut q=self.db.prepare("SELECT id,document FROM audit_outbox WHERE delivery_state='pending' ORDER BY id LIMIT 64")?;
-            q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
-                .collect::<std::result::Result<Vec<_>, _>>()?
-        };
-        let tx = self.db.transaction()?;
-        for (id, document) in pending {
-            let doc = serde_json::from_str(&document).map_err(|_| Error::config("Audit JSON"))?;
-            enqueue(&tx, "audit", &id, AUDIT, &doc)?;
-            tx.execute(
-                "UPDATE audit_outbox SET delivery_state='queued' WHERE id=? AND document=?",
-                params![id, document],
-            )?;
-        }
-        tx.commit()?;
         Ok(())
     }
-    fn deliver(&mut self) -> Result<usize> {
-        let rows = {
-            let mut q=self.db.prepare("SELECT kind,id,target,source,checksum,attempts FROM publication_jobs WHERE state='pending' AND next_attempt<=unixepoch() AND (kind!='enrich' OR EXISTS(SELECT 1 FROM publication_jobs p WHERE p.kind='passage' AND p.id=publication_jobs.id AND p.state='published')) ORDER BY CASE kind WHEN 'message' THEN 0 WHEN 'passage' THEN 1 WHEN 'audit' THEN 2 ELSE 3 END,id LIMIT 16")?;
-            q.query_map([], |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, String>(3)?,
-                    r.get::<_, String>(4)?,
-                    r.get::<_, i64>(5)?,
-                ))
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?
-        };
-        if rows.is_empty() {
-            return Ok(0);
+    fn record_delivery(&self, doc: &Document, success: bool, code: &str) -> Result<()> {
+        let mut row = doc.record.clone();
+        row.payload["in_flight"] = json!(false);
+        let attempt = row.payload["attempts"].clone();
+        let events = row.payload["events"]
+            .as_array_mut()
+            .ok_or_else(Error::unavailable)?;
+        let last_failed = events
+            .last()
+            .is_some_and(|e| e["state"] != "publication_succeeded");
+        let at = now();
+        if !success || row.category == "message" || last_failed {
+            if events.len() >= 10000 {
+                return Err(Error::config("Publication history bound"));
+            }
+            events.push(json!({"state":if success {"publication_succeeded"} else {code},"code":code,"at":at,"attempt":attempt}));
+            if !row.flags.iter().any(|f| f == "events_pending") {
+                row.flags.push("events_pending".into());
+            }
         }
+        if success {
+            row.state = "published".into();
+            row.payload["published_at"] = json!(at);
+            row.payload["last_error"] = Value::Null;
+        } else {
+            row.payload["last_error"] = json!(code);
+        }
+        self.store.put(&row, Some(doc))?;
+        if success && row.category == "message" {
+            self.store.update("projection", &row.source, |old| {
+                let mut record = old
+                    .cloned()
+                    .ok_or(parse_command_state::Error("state_record"))?;
+                if record.payload["core"] == row.payload["document"] {
+                    record.state = "published".into();
+                }
+                Ok(record)
+            })?;
+        }
+        Ok(())
+    }
+    fn deliver(&self) -> Result<usize> {
+        let rows = self.store.list(
+            "publication",
+            vec![
+                json!({"term":{"state":"pending"}}),
+                json!({"range":{"available":{"lte":epoch()}}}),
+            ],
+            16,
+        )?;
         let mut payload = String::new();
         let mut selected = Vec::new();
-        for row in rows {
-            let (kind, id, target, source, _, _) = &row;
+        for candidate in rows {
+            // Search is near-real-time. Never deliver a stale source or an already
+            // published job from an earlier refresh.
+            let Some(mut doc) = self.store.get("publication", &candidate.record.key)? else {
+                continue;
+            };
+            if doc.record.state != "pending" || doc.record.available > epoch() {
+                continue;
+            }
+            let kind = doc.record.category.clone();
+            let target = doc.record.owner.clone();
+            let id = doc.record.payload["id"]
+                .as_str()
+                .ok_or_else(Error::unavailable)?
+                .to_owned();
+            if kind == "enrich"
+                && !self
+                    .store
+                    .get("publication", &format!("passage:{id}"))?
+                    .is_some_and(|d| d.record.state == "published")
+            {
+                continue;
+            }
             let action = if kind == "audit" { "create" } else { "index" };
             let pipeline = if kind == "enrich" { INGEST } else { "_none" };
             let line = format!(
-                "{}\n{source}\n",
-                json!({action:{"_index":target,"_id":id,"pipeline":pipeline}})
+                "{}\n{}\n",
+                json!({action:{"_index":target,"_id":id,"pipeline":pipeline}}),
+                doc.record.payload["document"]
             );
             if payload.len() + line.len() > 2_097_152 {
                 if selected.is_empty() {
@@ -356,8 +547,27 @@ impl Publisher {
                 }
                 break;
             }
+            if doc.record.payload["in_flight"] == true {
+                self.record_delivery(&doc, false, "publication_confirmation_missing")?;
+                doc = self
+                    .store
+                    .get("publication", &doc.record.key)?
+                    .ok_or_else(Error::unavailable)?;
+            }
+            let mut row = doc.record.clone();
+            let attempt = row.payload["attempts"]
+                .as_u64()
+                .unwrap_or(0)
+                .saturating_add(1);
+            row.payload["attempts"] = json!(attempt);
+            row.payload["in_flight"] = json!(true);
+            row.available = epoch() + (1i64 << (attempt - 1).min(6)).min(60);
+            let claimed = self.store.put(&row, Some(&doc))?;
+            selected.push(claimed);
             payload.push_str(&line);
-            selected.push(row);
+        }
+        if selected.is_empty() {
+            return Ok(0);
         }
         let bulk = (|| -> Result<Value> {
             let response = self
@@ -377,25 +587,13 @@ impl Publisher {
             if bytes.len() > MAX_RESPONSE {
                 return Err(Error::unavailable());
             }
-            let result: Value = serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())?;
-            if !result["items"]
-                .as_array()
-                .is_some_and(|v| v.len() == selected.len())
-            {
-                return Err(Error::unavailable());
-            }
-            Ok(result)
+            serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())
         })();
         let result = match bulk {
             Ok(value) => value,
             Err(error) => {
-                for (kind, _, _, source, _, _) in &selected {
-                    crate::lifecycle::publication_failure(
-                        &self.db,
-                        kind,
-                        source,
-                        "publication_unavailable",
-                    )?;
+                for doc in &selected {
+                    let _ = self.record_delivery(doc, false, "publication_unavailable");
                 }
                 return Err(error);
             }
@@ -404,7 +602,11 @@ impl Publisher {
             .as_array()
             .filter(|v| v.len() == selected.len())
             .ok_or_else(Error::unavailable)?;
-        for ((kind, id, target, source, checksum, attempts), item) in selected.iter().zip(items) {
+        for (doc, item) in selected.iter().zip(items) {
+            let row = &doc.record;
+            let kind = row.category.as_str();
+            let target = &row.owner;
+            let id = row.payload["id"].as_str().ok_or_else(Error::unavailable)?;
             let action = if kind == "audit" { "create" } else { "index" };
             let status = item[action]["status"].as_u64().unwrap_or(0);
             let mut success = matches!(status, 200 | 201);
@@ -415,8 +617,7 @@ impl Publisher {
                     json!({}),
                 )?;
                 let mut previous = old["_source"].clone();
-                let mut incoming: Value =
-                    serde_json::from_str(source).map_err(|_| Error::unavailable())?;
+                let mut incoming = row.payload["document"].clone();
                 if incoming["kind"] == "passage_prepared" {
                     previous
                         .as_object_mut()
@@ -430,68 +631,27 @@ impl Publisher {
                 success = previous == incoming;
             }
             if success && kind == "enrich" {
-                let record = self.request(
+                let value = self.request(
                     reqwest::Method::GET,
                     &format!("/{target}/_doc/{id}?_source_includes=embedding_status"),
                     json!({}),
                 )?;
-                success = record["_source"]["embedding_status"] == "ready";
+                success = value["_source"]["embedding_status"] == "ready";
                 self.status.model.store(success, Ordering::Relaxed);
             }
-            if success {
-                let tx = self.db.transaction()?;
-                let published_at = now();
-                let updated=tx.execute("UPDATE publication_jobs SET state='published',published_at=?,last_error=NULL WHERE kind=? AND id=? AND checksum=?",params![published_at,kind,id,checksum])?;
-                if updated > 0 {
-                    let doc: Value =
-                        serde_json::from_str(source).map_err(|_| Error::unavailable())?;
-                    let message_id = if kind == "message" {
-                        doc["id"].as_str()
-                    } else {
-                        doc["message_id"].as_str()
-                    };
-                    // A message publication or recovery is a recorded event; routine passage/audit successes need no notification.
-                    tx.execute("INSERT INTO publication_events(message_id,revision,stage,at,code,job_id) SELECT ?,?,?,?,'publication_succeeded',? WHERE ?='message' OR (SELECT code FROM publication_events WHERE message_id=? AND revision=? AND stage=? AND job_id=? ORDER BY sequence DESC LIMIT 1)!='publication_succeeded'",params![message_id,doc["revision"].as_str(),kind,published_at,doc["id"].as_str(),kind,message_id,doc["revision"].as_str(),kind,doc["id"].as_str()])?;
-                }
-                if updated > 0 && kind == "message" {
-                    let doc: Value =
-                        serde_json::from_str(source).map_err(|_| Error::unavailable())?;
-                    let current: Option<String> = tx
-                        .query_row(
-                            "SELECT core FROM projections WHERE message_id=? AND revision=?",
-                            params![doc["id"].as_str(), doc["revision"].as_str()],
-                            |r| r.get(0),
-                        )
-                        .optional()?;
-                    if current
-                        .as_deref()
-                        .and_then(|s| serde_json::from_str::<Value>(s).ok())
-                        .as_ref()
-                        == Some(&doc)
-                    {
-                        tx.execute("UPDATE projections SET delivery_state='published' WHERE message_id=? AND revision=?",params![doc["id"].as_str(),doc["revision"].as_str()])?;
-                    }
-                }
-                if updated > 0 && kind == "audit" {
-                    tx.execute(
-                        "UPDATE audit_outbox SET delivery_state='published' WHERE id=?",
-                        [id],
-                    )?;
-                }
-                tx.commit()?;
-            } else {
-                crate::lifecycle::publication_failure(
-                    &self.db,
-                    kind,
-                    source,
-                    "publication_item_failed",
-                )?;
-                let delay = (1i64 << (*attempts).min(6)).min(60);
-                self.db.execute("UPDATE publication_jobs SET attempts=attempts+1,next_attempt=unixepoch()+?,last_error='publication_item_failed' WHERE kind=? AND id=? AND checksum=?",params![delay,kind,id,checksum])?;
-            }
+            self.record_delivery(
+                doc,
+                success,
+                if success {
+                    "publication_succeeded"
+                } else {
+                    "publication_item_failed"
+                },
+            )?;
         }
         Ok(selected.len())
     }
+
     pub fn run(mut self, cancelled: Arc<AtomicBool>) {
         let mut cycles = 0u64;
         while !cancelled.load(Ordering::Relaxed) {
@@ -519,46 +679,6 @@ impl Publisher {
             }
         }
     }
-}
-fn enqueue(
-    tx: &rusqlite::Transaction<'_>,
-    kind: &str,
-    id: &str,
-    target: &str,
-    doc: &Value,
-) -> Result<()> {
-    let source = doc.to_string();
-    let digest = hash(source.as_bytes());
-    if kind == "audit" {
-        let old: Option<String> = tx
-            .query_row(
-                "SELECT source FROM publication_jobs WHERE kind=? AND id=?",
-                params![kind, id],
-                |r| r.get(0),
-            )
-            .optional()?;
-        if let Some(old) = old {
-            let mut existing: Value =
-                serde_json::from_str(&old).map_err(|_| Error::unavailable())?;
-            let mut candidate = doc.clone();
-            if candidate["kind"] == "passage_prepared" {
-                existing
-                    .as_object_mut()
-                    .ok_or_else(Error::unavailable)?
-                    .remove("recorded_at");
-                candidate
-                    .as_object_mut()
-                    .ok_or_else(Error::unavailable)?
-                    .remove("recorded_at");
-            }
-            if existing != candidate {
-                return Err(Error::config("Immutable audit conflict"));
-            }
-            return Ok(());
-        }
-    }
-    tx.execute("INSERT INTO publication_jobs(kind,id,target,source,checksum) VALUES(?,?,?,?,?) ON CONFLICT(kind,id) DO UPDATE SET source=excluded.source,checksum=excluded.checksum,state='pending',attempts=0,next_attempt=0,published_at=NULL WHERE publication_jobs.checksum!=excluded.checksum",params![kind,id,target,source,digest])?;
-    Ok(())
 }
 pub fn chunks(
     text: &str,
@@ -680,11 +800,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
         })
         .collect()
 }
-pub fn journal_counts(path: &Path) -> Result<Value> {
-    let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let mut q =
-        db.prepare("SELECT kind,state,count(*) FROM publication_jobs GROUP BY kind,state")?;
-    let mut counts = Vec::new();
-    for row in q.query_map([],|r|Ok(json!({"kind":r.get::<_,String>(0)?,"state":r.get::<_,String>(1)?,"count":r.get::<_,i64>(2)?})))?{counts.push(row?);}
-    Ok(json!(counts))
+pub async fn journal_counts(store: &parse_command_state::Store) -> Result<Value> {
+    let response=store.search(json!({"size":0,"query":{"term":{"kind":"publication"}},"aggs":{"states":{"multi_terms":{"terms":[{"field":"category"},{"field":"state"}],"size":32}}}})).await?;
+    Ok(json!(response["aggregations"]["states"]["buckets"]))
 }

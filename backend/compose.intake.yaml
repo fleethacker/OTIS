@@ -21,8 +21,6 @@ services:
       PARSE_COMMAND_IMAP_PASSWORD: ${PARSE_COMMAND_IMAP_PASSWORD:-ParseCommandDemoOnly123!}
     volumes:
       - ./config/demo-compose-intake.json:/etc/parse-command/config.json:ro
-      - custody:/var/lib/parse-command
-      - private-state:/var/lib/parse-command-private
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
     networks:

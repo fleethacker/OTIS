@@ -1,3 +1,4 @@
+import { useDisplayTime } from "./display-time";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -31,6 +32,7 @@ export function Notifications() {
   return <NotificationPanel key={key} identity={key} />;
 }
 export function NotificationPanel({ identity }: { identity: string }) {
+  const { zone } = useDisplayTime();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<DeskNotification | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -221,7 +223,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
                   {notificationTitle(detail)}
                 </h3>
                 {detail.context && <p>{detail.context}</p>}
-                <time dateTime={detail.at}>{notificationTime(detail.at)}</time>
+                <time dateTime={detail.at}>{notificationTime(detail.at, zone)}</time>
                 {detail.kind === "traffic" ? (
                   members.isError ? (
                     <div role="alert">
@@ -272,7 +274,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
                     {detail.kind === "failed" && (
                       <p>
                         {detail.resolvedAt !== null
-                          ? `Recovered ${notificationTime(detail.resolvedAt)}`
+                          ? `Recovered ${notificationTime(detail.resolvedAt, zone)}`
                           : "Recovery pending"}
                       </p>
                     )}
@@ -326,7 +328,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
                                   ? "Message traffic"
                                   : item.detail || "Message intake")}
                             </span>
-                            <time dateTime={item.at}>{notificationTime(item.at)}</time>
+                            <time dateTime={item.at}>{notificationTime(item.at, zone)}</time>
                           </span>
                         </button>
                         {item.unread && (

@@ -15,9 +15,9 @@ impl std::fmt::Display for IntakeError {
 }
 impl std::error::Error for IntakeError {}
 pub type Result<T> = std::result::Result<T, IntakeError>;
-impl From<rusqlite::Error> for IntakeError {
-    fn from(_: rusqlite::Error) -> Self {
-        Self("journal_io")
+impl From<parse_command_state::Error> for IntakeError {
+    fn from(error: parse_command_state::Error) -> Self {
+        Self(error.0)
     }
 }
 impl From<std::io::Error> for IntakeError {

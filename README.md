@@ -25,6 +25,10 @@ IMAP-to-OpenSearch publication. A lightweight static/proxy web container serves
 React. The Go implementation remains as reference source. See the
 [combined-stack runbook](docs/integration/combined-stack.md) and
 [frontend API and search templates](docs/integration/rust-application-api.md).
+Admins open settings from the header gear. Native Keycloak OIDC, per-user
+preferences and hidden OpenSearch state are described in the
+[settings and SSO guide](docs/integration/settings-oidc.md). Existing SQLite
+deployments require the documented snapshot migration before replacement.
 
 Prepare the local model/native assets first using the
 [search preparation runbook](backend/search/README.md#connected-preparation).
@@ -58,7 +62,8 @@ least `262144` on the Docker host, as described in the
 [OpenSearch Docker setup guide](https://docs.opensearch.org/latest/install-and-configure/install-opensearch/docker/).
 
 Stop with `docker compose down`; indexed data, custody and private app state remain
-in separate volumes. Run only the search service with
+in the OpenSearch data volume. Retain old SQLite volumes for migration/rollback.
+Run only the search service with
 `docker compose up -d --wait opensearch`.
 
 ### Demo email inbox
@@ -76,10 +81,10 @@ python3 demo/mail.py send ../OPTASK_Messages/*.txt
 
 The server connects to `mailserver:143` on the demo environment's external
 `parse-command-demo_mail` network. SMTP/IMAP bind to loopback ports 1025 and 1143.
-Its custody volume and resource limits belong to the application stack. The
+Its hidden custody index and resource limits belong to the application stack. The
 executable/crate remains `parse-command-intake`; its deployed image is
 `parse-command-server:local`. Stop the standalone worker before adopting its
-custody volume through the override in [`.env.example`](.env.example).
+custody state through the [migration procedure](docs/integration/settings-oidc.md#storage-and-migration).
 See the [stack guide](docs/integration/combined-stack.md).
 `compose.intake.yml` is an empty compatibility file; no overlay is needed.
 

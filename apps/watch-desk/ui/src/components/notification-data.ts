@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { readJson } from "./source-data";
+import { sessionFetch } from "./session-access";
 
 export interface DeskNotification {
   id: number;
@@ -36,7 +37,7 @@ export async function notificationRequest<T>(
   body: object,
   signal?: AbortSignal
 ) {
-  const response = await fetch(`/api/v1/notifications/${operation}`, {
+  const response = await sessionFetch(`/api/v1/notifications/${operation}`, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
@@ -89,13 +90,13 @@ export function notificationTitle(item: DeskNotification): string {
   }
   return item.count === 1 ? "New message received" : `${item.count} new messages received`;
 }
-export function notificationTime(value: string): string {
+export function notificationTime(value: string, zone = "UTC"): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) {
     return "Time unavailable";
   }
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "UTC",
+    timeZone: zone,
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -104,7 +105,7 @@ export function notificationTime(value: string): string {
     hourCycle: "h23",
   }).formatToParts(date);
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("day")} ${get("month").toUpperCase()} ${get("year")} ${get("hour")}${get("minute")}Z`;
+  return `${get("day")} ${get("month").toUpperCase()} ${get("year")} ${get("hour")}${get("minute")}${zone === "UTC" ? "Z" : ` ${zone}`}`;
 }
 
 export function notificationItems(pages: NotificationPage[] = []): DeskNotification[] {

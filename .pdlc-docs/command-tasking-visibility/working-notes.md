@@ -107,3 +107,68 @@ Ask for the single end-to-end scenario the proof of concept must handle, startin
 - User moved docs/knowledge to FleetHacker/OPTASK_Messages/knowledge and requested keeping USMTF knowledge out of Git. Removed repository knowledge links and relocated detailed ICD format rules to that external knowledge directory; kept the Git ICD focused on the data/interface contract.
 - Revalidated all external fixtures against four schemas and the original source files. Repository JSON now consists only of schemas and mappings; no fixture JSON/NDJSON remains under docs/review.
 - Concurrent Git activity committed the documentation and earlier sample payloads while this work was underway. Found sample files in commit 1f3048d, included in the locally recorded origin/main history. Current-tree sample deletions are pending. Asked whether to prepare a history-cleanup plan; no history rewrite or push was performed.
+
+## Session — 2026-11-04 — Settings and OIDC planning
+
+- User requested pushing the completed workflow first, then reviewing GitHub settings backlog and planning a user store with OIDC, with questions before implementation.
+- Published workflow commits through PR #14, head `3656195`; observed it merged into main at `60ac735`. Created `codex/settings-oidc-plan` from that main revision for planning only.
+- Read GitHub issues #6 and #11 for settings, plus related summary and UDS packaging dependencies #7, #9, and #13. The current implementation target is Rust/React, superseding the older Go context in #6.
+- User confirmed UDS/Keycloak, approved IdP users with an IdP group granting administration, per-user display timezone with shared UTC default, and exactly two user types: Admin and Viewer.
+- Created `docs/planning/settings-and-oidc.md` with proposed OpenSearch shared settings, SQLite users/sessions/preferences, stable issuer/subject identity, migration safeguards, role permissions, compact UI, and test gates. These engineering choices remain proposals pending plan approval.
+- Asked whether Viewers may prepare acknowledgement drafts, which local GenAI interface to support, and whether dedicated Admin/Viewer test groups are acceptable. Production issuer/hostnames and resource allocation remain deployment inputs.
+- User confirmed Viewers may create their own drafts, the first GenAI connection will use an enclave-local OpenAI-compatible API, and the local SSO groups are `/Parse Command/Admin` and `/Parse Command/Viewer`.
+- User directed following IdP session limits. Removed the proposed fifteen-minute inactivity, eight-hour maximum, and five-minute revalidation timers from the plan. Local disable/revoke remains effective on the next request; actual Keycloak expiry, renewal, and group-change behavior will be verified during integration. This answer resolves the session-policy question without approving implementation of the overall plan.
+- Applied dougbot PDLC documentation and UDS context guidance. Consulted official OpenID, OAuth, OpenSearch, and UDS sources. No credentials, sample traffic, or manual contents were uploaded.
+- Local read-only inventory found no Kubernetes context or UDS/k3d CLI. Docker exposes 11.73 GiB RAM, while the documented full UDS demo calls for 10 GiB; the plan accounts for existing application memory and a smaller identity-layer test option.
+- No settings/authentication code, database migration, or UDS deployment was performed in this planning step.
+
+### Approved implementation and subsequent steering
+
+- User approved the settings/OIDC plan and replaced the proposed SQLite persistence with hidden OpenSearch indices for all state, explicitly including IMAP custody, retries and publication outboxes. The migration and authentication implementation are in progress; they have not been deployed or accepted as complete.
+- User requested auditing every parsed-message card that used numbered field labels and displaying the full handbook set name beside its identifier. The shared viewer now uses the supplied handbook's definitions across all available sets. Where newer example definitions are unavailable, the user directed showing the original values without invented labels.
+- The UI catalog contains 105 set names and 444 field positions, including repeated fields and descriptor alternatives. Seven names missing from the initial field-index extraction were recovered from the set tables. The existing edition-specific layout differences remain explicit.
+- Manual files, raw samples and extraction notes remain outside Git. The repository contains only runtime display metadata and synthetic regression cases for this change.
+
+## Session — 2026-11-05 — Settings, hidden state and OIDC implementation
+
+- Implemented shared settings, per-user timezone, Admin/Viewer management and native Rust OIDC; private state, custody, retries and publication now use two hidden OpenSearch indices. SQLite remains only a read-only migration input. See `docs/integration/settings-oidc.md` for the current contract.
+- Added strict state envelopes, real-time conditional writes, bounded queues/search windows/cleanup, encrypted provider tokens, hashed cookies, same-origin mutations, local disable/revoke and a single-writer lease. Application idle/absolute session limits are not imposed over the IdP policy.
+- Migrated consistent snapshot copies into isolated hidden indices and verified every record, content hashes and an idempotent repeated import. Preserved 57 receipts, 27 projections, 1,530 publication jobs, 1,032 audit records, private preparations/history and notification ownership. Live source volumes remain untouched.
+- The preview on port 8082 uses copied hidden state and no mailbox password; the user-facing application on port 8080 remains the previous deployment. Browser checks verified Viewer/Admin settings, saved timezone, acknowledgement defaults, message cards and lifecycle history.
+- User approved local `sso.uds.dev` and `parse-command.uds.dev`. UDS layer registry access and the full demo memory budget prevent the proposed minimal UDS install. Asked whether standalone Keycloak is acceptable or layer access can be supplied; no substitution or full-stack cutover has occurred pending that answer.
+- Verification and outstanding actual-IdP/cutover gates are recorded in `docs/integration/settings-oidc-verification.md`. A signed-token test is not an end-to-end Keycloak or UDS acceptance result.
+
+### Full local UDS deployment decision
+
+- Timeout update, 2026-11-05: user explicitly selected 15 minutes of inactivity.
+  Local Keycloak realm/client idle limits are 900 seconds; the existing maximum
+  session and access-token limits remain. The UI must distinguish token expiry
+  from the provider's session deadline and renew only on user activity.
+
+- Local sign-in update, 2026-11-05: the user fixed the host file and explicitly
+  declined an authenticator. The local Parse Command client now uses a copied
+  UDS browser flow with second-factor subflows disabled. Fresh Admin/Viewer
+  password-only logins pass; unapproved groups and Viewer user-management access
+  remain denied. Realm defaults, PKCE and IdP session limits are preserved.
+  Reapplication and rollback metadata live outside Git under `../uds-local`.
+
+- User explicitly requested full UDS Core including UDS Registry, superseding the smaller-layer and standalone Keycloak alternatives above.
+- Existing authenticated access can read the official Registry project and pull its packaged release. Downloaded Core 1.14.3 and Registry 0.52.1 ARM64 artifacts; verified UDS CLI 0.41.0 and k3d 5.9.0 release checksums.
+- Deployment assets and private configuration remain in the external `FleetHacker/uds-local` directory. The custom full Core bundle preserves upstream packages/components and disables external Google federation. Its Kubernetes configuration is isolated and its host ports bind to loopback.
+- Registry's packaged vulnerability database will be used with external updates disabled. Actual cluster readiness, runtime isolation and OIDC acceptance remain to be verified before application cutover.
+
+### Compact settings modal and loopback UI test
+
+- Added the requested admin-only Tabler settings gear at the right of the header.
+  It opens the existing settings controls in the reusable native modal with compact
+  tabs/forms. Closing preserves edits; Escape returns focus. Viewers keep personal
+  Preferences in their account menu.
+- User requested testing on 127.0.0.1. The compatible local test runs on port 8083
+  with separate copied hidden indices and local demo accounts; 8080 and the HTTPS
+  SSO preview retain their deployments. Local config remains outside Git.
+- Protected type/lint/format checks, 86 UI tests, release build and browser checks
+  pass. Browser verified Admin/Viewer visibility, saved defaults, and close/reopen.
+- Pre-PR review found that portalled dialogs could remain visible during session
+  revalidation. The shared modal now follows the authentication visibility boundary;
+  a regression verifies hiding, same-account draft retention, and account-change
+  clearing. Protected checks and all 87 UI tests pass.

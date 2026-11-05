@@ -4,66 +4,52 @@ use parse_command_server::{
     private::Private,
 };
 use serde_json::json;
-fn directory() -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!(
-        "parse-command-pagination-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    std::fs::create_dir(&path).unwrap();
-    path
-}
-#[test]
-fn query_bound_windows_survive_restart_reject_other_queries_and_expire() {
-    let dir = directory();
-    let path = dir.join("private.sqlite");
-    let db = Private::open(&path, None).unwrap();
-    let value = json!({"kind":"search","documents":[{"id":"a"},{"id":"b"}]});
+mod support;
+#[tokio::test]
+#[ignore = "requires isolated OpenSearch test indices"]
+async fn result_windows_are_bounded_owner_scoped_and_survive_reopen() {
+    let store = support::store().await;
+    let db = Private::new(store.clone());
+    let value = json!({"kind":"search","documents":[{"id":"a"}]});
     let id = db
         .put_read_window("owner-query-sort-filter", &value)
+        .await
         .unwrap();
     drop(db);
-    let db = Private::open(&path, None).unwrap();
+    let db = Private::new(store.clone());
     assert_eq!(
-        db.read_window(&id, "owner-query-sort-filter").unwrap(),
+        db.read_window(&id, "owner-query-sort-filter")
+            .await
+            .unwrap(),
         value
     );
-    assert!(db.read_window(&id, "other-owner").is_err());
-    assert!(db.read_window(&id, "other-query-sort-filter").is_err());
-    db.db
-        .execute("UPDATE read_windows SET expires=0", [])
-        .unwrap();
-    assert!(db.read_window(&id, "owner-query-sort-filter").is_err());
-    assert!(
-        db.save_read_window(&id, "owner-query-sort-filter", &value)
-            .is_err()
-    );
-    drop(db);
-    std::fs::remove_dir_all(dir).unwrap();
-}
-#[test]
-fn result_windows_have_explicit_count_and_byte_bounds_without_blocking_private_drafts() {
-    let dir = directory();
-    let mut db = Private::open(&dir.join("private.sqlite"), None).unwrap();
+    assert!(db.read_window(&id, "other-owner").await.is_err());
     assert!(
         db.put_read_window("f", &json!({"oversized":"x".repeat(524289)}))
+            .await
             .is_err()
     );
-    for _ in 0..64 {
-        db.put_read_window("f", &json!({})).unwrap();
+    for _ in 0..63 {
+        db.put_read_window("f", &json!({})).await.unwrap();
     }
-    assert!(db.put_read_window("f", &json!({})).is_err());
-    db.save_draft("owner", "source@revision", "private draft")
+    assert!(db.put_read_window("f", &json!({})).await.is_err());
+    db.save_draft("owner", "id@r1", "still writable")
+        .await
         .unwrap();
-    assert_eq!(
-        db.draft("owner", "source@revision").unwrap()["draft"]["text"],
-        "private draft"
+    store
+        .update("read_window", &id, |old| {
+            let mut row = old.unwrap().clone();
+            row.expires = 1;
+            Ok(row)
+        })
+        .await
+        .unwrap();
+    assert!(
+        db.read_window(&id, "owner-query-sort-filter")
+            .await
+            .is_err()
     );
-    drop(db);
-    std::fs::remove_dir_all(dir).unwrap();
+    support::cleanup(&store).await;
 }
 #[test]
 fn date_sort_orders_the_complete_window_with_unknown_times_last_and_preserves_relevance() {

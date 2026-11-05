@@ -3,6 +3,7 @@ import { ConnectQueryProvider } from "@defense-unicorns/ark-ui";
 import { useIdentity } from "./hooks/useIdentity";
 import { routes } from "./route-registry";
 import { AppLayout } from "./components/app-layout";
+import { sessionInterceptor } from "./components/session-access";
 
 /**
  * App is the single mount point — it wires:
@@ -51,7 +52,7 @@ function AppContent() {
 
 export function App() {
   return (
-    <ConnectQueryProvider baseUrl="/">
+    <ConnectQueryProvider baseUrl="/" interceptors={[sessionInterceptor]}>
       <AppContent />
     </ConnectQueryProvider>
   );

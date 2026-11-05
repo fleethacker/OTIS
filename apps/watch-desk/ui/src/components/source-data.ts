@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fromJson, type JsonValue } from "@bufbuild/protobuf";
 import { ReadSchedulesResponseSchema } from "../gen/app/v1/source_data_pb";
+import { sessionFetch } from "./session-access";
 
 export type Dataset = "canonical" | "legacy";
 export type MessageSort = "relevance" | "issued_desc" | "issued_asc";
@@ -64,7 +65,7 @@ export interface SourceMeta {
   matchedExcerpts?: Record<string, { passageId: string; text: string }[]>;
 }
 export async function readSource(operation: string, request: SourceRequest, signal?: AbortSignal) {
-  const response = await fetch(`/api/v1/messages/${operation}`, {
+  const response = await sessionFetch(`/api/v1/messages/${operation}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",

@@ -64,7 +64,7 @@ pub fn message_header(core: &Value) -> Value {
     }
     Value::Object(header)
 }
-pub fn message(
+pub async fn message(
     core: &Value,
     private: &Private,
     detail: bool,
@@ -72,7 +72,7 @@ pub fn message(
     received: Option<&str>,
 ) -> Result<Value> {
     let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
-    let id = private.id(&key)?;
+    let id = private.id(&key).await?;
     let mut result = json!({"id":id.to_string(),"sourceMessageId":key,"rawText":raw.unwrap_or(""),"processingStatus":"needs_review","provenance":"upstream","events":[],"lifecycleEntries":[]});
     // Canonical publication follows successful scanning and schema validation.
     // Semantic uncertainty (partial dates, named areas, inferred profiles) is not
@@ -101,7 +101,7 @@ pub fn message(
     if let Some(activities) = core["activities"].as_array() {
         for fact in activities {
             let event_key = format!("{key}#{}", text(fact, "id"));
-            let mut e = json!({"id":private.id(&event_key)?.to_string(),"messageId":id.to_string(),"sourceEventId":text(fact,"id"),"title":text(fact,"type").replace('_'," "),"scheduleStatus":"needs_review","reviewReason":"Extracted source fact; operational confirmation and command assignment remain unvalidated","isRevised":false,"revisions":[]});
+            let mut e = json!({"id":private.id(&event_key).await?.to_string(),"messageId":id.to_string(),"sourceEventId":text(fact,"id"),"title":text(fact,"type").replace('_'," "),"scheduleStatus":"needs_review","reviewReason":"Extracted source fact; operational confirmation and command assignment remain unvalidated","isRevised":false,"revisions":[]});
             for (from, to) in [("start_at", "startAt"), ("end_at", "endAt")] {
                 if let Some(t) = fact[from].as_str() {
                     e[to] = json!(timestamp(t)?);
@@ -154,9 +154,9 @@ pub fn timeline(core: &Value, from: &str, to: &str) -> Result<(Vec<Value>, Vec<V
     }
     Ok((items, review))
 }
-pub fn legacy(row: &Value, private: &Private, detail: bool) -> Result<Value> {
+pub async fn legacy(row: &Value, private: &Private, detail: bool) -> Result<Value> {
     let key = text(row, "source_key");
-    let id = private.id(key)?;
+    let id = private.id(key).await?;
     let mut result = json!({"id":id.to_string(),"sourceMessageId":key,"rawText":if detail{text(row,"raw_text")}else{""},"processingStatus":text(row,"processing_status"),"provenance":text(row,"provenance"),"events":[],"lifecycleEntries":[]});
     for (from, to) in [
         ("subject", "subject"),
@@ -185,7 +185,7 @@ pub fn legacy(row: &Value, private: &Private, detail: bool) -> Result<Value> {
     }
     let mut events = Vec::new();
     for event in row["events"].as_array().into_iter().flatten() {
-        let mut e = json!({"id":private.id(&format!("{key}#legacy-{}",event["id"]))?.to_string(),"messageId":id.to_string(),"title":event["title"],"scheduleStatus":event["schedule_status"],"isRevised":event["is_revised"].as_i64().unwrap_or(0)!=0,"revisions":[]});
+        let mut e = json!({"id":private.id(&format!("{key}#legacy-{}",event["id"])).await?.to_string(),"messageId":id.to_string(),"title":event["title"],"scheduleStatus":event["schedule_status"],"isRevised":event["is_revised"].as_i64().unwrap_or(0)!=0,"revisions":[]});
         for (a, b) in [
             ("source_event_id", "sourceEventId"),
             ("unit", "unit"),

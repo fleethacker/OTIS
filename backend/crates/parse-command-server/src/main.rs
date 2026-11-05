@@ -182,6 +182,9 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     {
                         eprintln!("notification_error: retry_pending");
                     }
+                    if parse_command_server::xnet::sync(&background.private.state, &background.custody).await.is_err() {
+                        eprintln!("xnet_error: retry_pending");
+                    }
                 }
                 if background.private.state.cleanup().await.is_err() {
                     eprintln!("state_cleanup_error: retry_pending");

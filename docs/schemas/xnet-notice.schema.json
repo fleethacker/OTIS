@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:parse-command:xnet-notice:1",
+  "title": "Content-free fictional cross-network notice payload (not a parser ICD document)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["shipId", "count", "highestPrecedence", "firstWaitingAt", "latestWaitingAt"],
+  "properties": {
+    "shipId": {"type": "string", "minLength": 1, "maxLength": 120},
+    "count": {"type": "integer", "minimum": 1, "maximum": 2000},
+    "highestPrecedence": {"enum": ["FLASH", "IMMEDIATE", "PRIORITY", "ROUTINE", "not stated"]},
+    "firstWaitingAt": {"type": "string", "format": "date-time"},
+    "latestWaitingAt": {"type": "string", "format": "date-time"}
+  }
+}

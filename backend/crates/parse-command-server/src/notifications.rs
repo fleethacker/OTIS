@@ -20,6 +20,7 @@ struct Source {
     key: String,
     subject: String,
     context: String,
+    networks: Vec<String>,
 }
 async fn source(store: &Store, key: &str) -> Result<Source> {
     if key.is_empty() {
@@ -30,6 +31,7 @@ async fn source(store: &Store, key: &str) -> Result<Source> {
     };
     let core = &doc.record.payload["core"];
     Ok(Source {
+        networks: doc.record.flags.iter().filter(|f| f.starts_with("arrival:")).cloned().collect(),
         key: if doc.record.state == "published" {
             key.into()
         } else {
@@ -61,6 +63,7 @@ async fn notice(
         json!({"id":version,"kind":kind,"context":source.context,"messageKey":source.key,"at":at,"detail":detail,"resolvedAt":null,"count":1,"members":{}}),
     );
     row.order = version;
+    row.flags = source.networks.clone();
     let notice = store
         .update("notification", key, |old| {
             Ok(old.cloned().unwrap_or_else(|| row.clone()))
@@ -88,7 +91,8 @@ async fn traffic(store: &Store, event: &Record, source: &Source, at: &str) -> Re
         .key
         .rsplit_once('@')
         .map_or(source.key.as_str(), |(body, _)| body);
-    let old = store.get("notification_seen", body).await?;
+    let seen_key = if source.networks.is_empty() { body.to_owned() } else { format!("{body}:{}", source.networks.join(",")) };
+    let old = store.get("notification_seen", &seen_key).await?;
     let seen = if let Some(old) = old {
         old
     } else {
@@ -96,10 +100,10 @@ async fn traffic(store: &Store, event: &Record, source: &Source, at: &str) -> Re
         let seconds = chrono::DateTime::parse_from_rfc3339(at)
             .map_err(|_| Error::unavailable())?
             .timestamp();
-        let key = format!("traffic:{}", seconds.div_euclid(300));
+        let key = if source.networks.is_empty() { format!("traffic:{}", seconds.div_euclid(300)) } else { format!("traffic:{}:{}", source.networks.join(","), seconds.div_euclid(300)) };
         let mut row = Record::new(
             "notification_seen",
-            body,
+            &seen_key,
             json!({"event":event.key,"group":key,"at":at}),
         );
         row.order = version;
@@ -328,6 +332,8 @@ pub async fn execute(
     operation: &str,
     request: Request,
 ) -> Result<Value> {
+    let desk = crate::xnet::desk(store, owner).await?;
+    let network_filter = crate::xnet::view::notification_filter(desk);
     let watermark = store
         .get("counter", "notifications")
         .await?
@@ -346,7 +352,7 @@ pub async fn execute(
                 .map(|v| positive(Some(v)))
                 .transpose()?
                 .unwrap_or(i64::MAX);
-            let value=store.search(json!({"size":PAGE+1,"_source":{"excludes":["payload.members"]},"query":{"bool":{"filter":[{"term":{"kind":"notification"}},{"range":{"order":{"lt":before}}}]}},"sort":[{"order":"desc"},"key"]})).await?;
+            let value=store.search(json!({"size":PAGE+1,"_source":{"excludes":["payload.members"]},"query":{"bool":{"filter":[{"term":{"kind":"notification"}},{"range":{"order":{"lt":before}}},network_filter]}},"sort":[{"order":"desc"},"key"]})).await?;
             let rows = parse_command_state::hits(&value)?;
             let more = rows.len() > PAGE;
             let mut items = Vec::new();
@@ -366,7 +372,7 @@ pub async fn execute(
             let mut after = None;
             let mut scanned = 0;
             loop {
-                let mut q = json!({"size":500,"_source":["kind","key","order","payload.id"],"query":{"bool":{"filter":[{"term":{"kind":"notification"}},{"range":{"order":{"gt":through}}}]}},"sort":[{"order":"desc"},"key"]});
+                let mut q = json!({"size":500,"_source":["kind","key","order","payload.id"],"query":{"bool":{"filter":[{"term":{"kind":"notification"}},{"range":{"order":{"gt":through}}},network_filter]}},"sort":[{"order":"desc"},"key"]});
                 if let Some(v) = after {
                     q["search_after"] = v;
                 }
@@ -407,6 +413,9 @@ pub async fn execute(
         }
         "members" => {
             let doc = selected(store, positive(request.id)?).await?;
+            if !crate::xnet::view::notification_visible(desk, &doc.record.flags) {
+                return Err(Error::invalid("Notification is outside the selected desk view"));
+            }
             let before = request
                 .before
                 .map(|v| positive(Some(v)))

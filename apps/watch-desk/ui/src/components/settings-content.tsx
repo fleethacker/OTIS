@@ -36,10 +36,23 @@ interface Users {
   users: User[];
   nextAfter: string | null;
 }
-export function SettingsContent({ active = true }: { active?: boolean }) {
+export function SettingsContent({
+  active = true,
+  includePreferences = true,
+  initialTab,
+}: {
+  active?: boolean;
+  includePreferences?: boolean;
+  initialTab?: "command" | "ai" | "users";
+}) {
   const { role } = useIdentity();
   const { shared, timezone } = useSettings();
-  const [tab, setTab] = useState("preferences");
+  const [tab, setTab] = useState(initialTab ?? (includePreferences ? "preferences" : "command"));
+  useEffect(() => {
+    if (initialTab) {
+      setTab(initialTab);
+    }
+  }, [initialTab]);
   const [zone, setZone] = useState(timezone);
   const [form, setForm] = useState<CommandSettings | undefined>(shared?.settings);
   const [revision, setRevision] = useState(shared?.revision);
@@ -104,7 +117,11 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
   return (
     <div className="settings-content">
       <nav aria-label="Settings sections">
-        {["preferences", "command", ...(admin ? ["ai", "users"] : [])].map((value) => (
+        {[
+          ...(includePreferences ? ["preferences"] : []),
+          "command",
+          ...(admin ? ["ai", "users"] : []),
+        ].map((value) => (
           <AppButton
             size="sm"
             type="button"
@@ -131,7 +148,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
           {notice}
         </Notice>
       )}
-      {tab === "preferences" && (
+      {includePreferences && tab === "preferences" && (
         <>
           <AppearancePreferences />
           <form

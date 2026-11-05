@@ -1,5 +1,6 @@
 import { useState } from "react";
 import moment from "moment-timezone";
+import { useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { createConnectQueryKey } from "@connectrpc/connect-query";
 import { readSchedules } from "../gen/app/v1/source_data-SourceDataService_connectquery";
@@ -14,11 +15,14 @@ import {
 } from "../components/session";
 import { MessageScopeEditor } from "../components/message-scope";
 import { StationSummary } from "../components/station-assignment";
+import { AppearancePreferences } from "../components/appearance-preferences";
+import { SettingsContent } from "../components/settings-content";
 
 export const route: RouteMeta = { path: "/account", label: "Account & settings", order: 20 };
 
 export default function Account() {
   const { session, saveSettings } = useSession();
+  const location = useLocation();
   const client = useQueryClient();
   const [edited, setEdited] = useState<AccountSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -28,6 +32,11 @@ export default function Account() {
     return <p role="alert">Sign in to view your account.</p>;
   }
   const user = session.user;
+  const requestedSection = new URLSearchParams(location.search).get("settings");
+  const initialSection =
+    user.role === "admin" && (requestedSection === "users" || requestedSection === "ai")
+      ? requestedSection
+      : "command";
   const settings = edited ?? session.settings;
   const dirty = JSON.stringify(settings) !== JSON.stringify(session.settings);
   function change(update: Partial<AccountSettings>) {
@@ -192,6 +201,25 @@ export default function Account() {
         {message && <p role="status">{message}</p>}
         {error && <p role="alert">{error}</p>}
       </form>
+      <section
+        className="card border border-base-300 bg-base-100 p-6 gap-4"
+        aria-labelledby="appearance-heading"
+      >
+        <h2 id="appearance-heading" className="text-lg font-semibold">Appearance</h2>
+        <AppearancePreferences />
+      </section>
+      <section
+        className="card border border-base-300 bg-base-100 p-6 gap-4"
+        aria-labelledby="workspace-settings-heading"
+      >
+        <h2 id="workspace-settings-heading" className="text-lg font-semibold">Workspace settings</h2>
+        <p className="text-sm text-bc-muted">
+          {user.role === "admin"
+            ? "Manage shared command, AI, and user settings."
+            : "View the shared command settings for your watch."}
+        </p>
+        <SettingsContent includePreferences={false} initialTab={initialSection} />
+      </section>
     </div>
   );
 }

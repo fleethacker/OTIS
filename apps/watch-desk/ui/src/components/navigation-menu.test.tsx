@@ -21,6 +21,7 @@ test("burger follows briefing, workspace and OTIS links and closes after selecti
   fireEvent.click(trigger);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
   expect(view.getByRole("dialog", { name: "Navigation menu" })).toBeTruthy();
+  expect(view.queryByRole("link", { name: "Account & settings" })).toBeNull();
   expect(view.getByRole("link", { name: "Shift briefing" })).toBe(document.activeElement);
   fireEvent.click(view.getByRole("link", { name: "Shift briefing" }));
   expect(view.getByText("Route: /shift")).toBeTruthy();

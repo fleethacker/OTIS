@@ -7,7 +7,74 @@ import { DisplayTimeProvider, useDisplayTime } from "../components/display-time"
 import type { AccountSettings } from "../components/session";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NotificationPanel } from "../components/notifications";
+import { SessionContext } from "../components/session";
+import { SettingsContext, type SettingsReply } from "../components/settings-data";
+import { createRouterTransport } from "@connectrpc/connect";
+import { TransportProvider } from "@connectrpc/connect-query";
+import { AppService } from "../gen/app/v1/app_pb";
 import Account from "./account";
+
+const sharedSettings: SettingsReply = {
+  revision: "1:1",
+  settings: {
+    version: 2,
+    shipName: "EXAMPLE SHIP",
+    unitName: "",
+    commandIds: [],
+    outgoingCommand: "EXAMPLE",
+    actionAuthority: "OPS",
+    defaultTimezone: "UTC",
+    ai: null,
+    turnoverUtc: ["0000Z"],
+    defaultShips: [],
+    operationName: "",
+    groupCommand: "",
+  },
+};
+
+test("admin account page includes shared management controls and honors a Users deep link", async () => {
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (path) => {
+    if (String(path).endsWith("/responsibilities"))
+      return Response.json({ items: [], messageTypes: [] });
+    if (String(path).endsWith("/briefing/commands"))
+      return Response.json({ commandIds: [], limited: false });
+    if (String(path).endsWith("/settings/users"))
+      return Response.json({ users: [], nextAfter: null });
+    return Response.json({});
+  });
+  const transport = createRouterTransport((router) =>
+    router.service(AppService, { getIdentity: () => ({ username: "admin", role: "admin" }) })
+  );
+  const adminSession = {
+    ...testSession,
+    user: { ...testSession.user!, role: "admin" as const },
+  };
+  const view = renderWithProviders(
+    <TransportProvider transport={transport}>
+      <SessionContext.Provider value={{
+        session: adminSession,
+        refresh: async () => {},
+        saveSettings: async () => {},
+        logout: async () => {},
+      }}>
+        <SettingsContext.Provider value={{ shared: sharedSettings, timezone: "UTC" }}>
+          <Account />
+        </SettingsContext.Provider>
+      </SessionContext.Provider>
+    </TransportProvider>,
+    { route: "/account?settings=users" }
+  );
+  try {
+    await waitFor(() => expect(view.getByRole("button", { name: "Users" })).toHaveAttribute("aria-pressed", "true"));
+    expect(view.getByRole("button", { name: "Command" })).toBeTruthy();
+    expect(view.getByRole("button", { name: "AI" })).toBeTruthy();
+    expect(view.getByRole("heading", { name: "Workspace settings" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Preferences" })).toBeNull();
+  } finally {
+    view.unmount();
+    fetch.mockRestore();
+  }
+});
 
 test("saving narrower relevance refreshes notifications and removes previously matching traffic", async () => {
   let settings = testSession.settings;

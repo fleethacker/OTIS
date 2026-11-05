@@ -8,6 +8,11 @@ import { MessageRecordSchema } from "../gen/app/v1/models_pb";
 import { MessageReader } from "../components/message-reader";
 import { messageTitle, structuredIdentifiers } from "../components/structured-message-format";
 import Messages from "./messages";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createRouterTransport } from "@connectrpc/connect";
+import { TransportProvider } from "@connectrpc/connect-query";
+import { AppService } from "../gen/app/v1/app_pb";
+import { DraftService } from "../gen/app/v1/drafts_pb";
 
 // The larger project keeps the reference corpus outside Git and Docker images.
 // Generic reader tests below always run; only corpus-specific cases are optional.
@@ -344,4 +349,86 @@ test("reader keeps uncertain time fragments literal and escapes source HTML", ()
   expect(panel.getAllByText(html)).toHaveLength(2);
   expect(view.getByRole("heading", { level: 2 }).textContent).toBe(html);
   expect(view.container.querySelector("img, script")).toBeNull();
+});
+
+test("message search opens a compact reader on selection and closes back to full-width cards", () => {
+  const key = "source-card@r1";
+  const message = create(MessageRecordSchema, {
+    id: 1n,
+    sourceMessageId: key,
+    subject: "Exercise communications preview",
+    sender: "TRAINING COMMAND",
+    rawText: "MSGID/OPTASK COMMS//",
+  });
+  // Seed fresh source reads so this interaction test stays isolated from network
+  // and unrelated pending requests in the DOM test environment.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(
+    [
+      "parse-command-source",
+      "search",
+      { query: "preview", mode: "hybrid", dataset: "canonical", pageToken: undefined },
+    ],
+    {
+      messages: [message],
+      meta: {
+        messageHeaders: {
+          [key]: {
+            type: "OPTASK COMMS",
+            originator: "TRAINING COMMAND",
+            issuedAt: "2008-03-31T18:00:00Z",
+          },
+        },
+      },
+    }
+  );
+  client.setQueryData(["parse-command-source", "detail", { key, dataset: "canonical" }], {
+    messages: [message],
+    meta: {},
+  });
+  const transport = createRouterTransport((router) => {
+    router.service(AppService, { getIdentity: () => ({ username: "test-user" }) });
+    router.service(DraftService, {
+      readDraft: () => ({}),
+      readPreparation: () => ({ fieldsJson: "{}", historyJson: "[]" }),
+    });
+  });
+  const view = renderWithProviders(
+    <TransportProvider transport={transport}>
+      <QueryClientProvider client={client}>
+        <Messages />
+      </QueryClientProvider>
+    </TransportProvider>,
+    { route: "/messages?q=preview&returnTo=%2Fcalendar%3Fdate%3D2008-04-01" }
+  );
+  try {
+    expect(
+      view.container.querySelector(".messages-workspace")?.getAttribute("data-reader-open")
+    ).toBe("false");
+    expect(view.queryByRole("article", { name: "Selected message" })).toBeNull();
+    expect(view.queryByText("Select a Message record")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: /Exercise communications preview/ }));
+    expect(view.getByRole("article", { name: "Selected message" })).toBeTruthy();
+    expect(
+      view.container.querySelector(".messages-workspace")?.getAttribute("data-reader-open")
+    ).toBe("true");
+    fireEvent.click(view.getByRole("button", { name: "Close message" }));
+    expect(view.queryByRole("article", { name: "Selected message" })).toBeNull();
+    expect(
+      view.container.querySelector(".messages-workspace")?.getAttribute("data-reader-open")
+    ).toBe("false");
+    expect(view.queryByRole("button", { name: "Close message" })).toBeNull();
+    expect(document.activeElement).toBe(
+      view.getByRole("button", { name: /Exercise communications preview/ })
+    );
+    expect(
+      (view.getByRole("searchbox", { name: "Search Message records" }) as HTMLInputElement).value
+    ).toBe("preview");
+    expect(view.getByRole("link", { name: "Return to Calendar" }).getAttribute("href")).toBe(
+      "/calendar?date=2008-04-01"
+    );
+  } finally {
+    view.unmount();
+    client.clear();
+  }
 });

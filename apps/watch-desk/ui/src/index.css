@@ -452,3 +452,13 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .record-card-metadata { justify-content: space-between; color: var(--color-bc-muted); font-size: 11px; }
 .record-card-originator { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-card-metadata time, .record-card-metadata > span:last-child { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Browse fills the workspace until a source record is selected. */
+.messages-workspace[data-reader-open="false"] { grid-template-columns: minmax(0, 1fr); }
+.messages-workspace[data-reader-open="false"] .record-list { border-right: 0; border-bottom: 0; }
+
+.message-viewer { position: relative; min-width: 0; }
+.message-viewer-close { position: absolute; top: 8px; right: 8px; z-index: 1; width: 28px; height: 28px; padding: 5px; }
+.message-viewer-close svg { width: 16px; height: 16px; }
+.message-viewer .message-reader > header { padding-right: 24px; }
+.message-viewer > p[role="status"], .message-viewer > [role="alert"] { padding: 24px; }

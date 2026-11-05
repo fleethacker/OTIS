@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { TbX } from "react-icons/tb";
 import type { RouteMeta } from "../route-registry";
 import { calendarReturn } from "../components/calendar-links";
 import { useSource, useDebounced } from "../components/source-data";
@@ -28,6 +29,14 @@ export default function Messages() {
     !!record
   );
   const selected = detail.data?.messages[0];
+  const cardList = useRef<HTMLElement>(null);
+  function closeMessage() {
+    const card = cardList.current?.querySelector<HTMLButtonElement>(
+      '.record-entry[aria-pressed="true"]'
+    );
+    (card ?? cardList.current)?.focus();
+    update("record", "");
+  }
   function update(key: string, value: string) {
     if (key === "q") {
       setPageToken(undefined);
@@ -86,8 +95,13 @@ export default function Messages() {
               </button>
             </div>
           )}
-          <div className="messages-workspace">
-            <section aria-label="Message record list" className="record-list">
+          <div className="messages-workspace" data-reader-open={record.length > 0}>
+            <section
+              ref={cardList}
+              tabIndex={-1}
+              aria-label="Message record list"
+              className="record-list"
+            >
               <h2>{matches.length} records in this result window</h2>
               {result.data.meta.windowLimited === true && (
                 <p>Search candidate limit reached. Narrow your search.</p>
@@ -118,31 +132,41 @@ export default function Messages() {
                 />
               ))}
             </section>
-            {record && detail.isPending ? (
-              <p role="status">Loading selected message…</p>
-            ) : record && detail.isError ? (
-              <div role="alert">
-                Selected message could not be loaded: {detail.error.message}
-                <button className="btn btn-sm" onClick={() => void detail.refetch()}>
-                  Retry selected message
+            {record.length > 0 && (
+              <div className="message-viewer">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs message-viewer-close"
+                  aria-label="Close message"
+                  title="Close message"
+                  onClick={closeMessage}
+                >
+                  <TbX aria-hidden="true" focusable="false" />
                 </button>
+                {record && detail.isPending ? (
+                  <p role="status">Loading selected message…</p>
+                ) : record && detail.isError ? (
+                  <div role="alert">
+                    Selected message could not be loaded: {detail.error.message}
+                    <button className="btn btn-sm" onClick={() => void detail.refetch()}>
+                      Retry selected message
+                    </button>
+                  </div>
+                ) : selected ? (
+                  <MessageReader key={selected.sourceMessageId} message={selected} />
+                ) : record ? (
+                  <section className="reader-empty">
+                    <h2>Message record not found</h2>
+                    <p>
+                      The requested record {record} is unavailable. No other record has been
+                      substituted.
+                    </p>
+                    <button className="btn btn-sm" onClick={() => void result.refetch()}>
+                      Retry
+                    </button>
+                  </section>
+                ) : null}
               </div>
-            ) : selected ? (
-              <MessageReader key={selected.sourceMessageId} message={selected} />
-            ) : (
-              <section className="reader-empty">
-                <h2>{record ? "Message record not found" : "Select a Message record"}</h2>
-                <p>
-                  {record
-                    ? `The requested record ${record} is unavailable. No other record has been substituted.`
-                    : "Choose a source to inspect its raw message and extracted fields."}
-                </p>
-                {record && (
-                  <button className="btn btn-sm" onClick={() => void result.refetch()}>
-                    Retry
-                  </button>
-                )}
-              </section>
             )}
           </div>
         </>

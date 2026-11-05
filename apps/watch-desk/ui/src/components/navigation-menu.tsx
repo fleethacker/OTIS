@@ -13,6 +13,9 @@ export function NavigationMenu() {
           <NavLink to="/messages" onClick={close}>
             Message Search
           </NavLink>
+          <NavLink to="/about" onClick={close}>
+            About OTIS
+          </NavLink>
         </nav>
       )}
     </Popover>

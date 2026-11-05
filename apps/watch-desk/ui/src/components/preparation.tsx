@@ -142,7 +142,7 @@ export function Preparation({
     setFailure("");
     setStatus("");
     if (acknowledged && !external) {
-      setFailure("Confirm that acknowledgement occurred outside Watch Desk.");
+      setFailure("Confirm that acknowledgement occurred outside OTIS.");
       return;
     }
     if (
@@ -222,7 +222,7 @@ export function Preparation({
               <p>
                 <strong>
                   {read.data.acknowledged
-                    ? "Acknowledged · User-reported outside Watch Desk"
+                    ? "Acknowledged · User-reported outside OTIS"
                     : "Not recorded as acknowledged in personal tracking"}
                 </strong>
               </p>
@@ -239,7 +239,7 @@ export function Preparation({
                     checked={external}
                     onChange={(e) => setExternal(e.target.checked)}
                   />{" "}
-                  I confirm acknowledgement occurred outside Watch Desk.
+                  I confirm acknowledgement occurred outside OTIS.
                 </label>
                 <label htmlFor={`${id}-note`}>Optional tracking note</label>
                 <input
@@ -402,7 +402,7 @@ export function Preparation({
                 Limited 2003-reference profile: one reference, one response, single-field EXER or
                 OPER, complete Zulu DTG only. Repeated references/authorities, other date
                 alternatives, DECL/classified release and full character/profile certification are
-                unsupported. Apply approved release procedures outside Watch Desk.
+                unsupported. Apply approved release procedures outside OTIS.
               </p>
             </>
           )}

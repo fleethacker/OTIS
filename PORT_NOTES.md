@@ -217,3 +217,12 @@ Files: `day-timeline.tsx`, `calendar-layout.ts`, `command-roster.test.tsx`,
   other contributor at the documented identity seam; permissions are implemented.
   Edits to shared confirmed fields can replace matching local editor drafts on an
   explicit refresh/save; full multi-user draft conflict UX is not implemented.
+
+## P4 build follow-up — checked SQLite integer reads
+
+Container report for `aea938d`: UI 83/83 and TypeScript passed; Rust failed with five
+E0277 errors because this rusqlite version does not implement `FromSql` for `u64`.
+`context_metadata.rs` now reads SQLite integers as `i64`; citation byte/line bounds
+use checked `u64::try_from`, returning a sanitized unavailable error for negatives.
+COUNT remains signed internally. Added zero/max/negative conversion coverage.
+Static diff check only here; the Rust container rerun remains outstanding.

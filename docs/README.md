@@ -2,6 +2,10 @@
 
 Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.1.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; the application server continuously publishes messages, passages and audit batches to OpenSearch. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
+The [architecture overview](integration/architecture.md) shows the tech stack,
+data flows and bottom-up relationship between Kubernetes, UDS Core and OTIS,
+alongside the separate local Compose profile.
+
 The [ARM64 UDS deployment work](../deploy/uds/README.md) and
 [ADR 0002](decisions/0002-uds-arm64-deployment.md) describe issue #9 and its
 remaining acceptance gates.

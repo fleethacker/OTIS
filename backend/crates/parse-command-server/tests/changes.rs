@@ -9,7 +9,7 @@ fn db() -> Connection {
 }
 fn add(db: &Connection, name: &str, sequence: Option<i64>, at: Option<&str>, commands: &[&str]) -> String {
     let id = parse_command_types::message_id(name);
-    let core = json!({"subject":format!("Fictional {name}"),"type":"OPTASK COMMS","command_ids":commands});
+    let core = json!({"subject":format!("Fictional {name}"),"type":"OPTASK COMMS","command_ids":commands,"issued_at":at});
     db.execute("INSERT INTO projections VALUES(?,'r1',?,'published')", params![id,core.to_string()]).unwrap();
     if let Some(sequence) = sequence {
         db.execute("INSERT INTO receipts VALUES(?,?,?,'r1',?,?)", params![sequence,format!("receipt-{sequence}"),id,at,format!("Fictional {name}")]).unwrap();
@@ -33,7 +33,7 @@ fn boundaries_hidden_records_and_unknown_times_are_distinct() {
     assert_eq!(result["returnedNewCount"], 2);
     assert_eq!(result["hiddenCount"], 1);
     assert_eq!(result["items"][0]["id"], exact);
-    assert_eq!(result["items"][0]["basis"], "first_custody_recording");
+    assert_eq!(result["items"][0]["basis"], "source_issue_time");
     assert_eq!(result["unknownHiddenCount"], 1);
     assert_eq!(result["availability"]["amended"], "not_available");
     assert_eq!(result["availability"]["cancelled"], "not_available");
@@ -42,7 +42,7 @@ fn boundaries_hidden_records_and_unknown_times_are_distinct() {
     let result = read_connection(&db, &request).unwrap();
     assert_eq!(result["returnedNewCount"], 1); // exact 0400 is now before the lower bound
     assert_eq!(result["unknownTime"].as_array().unwrap().len(), 1);
-    assert_eq!(result["unknownTime"][0]["recordedAt"], Value::Null);
+    assert_eq!(result["unknownTime"][0]["issuedAt"], Value::Null);
     request.filters.no_commands = true;
     let result = read_connection(&db, &request).unwrap();
     assert_eq!(result["items"], json!([]));
@@ -66,7 +66,7 @@ fn duplicate_receipts_and_parser_revisions_do_not_create_new_custody_records() {
     let db = db();
     let id = add(&db, "old body", Some(1), Some("2026-11-05T03:00:00Z"), &[]);
     db.execute("INSERT INTO receipts VALUES(2,'duplicate',?,'r2','2026-11-05T06:00:00Z','Later subject')", [&id]).unwrap();
-    db.execute("INSERT INTO projections VALUES(?,'r2',?,'published')", params![id,json!({"type":"OPTASK COMMS","command_ids":[]}).to_string()]).unwrap();
+    db.execute("INSERT INTO projections VALUES(?,'r2',?,'published')", params![id,json!({"type":"OPTASK COMMS","command_ids":[],"issued_at":"2026-11-05T03:00:00Z"}).to_string()]).unwrap();
     assert_eq!(read_connection(&db, &request()).unwrap()["returnedNewCount"], 0);
     let mut scope = request(); scope.since = "2026-11-05T02:00:00Z".into();
     let value = read_connection(&db, &scope).unwrap();
@@ -90,4 +90,20 @@ fn bounded_pages_keep_a_receipt_watermark_and_reject_invalid_requests() {
     request.until = request.since.clone();
     assert!(read_connection(&db, &request).is_err());
     assert!(serde_json::from_str::<Request>(r#"{"since":"2026-11-05T04:00:00Z","until":"2026-11-05T08:00:00Z","actor":"spoof"}"#).is_err());
+}
+#[test]
+fn sent_time_not_receipt_time_places_and_orders_messages() {
+    let db = db();
+    // Sent 0500Z but received after the window; sent before the window but received inside it.
+    let late = add(&db, "sent in window", Some(1), Some("2026-11-05T05:00:00Z"), &[]);
+    db.execute("UPDATE receipts SET received_at='2026-11-05T09:30:00Z' WHERE sequence=1", []).unwrap();
+    add(&db, "sent before window", Some(2), Some("2026-11-05T02:00:00Z"), &[]);
+    db.execute("UPDATE receipts SET received_at='2026-11-05T06:00:00Z' WHERE sequence=2", []).unwrap();
+    let newest = add(&db, "sent later", Some(3), Some("2026-11-05T07:00:00Z"), &[]);
+    let result = read_connection(&db, &request()).unwrap();
+    assert_eq!(result["returnedNewCount"], 2);
+    assert_eq!(result["items"][0]["id"], newest);
+    assert_eq!(result["items"][1]["id"], late);
+    assert_eq!(result["items"][1]["issuedAt"], "2026-11-05T05:00:00.000000000Z");
+    assert_eq!(result["items"][1]["recordedAt"], "2026-11-05T09:30:00.000000000Z");
 }

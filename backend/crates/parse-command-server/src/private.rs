@@ -53,11 +53,13 @@ impl Private {
         CREATE TABLE IF NOT EXISTS activity(id INTEGER PRIMARY KEY,owner TEXT NOT NULL,source_key TEXT NOT NULL,kind TEXT NOT NULL,note TEXT NOT NULL,recorded_at TEXT NOT NULL,occurred_at TEXT);
         CREATE INDEX IF NOT EXISTS activity_scope ON activity(owner,source_key,id);
         CREATE TABLE IF NOT EXISTS cursors(token TEXT PRIMARY KEY,pit TEXT NOT NULL,after_json TEXT NOT NULL,fingerprint TEXT NOT NULL,expires INTEGER NOT NULL,UNIQUE(pit,after_json,fingerprint));
+        CREATE TABLE IF NOT EXISTS read_windows(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,payload TEXT NOT NULL,expires INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY,role TEXT NOT NULL,expires INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS migration(id TEXT PRIMARY KEY,source_hash TEXT NOT NULL,counts TEXT NOT NULL,recorded_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS legacy_messages(source_key TEXT PRIMARY KEY,document TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS legacy_orphans(kind TEXT NOT NULL,id INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(kind,id));
         PRAGMA user_version=1;COMMIT;")?;
+        crate::notifications::initialize(&db)?;
         let mut this = Self { db };
         if let Some(legacy) = legacy {
             if !legacy.exists() {
@@ -181,6 +183,62 @@ impl Private {
         tx.execute("INSERT INTO activity(owner,source_key,kind,note,recorded_at,occurred_at) VALUES(?,?,?,?,?,?)",params![owner,key,if ack{"acknowledged"}else{"reset"},note,now(),occurred])?;
         tx.commit()?;
         self.preparation(owner, key)
+    }
+    // At most 64 windows of 512 KiB; idle windows expire before their 120s PIT.
+    pub fn put_read_window(&self, fingerprint: &str, value: &Value) -> Result<String> {
+        let payload = value.to_string();
+        if payload.len() > 524_288 {
+            return Err(Error::new(
+                "resource_exhausted",
+                "Result window exceeds configured bound",
+            ));
+        }
+        self.db
+            .execute("DELETE FROM read_windows WHERE expires<unixepoch()", [])?;
+        let count: i64 = self
+            .db
+            .query_row("SELECT count(*) FROM read_windows", [], |r| r.get(0))?;
+        if count >= 64 {
+            return Err(Error::new(
+                "resource_exhausted",
+                "Result window limit reached; retry after inactive searches expire",
+            ));
+        }
+        let mut random = [0u8; 32];
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut random)?;
+        let id = random
+            .iter()
+            .map(|v| format!("{v:02x}"))
+            .collect::<String>();
+        self.db.execute(
+            "INSERT INTO read_windows VALUES(?,?,?,unixepoch()+110)",
+            params![id, fingerprint, payload],
+        )?;
+        Ok(id)
+    }
+    pub fn read_window(&self, id: &str, fingerprint: &str) -> Result<Value> {
+        let payload: Option<String> = self.db.query_row("SELECT payload FROM read_windows WHERE id=? AND fingerprint=? AND expires>=unixepoch()", params![id,fingerprint], |r|r.get(0)).optional()?;
+        let payload = payload
+            .ok_or_else(|| Error::invalid("Results expired or changed; refresh the search"))?;
+        if payload.len() > 524_288 {
+            return Err(Error::config("Result window bound"));
+        }
+        self.db.execute(
+            "UPDATE read_windows SET expires=unixepoch()+110 WHERE id=? AND fingerprint=?",
+            params![id, fingerprint],
+        )?;
+        serde_json::from_str(&payload).map_err(|_| Error::config("Invalid result window"))
+    }
+    pub fn save_read_window(&self, id: &str, fingerprint: &str, value: &Value) -> Result<()> {
+        let payload = value.to_string();
+        if payload.len() > 524_288 {
+            return Err(Error::new(
+                "resource_exhausted",
+                "Result window exceeds configured bound",
+            ));
+        }
+        if self.db.execute("UPDATE read_windows SET payload=?,expires=unixepoch()+110 WHERE id=? AND fingerprint=? AND expires>=unixepoch()", params![payload,id,fingerprint])? != 1 { return Err(Error::invalid("Results expired; refresh the search")); }
+        Ok(())
     }
     pub fn cursor(&self, pit: &str, after: &Value, fingerprint: &str) -> Result<String> {
         self.db

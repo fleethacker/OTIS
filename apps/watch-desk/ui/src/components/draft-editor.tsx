@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import { Preparation } from "./preparation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -6,7 +6,7 @@ import { useQuery, useMutationWithInvalidate } from "@defense-unicorns/ark-ui";
 import { readDraft, saveDraft } from "../gen/app/v1/drafts-DraftService_connectquery";
 import { getIdentity } from "../gen/app/v1/app-AppService_connectquery";
 
-const Verified = createContext(false);
+import { PrivateVerified as Verified } from "./private-verification";
 export function DraftEditor({ source, children }: { source: string; children?: ReactNode }) {
   const [session, setSession] = useState(0);
   useEffect(() => {

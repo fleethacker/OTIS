@@ -55,6 +55,13 @@ impl Publisher {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| Error::unavailable())?;
+        crate::lifecycle::initialize(&db)?;
+        // Backfill only actual, still-active published records, using their recorded time.
+        db.execute_batch("INSERT INTO publication_events(message_id,revision,stage,at,code,job_id)
+            SELECT p.message_id,p.revision,'message',j.published_at,'publication_succeeded',p.message_id
+            FROM projections p JOIN publication_jobs j ON j.kind='message' AND j.id=p.message_id||':'||p.revision
+            WHERE j.state='published' AND j.published_at IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM publication_events e WHERE e.message_id=p.message_id AND e.revision=p.revision AND e.stage='message' AND e.code='publication_succeeded') ORDER BY j.published_at;")?;
         Ok(Self {
             db,
             client,
@@ -352,24 +359,47 @@ impl Publisher {
             payload.push_str(&line);
             selected.push(row);
         }
-        let response = self
-            .client
-            .post(format!("{}/_bulk?refresh=wait_for", self.config.search))
-            .header("Content-Type", "application/x-ndjson")
-            .body(payload)
-            .send()
-            .map_err(|_| Error::unavailable())?;
-        if !response.status().is_success() {
-            return Err(Error::unavailable());
-        }
-        let mut bytes = Vec::new();
-        response
-            .take(MAX_RESPONSE as u64 + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_RESPONSE {
-            return Err(Error::unavailable());
-        }
-        let result: Value = serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())?;
+        let bulk = (|| -> Result<Value> {
+            let response = self
+                .client
+                .post(format!("{}/_bulk?refresh=wait_for", self.config.search))
+                .header("Content-Type", "application/x-ndjson")
+                .body(payload)
+                .send()
+                .map_err(|_| Error::unavailable())?;
+            if !response.status().is_success() {
+                return Err(Error::unavailable());
+            }
+            let mut bytes = Vec::new();
+            response
+                .take(MAX_RESPONSE as u64 + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > MAX_RESPONSE {
+                return Err(Error::unavailable());
+            }
+            let result: Value = serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())?;
+            if !result["items"]
+                .as_array()
+                .is_some_and(|v| v.len() == selected.len())
+            {
+                return Err(Error::unavailable());
+            }
+            Ok(result)
+        })();
+        let result = match bulk {
+            Ok(value) => value,
+            Err(error) => {
+                for (kind, _, _, source, _, _) in &selected {
+                    crate::lifecycle::publication_failure(
+                        &self.db,
+                        kind,
+                        source,
+                        "publication_unavailable",
+                    )?;
+                }
+                return Err(error);
+            }
+        };
         let items = result["items"]
             .as_array()
             .filter(|v| v.len() == selected.len())
@@ -410,7 +440,19 @@ impl Publisher {
             }
             if success {
                 let tx = self.db.transaction()?;
-                let updated=tx.execute("UPDATE publication_jobs SET state='published',published_at=?,last_error=NULL WHERE kind=? AND id=? AND checksum=?",params![now(),kind,id,checksum])?;
+                let published_at = now();
+                let updated=tx.execute("UPDATE publication_jobs SET state='published',published_at=?,last_error=NULL WHERE kind=? AND id=? AND checksum=?",params![published_at,kind,id,checksum])?;
+                if updated > 0 {
+                    let doc: Value =
+                        serde_json::from_str(source).map_err(|_| Error::unavailable())?;
+                    let message_id = if kind == "message" {
+                        doc["id"].as_str()
+                    } else {
+                        doc["message_id"].as_str()
+                    };
+                    // A message publication or recovery is a recorded event; routine passage/audit successes need no notification.
+                    tx.execute("INSERT INTO publication_events(message_id,revision,stage,at,code,job_id) SELECT ?,?,?,?,'publication_succeeded',? WHERE ?='message' OR (SELECT code FROM publication_events WHERE message_id=? AND revision=? AND stage=? AND job_id=? ORDER BY sequence DESC LIMIT 1)!='publication_succeeded'",params![message_id,doc["revision"].as_str(),kind,published_at,doc["id"].as_str(),kind,message_id,doc["revision"].as_str(),kind,doc["id"].as_str()])?;
+                }
                 if updated > 0 && kind == "message" {
                     let doc: Value =
                         serde_json::from_str(source).map_err(|_| Error::unavailable())?;
@@ -438,6 +480,12 @@ impl Publisher {
                 }
                 tx.commit()?;
             } else {
+                crate::lifecycle::publication_failure(
+                    &self.db,
+                    kind,
+                    source,
+                    "publication_item_failed",
+                )?;
                 let delay = (1i64 << (*attempts).min(6)).min(60);
                 self.db.execute("UPDATE publication_jobs SET attempts=attempts+1,next_attempt=unixepoch()+?,last_error='publication_item_failed' WHERE kind=? AND id=? AND checksum=?",params![delay,kind,id,checksum])?;
             }
@@ -596,7 +644,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
         ("semantic", neural.clone()),
         (
             "hybrid",
-            json!({"hybrid":{"queries":[{"bool":{"must":[lexical],"filter":"__FILTERS__"}},neural]}}),
+            json!({"hybrid":{"pagination_depth":100,"queries":[{"bool":{"must":[lexical],"filter":"__FILTERS__"}},neural]}}),
         ),
     ] {
         if mode != "keyword" && model.is_none() {
@@ -606,6 +654,8 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
     }
     templates.push(("parse-command-message-detail-v1".into(),json!({"size":2,"timeout":"5s","query":{"bool":{"filter":[{"term":{"id":"__ID__"}},{"term":{"revision":"__REV__"}}]}}}).to_string()));
     templates.push(("parse-command-messages-list-v1".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":false,"query":filters,"sort":[{"issued_at":{"order":"desc","missing":"_last"}},"id","revision"],"search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"60s"}}).to_string()));
+    templates.push(("parse-command-messages-list-v2".into(),json!({"size":21,"_source":["id","revision","type","originator","subject","issued_at","command_ids","security","status","review_flags"],"timeout":"5s","track_total_hits":10000,"query":filters,"sort":"__SORT__","search_after":"__AFTER__","pit":{"id":"__PIT__","keep_alive":"120s"}}).to_string()));
+    templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
     templates.push(("parse-command-timeline-v1".into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","must":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}}]}},"sort":["id","revision"]}).to_string()));
     templates.push(("parse-command-evidence-list-v1".into(),json!({"size":65,"timeout":"5s","query":{"bool":{"filter":"__FILTERS__"}},"sort":["id"],"search_after":"__AFTER__"}).to_string()));
     templates.push(("parse-command-source-status-v1".into(),json!({"size":0,"track_total_hits":true,"aggs":{"embedding_states":{"terms":{"field":"embedding_status","size":3}}}}).to_string()));
@@ -619,6 +669,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
                     "{{#has_after}}\"search_after\":{{#toJson}}after{{/toJson}},{{/has_after}}",
                 )
                 .replace("\"__FILTERS__\"", "{{#toJson}}filters{{/toJson}}")
+                .replace("\"__SORT__\"", "{{#toJson}}sort{{/toJson}}")
                 .replace("\"__QUERY__\"", "\"{{query}}\"")
                 .replace("\"__ID__\"", "\"{{message_id}}\"")
                 .replace("\"__REV__\"", "\"{{revision}}\"")

@@ -77,7 +77,13 @@ impl MessageParser for OptaskParser {
         if profile.inferential() {
             output.review_flag("inferred_profile")?;
         }
-        let mut scope = Scope::default();
+        let current_year = context.recorded_at.as_str()[..4]
+            .parse::<i32>()
+            .map_err(|_| bad("intake_year"))?;
+        let mut scope = Scope {
+            year: Some(current_year),
+            ..Scope::default()
+        };
         let mut counts = [0usize; 5];
         let mut message_periods = Vec::new();
         for record in input.records {
@@ -86,6 +92,19 @@ impl MessageParser for OptaskParser {
                 continue;
             }
             scope.advance(record, input.message_type)?;
+            let defaulted: Vec<_> = record
+                .fields
+                .iter()
+                .filter_map(|field| {
+                    time::parse(&field.normalized())
+                        .ok()
+                        .filter(|value| value.status == Some(TimeStatus::MissingYear))
+                        .map(|_| field.position)
+                })
+                .collect();
+            if !defaulted.is_empty() {
+                output.audit(audit(record,None,profile,"optask.intake_year_default.v1","user-approved current-year policy",json!({"applied_year":current_year,"year_source":"intake_recorded_at","field_positions":defaulted})))?;
+            }
             for (is_geo, extraction) in [
                 extract(record, input.message_type, profile, &scope),
                 geo::extract(record, &scope, context.budget),
@@ -118,6 +137,7 @@ impl MessageParser for OptaskParser {
                             fact.assign_id(&mut counts);
                             let id = fact.id().to_owned();
                             if matches!(&fact,Fact::Location(v) if v.status==LocationStatus::Unresolved)
+                                && extraction.diagnostic.is_some()
                             {
                                 output.review_flag("geospatial_review")?;
                             }
@@ -327,6 +347,7 @@ fn header(
 
 #[derive(Default)]
 struct Scope {
+    year: Option<i32>,
     segment: Option<String>,
     coordinator: Option<String>,
     datum: Option<String>,

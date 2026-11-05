@@ -5,8 +5,10 @@ export function Popover({
   label,
   trigger,
   children,
+  align = "start",
 }: {
   label: string;
+  align?: "start" | "end";
   trigger: ReactNode;
   children: (actions: { close: () => void }) => ReactNode;
 }) {
@@ -24,7 +26,9 @@ export function Popover({
       return;
     }
     panel.current
-      ?.querySelector<HTMLElement>("a[href], button:not([disabled]), [tabindex='0']")
+      ?.querySelector<HTMLElement>(
+        "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex='0']"
+      )
       ?.focus();
     const outside = (event: PointerEvent) => {
       if (
@@ -60,6 +64,7 @@ export function Popover({
         type="button"
         className="btn btn-ghost popover-trigger"
         aria-label={label}
+        title={label}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={id}
@@ -68,7 +73,14 @@ export function Popover({
         {trigger}
       </button>
       {open && (
-        <div ref={panel} id={id} role="dialog" aria-label={label} className="popover-panel">
+        <div
+          ref={panel}
+          id={id}
+          data-align={align}
+          role="dialog"
+          aria-label={label}
+          className="popover-panel"
+        >
           {children({ close })}
         </div>
       )}

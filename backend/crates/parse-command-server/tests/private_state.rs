@@ -5,14 +5,16 @@ use parse_command_server::{
     private::{Private, timestamp},
 };
 use serde_json::json;
+static NEXT_DIRECTORY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 fn directory() -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "parse-command-private-test-{}-{}",
+        "parse-command-private-test-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT_DIRECTORY.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     ));
     std::fs::create_dir(&path).unwrap();
     path

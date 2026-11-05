@@ -17,9 +17,11 @@ reads to seven seconds. Failed or partial OpenSearch reads fail the request.
   "query": "communications",
   "mode": "hybrid",
   "dataset": "canonical",
+  "sort": "relevance",
   "filters": {
     "commandIds": [],
     "messageTypes": ["OPTASK COMMS"],
+    "originators": ["TRAINING GROUP 99"],
     "classifications": [],
     "unassignedOnly": false,
     "noCommands": false
@@ -29,8 +31,9 @@ reads to seven seconds. Failed or partial OpenSearch reads fail the request.
 
 | Operation | Inputs and result |
 | --- | --- |
-| `list` | Empty query, typed filters, optional opaque `pageToken`; 20 metadata cards, `meta.nextPageToken` |
-| `search` | Nonempty query, `keyword`, `semantic` or `hybrid`; up to 20 ranked message revisions and two excerpts each from 100 passage candidates |
+| `list` | Empty query, typed filters/sort, optional opaque `pageToken`; at most 20 metadata cards with count and previous/next page tokens |
+| `search` | Nonempty query, `keyword`, `semantic` or `hybrid`; at most 20 message revisions per page from the fixed 100-passage ranked window |
+| `options` | Canonical message-type and originating-command choices from bounded metadata aggregations (32 types / 256 originators) |
 | `detail` | Exact `key`; selected full structured record and preserved raw body, receipt time, evidence availability |
 | `timeline` | Explicit RFC3339 `from`/`to`, positive window up to 42 days; command filters and optional hybrid query; up to 100 source messages / 2,048 facts |
 | `evidence` | Exact `key`, optional `factId` or `passageId`; separate bounded audit records |
@@ -53,6 +56,34 @@ UI aliases; they never replace source identity. Evidence and private state are
 always scoped to the exact revision. Legacy keys have a separate `legacy:`
 namespace. Legacy records only appear when `dataset: "legacy"` is explicitly
 requested and fixture mode is enabled. There is no fixture fallback.
+
+List/search accept `sort: relevance | issued_desc | issued_asc`. Browsing uses
+newest issue time when relevance has no query; missing issue times sort last in
+both date directions. Date ties use source ID and revision for stable ordering.
+Sender filtering means exact MSGID originating commands (`filters.originators`),
+not RFC email senders. The UI's issued-through date includes that entire Zulu day;
+it becomes the next midnight in the exclusive `issuedTo` API parameter.
+
+`meta` supplies `page`, `pageSize: 20`, `totalRecords`, `totalRelation`, optional
+`totalPages`, and opaque `currentPageToken` / `previousPageToken` / `nextPageToken`.
+Tokens bind the owner, query, mode, filters and sort. Any change starts a new
+window. Browsing uses PIT plus `search_after`; counts are exact up to 10,000 and
+then explicitly have relation `gte`. PIT keepalive is 120 seconds. Previous pages
+reuse saved anchors in the same PIT, including after reaching the final page.
+
+Hybrid search keeps an explicit `pagination_depth: 100` and deduplicates all of
+that ranked passage window into message revisions before paging. Relevance order
+comes from OpenSearch RRF. Date sorting applies to the complete deduplicated
+window, not just the visible page. Counts describe **top matches in that ranked
+window**, never the entire semantic match population. Continuation pages reuse
+the ranked snapshot without model inference; `snapshotAt` identifies its time.
+No continuation page enlarges the candidate depth or silently reranks messages.
+
+Read-window state lives in separate ephemeral `read_windows` rows in the private
+SQLite database. It is limited to 64 windows, 512 KiB each, with 110-second idle
+expiry renewed by active paging. It contains bounded metadata/excerpts or PIT
+anchors, never vectors, raw email or audit payloads. Expired/mismatched windows
+fail explicitly; retry starts a fresh search. They do not alter drafts or custody.
 
 Filters support issue-time bounds `issuedFrom` inclusive / `issuedTo` exclusive,
 up to 32 exact values in each metadata list, and unassigned-only selection.
@@ -129,3 +160,122 @@ the OpenSearch defaults; no relevance gain is claimed without a judged query set
 The read-only `backend/search/verify_application_search.py` checks both clauses,
 identical filters and actual RRF score arithmetic against the deployed cluster.
 See the [OpenSearch score ranker documentation](https://docs.opensearch.org/latest/search-plugins/search-pipelines/score-ranker-processor/).
+
+### Message-reader source sets and acknowledgement drafts
+
+A canonical detail read adds `sets` and `source_profile` to its presentation-only
+`structuredPayloadJson`. These are projected from the matching revision's
+`parse_completed` audit record, not stored again in the canonical index. Each
+set contains `set_id`, ordered `fields: [{position, value}]`, and ordered
+`rows: [{fields: [{position, value}]}]`. Every value is checked against its UTF-8
+byte span in the hash-verified decoded body. Audit/rule IDs and spans stay out
+of this projection. Repeated sets, free text, source placeholders and columnar
+cells retain their original values. Missing source sets produce an unavailable
+state; the browser does not reparse raw USMTF or render internal facts as sets.
+
+The viewer uses compact source-set cards and a review pill. Metadata and
+narrative cards have layouts for their content; frequency plans use a channel
+table. Labels select the baseline or observed-extension layout explicitly.
+Unregistered positions retain their source value with a neutral field label.
+The actions sidebar is removed. Lifecycle remains a separate tab with a vertical timeline.
+
+`Send Acknowledgement` opens a modal that generates and privately saves an
+**unsent** draft through the existing preparation API. The only editable form
+control is an unselected acknowledgement-type dropdown. The selected response
+chooses ACTAGCY or ICVALID exclusively; generating the reviewed draft is the
+explicit response/authority confirmation. Source type, originator, serial and
+verified issue date supply REF; receipt/current dates are never substituted.
+REF represents the source issue minute in its required DTG form; original
+second precision remains in the source MSGID card and raw body. Missing
+mandatory reference data blocks generation with a compact field error.
+
+Outgoing command and responding authority temporarily use the user-approved
+`FLEETHACKER` placeholder. Shared Settings must replace both independently;
+tracked in GitHub issue #6. Saving/copying a draft never records a sent or
+acknowledged state. The status pill distinguishes existing externally recorded
+acknowledgement, a saved unsent draft, and no acknowledgement. No SMTP sending
+is added by this change. Private state remains isolated by the existing verified
+identity/session cache boundary.
+
+### Lifecycle and parse completion
+
+Canonical detail reads populate the existing `lifecycleEntries` presentation
+contract from the matching body/revision's local custody journal: source issue
+instant, ingestion, processing/retry failures, parsing and indexed time.
+Issue time is anchored first; subsequent recorded events are chronological.
+Ingestion time is the durable local receipt time, distinct from mailbox receipt
+and USMTF issue time. New publication failures are persisted as static categories
+before retry; their history survives recovery. Decoded body identity is recorded
+before parsing, allowing failed attempts to remain associated with a later
+successful receipt of the same body. Unattributable pre-receipt/mailbox failures
+are not assigned to an arbitrary message. Historical timestamps that were never
+recorded cannot be reconstructed.
+
+Reads are scoped by body/revision, use indexed queries on a read-only SQLite
+connection, and bound custody/publication selections at 500 entries each.
+`lifecycle_state` and `lifecycle_limited` identify unavailable/truncated history.
+Actual acknowledgement-send events use `acknowledgement_sent` with the real
+send timestamp; until SMTP sending is implemented, the viewer shows Pending.
+Draft generation/copying never creates a send event.
+
+The Parsed badge means successful source parsing and canonical validation;
+record interpretation errors still show needs review. Operational uncertainty
+such as a missing month, source time conflicts, named map locations or an
+inferred profile does not itself mean source parsing failed. All fourteen
+original manual examples remain unchanged and are checked with the external
+source-conformance and expected-fact regression suites.
+
+The approved current-year rule binds missing source years to the immutable UTC
+intake-recorded year, audits that decision, preserves explicit source years and
+leaves other missing date components unresolved. Named locations remain valid
+without geometry; their unresolved geometry status is not a compliance error.
+Existing immutable interpretations retain their original audit history;
+reprocessing changed interpretation rules requires a new revision per the ICD.
+
+### Notification inbox
+
+`POST /api/v1/notifications/{operation}` uses the same session identity and
+same-origin checks as message reads. The request never accepts an owner/user ID;
+read state is private to the authenticated username and persists in the existing
+private SQLite volume. It is available across browsers using that identity.
+
+| Operation | Request | Response |
+| --- | --- | --- |
+| `list` | `{}` or `{ "before": 123 }` | `items` (up to 20), total `unread`, `watermark`, `nextBefore`, `catchingUp` |
+| `members` | `{ "id": 12, "before": 123 }` (`before` optional) | Up to 20 messages in a traffic group and `nextBefore` |
+| `read` | `{ "id": 12, "version": 123 }` **or** `{ "through": 123 }` | `{ "saved": true }` |
+
+An inbox item contains `id`, `version`, `kind` (`traffic`, `failed`, `recovered`),
+`context`, `messageKey`, `at`, `detail`, `resolvedAt`, `count`, and `unread`.
+IDs and versions are transport tokens, never display text. `at` is an actual
+recorded custody/publication timestamp, displayed in Zulu; traffic becomes
+available when message publication succeeds. Group members contain the source
+subject, message type/originator context, message link, timestamp and version.
+The message viewer accepts `tab=lifecycle` for notification links.
+
+The server incrementally reads at most 256 events from each custody/publication
+stream per request and commits its cursor with the resulting inbox updates.
+Publication successes are recorded in the same transaction as job completion;
+existing active published messages are backfilled using their recorded publication
+times. Replays do not duplicate notifications. Repeated failures of the same receipt
+or publication job coalesce until a recorded success creates a recovery notice.
+A different job succeeding cannot resolve that failure. Original custody/audit
+history remains intact. The inbox retains its latest 5,000 entries; member/read
+rows are removed with retired inbox entries. Source deduplication and replay
+cursors remain durable.
+
+Distinct newly published messages within one fixed five-minute UTC window form
+one traffic notification. Opening that group lists its messages; a single-message
+notification opens its message directly. Duplicate delivery does not announce a
+new message. Reading an item stores the version the user actually viewed. Marking
+all read uses the displayed watermark, so arrivals after that snapshot remain
+unread. Neither operation changes message acknowledgements or incident recovery.
+
+The compact header inbox has no daily reminder, source IDs, explanatory footer,
+or alerts derived from interpretation flags. The present event producers are
+intake and publication failures/recoveries and newly published message traffic.
+No operational schedule-change event producer exists yet; schedule uncertainty,
+parser re-interpretation and draft edits are not represented as schedule changes.
+The UI polls every 30 seconds while foregrounded (one second during bounded
+catch-up); notifications use local storage/API resources only, without OpenSearch
+searches, email delivery, push services, or runtime external dependencies.

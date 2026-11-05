@@ -1,4 +1,4 @@
-//! Field interpretation only. Never supplies a date, zone or year from the machine clock.
+//! Field interpretation uses only supplied context, never the machine clock.
 use chrono::NaiveDate;
 use parse_command_parser_api::*;
 use parse_command_types::*;
@@ -174,6 +174,40 @@ pub(crate) fn parse(raw: &str) -> Result<TimeValue, ParseFailure> {
         }),
     })
 }
+/// User-approved policy: a stated day/month without a year uses the intake year.
+/// No month, day, timezone, or receipt date is substituted for other missing parts.
+pub(crate) fn parse_with_year(
+    raw: &str,
+    current_year: Option<i32>,
+) -> Result<TimeValue, ParseFailure> {
+    let value = parse(raw)?;
+    if value.status != Some(TimeStatus::MissingYear) {
+        return Ok(value);
+    }
+    let Some(year) = current_year else {
+        return Ok(value);
+    };
+    let token = raw
+        .strip_prefix("ASOF:")
+        .or_else(|| raw.strip_prefix("NLT:"))
+        .or_else(|| raw.strip_prefix("TIME:"))
+        .unwrap_or(raw);
+    let start = if token.len() == 11 { 8 } else { 7 };
+    let mon = month(&token[start..start + 3])?;
+    let at = UtcTimestamp::new(format!(
+        "{year:04}-{mon:02}-{}T{}:{}:00Z",
+        &token[..2],
+        &token[2..4],
+        &token[4..6]
+    ))
+    .map_err(|_| bad("time_calendar"))?;
+    Ok(TimeValue {
+        at: Some(at),
+        clock: None,
+        label: None,
+        status: None,
+    })
+}
 impl TimeValue {
     pub fn apply_activity(self, a: &mut Activity, purpose: &str) {
         match purpose {
@@ -216,6 +250,23 @@ mod tests {
     use super::*;
     #[test]
     fn calendar_checksum_and_partial_context() {
+        assert_eq!(
+            parse_with_year("252310Z3SEP", Some(2026))
+                .unwrap()
+                .at
+                .unwrap()
+                .as_str(),
+            "2026-09-25T23:10:00Z"
+        );
+        assert!(parse_with_year("290100ZFEB", Some(2026)).is_err());
+        assert_eq!(
+            parse_with_year("290100ZFEB", Some(2024))
+                .unwrap()
+                .at
+                .unwrap()
+                .as_str(),
+            "2024-02-29T01:00:00Z"
+        );
         assert_eq!(parse("252310Z3").unwrap().clock.as_deref(), Some("23:10Z"));
         assert!(parse("252310Z2").is_err());
         assert!(parse("252310Z2SEP").is_err());

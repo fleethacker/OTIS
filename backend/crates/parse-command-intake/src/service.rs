@@ -136,6 +136,8 @@ impl Service {
                 }
             };
             let budget = WorkBudget::new(self.config.parser_work_units, cancelled);
+            self.journal
+                .identify_body(&job.receipt_id, &email.body, &self.config.revision)?;
             let at =
                 UtcTimestamp::new(&job.received_at).map_err(|_| IntakeError("receipt_time"))?;
             let context = ParseContext {
@@ -162,6 +164,7 @@ impl Service {
                         value.audit.into_iter().map(|e| e.into_inner()).collect(),
                         email,
                     ) {
+                        self.journal.record_retry(&job.receipt_id, error.0)?;
                         self.journal.release_attempt(&job.receipt_id)?;
                         return Err(error);
                     }

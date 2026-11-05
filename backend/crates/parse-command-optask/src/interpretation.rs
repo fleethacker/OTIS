@@ -15,7 +15,7 @@ pub(super) fn extract(
         }
         "FREQPLAN" if kind == "OPTASK COMMS" && p == Profile::Examples => frequency_plan(r)?,
         "COMPLAN" | "COMCHECK" | "COMGUARD" if kind == "OPTASK COMMS" && p == Profile::Examples => {
-            communications(r)?
+            communications(r, scope)?
         }
         "CRYPTDAT" | "VOICRYPT" if kind == "OPTASK LINK" => crypto(r, p, scope)?,
         "IVCCN" | "DALKFREQ" | "AUTOCAT" if kind == "OPTASK LINK" => link_frequencies(r, p, scope)?,
@@ -31,15 +31,15 @@ pub(super) fn extract(
             task(r, kind, scope)?
         }
         "MTASK" if kind == "OPTASK MCM" && p == Profile::Examples => task(r, kind, scope)?,
-        "IDP" if kind == "OPTASK IM" && p == Profile::Examples => report(r)?,
-        "RASKED" if kind == "OPTASK RAS" => rendezvous(r, p)?,
+        "IDP" if kind == "OPTASK IM" && p == Profile::Examples => report(r, scope)?,
+        "RASKED" if kind == "OPTASK RAS" => rendezvous(r, p, scope)?,
         _ => return Ok(None),
     };
     Ok(Some(result))
 }
 fn period(r: &RecordView<'_>, scope: &Scope) -> Result<Extraction, ParseFailure> {
     arity(r, 2, 3)?;
-    let start = period_time(&field(r, 1)?)?;
+    let start = period_time(&field(r, 1)?, scope.year)?;
     let endraw = field(r, 2)?;
     let qualified = matches!(
         endraw.as_ref(),
@@ -56,10 +56,10 @@ fn period(r: &RecordView<'_>, scope: &Scope) -> Result<Extraction, ParseFailure>
             status: Some(TimeStatus::Unresolved),
         }
     } else {
-        period_time(&endraw)?
+        period_time(&endraw, scope.year)?
     };
     let qualifier = if qualified {
-        Some(period_time(&field(r, 3)?)?)
+        Some(period_time(&field(r, 3)?, scope.year)?)
     } else {
         None
     };
@@ -91,11 +91,11 @@ fn period(r: &RecordView<'_>, scope: &Scope) -> Result<Extraction, ParseFailure>
         "S1 pp.2449-2450; S3 pp.243-263",
     ))
 }
-fn period_time(raw: &str) -> Result<time::TimeValue, ParseFailure> {
+fn period_time(raw: &str, year: Option<i32>) -> Result<time::TimeValue, ParseFailure> {
     if !matches!(raw, "-" | "UFN") && !matches!(raw.len(), 7 | 8 | 10 | 11 | 14) {
         return Err(bad("period_time_layout"));
     }
-    time::parse(raw)
+    time::parse_with_year(raw, year)
 }
 fn contact(r: &RecordView<'_>, scope: &Scope, layout: &str) -> Result<Extraction, ParseFailure> {
     arity(r, 5, usize::MAX)?;
@@ -175,7 +175,7 @@ fn frequency_plan(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
         "S3 p.246",
     ))
 }
-fn communications(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
+fn communications(r: &RecordView<'_>, scope: &Scope) -> Result<Extraction, ParseFailure> {
     let mut a = match r.set_id {
         "COMPLAN" => activity("communications_plan_window")?,
         "COMCHECK" => activity("communications_check")?,
@@ -186,8 +186,8 @@ fn communications(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
             arity(r, 4, usize::MAX)?;
             a.plan = present(&field(r, 1)?);
             a.variant = present(&field(r, 2)?);
-            time::parse(&field(r, 3)?)?.apply_activity(&mut a, "start");
-            time::parse(&field(r, 4)?)?.apply_activity(&mut a, "end");
+            time::parse_with_year(&field(r, 3)?, scope.year)?.apply_activity(&mut a, "start");
+            time::parse_with_year(&field(r, 4)?, scope.year)?.apply_activity(&mut a, "end");
             a.circuits = r.fields[4..]
                 .iter()
                 .map(|f| f.normalized().into_owned())
@@ -195,7 +195,7 @@ fn communications(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
         }
         "COMCHECK" => {
             arity(r, 3, usize::MAX)?;
-            time::parse(&field(r, 1)?)?.apply_activity(&mut a, "at");
+            time::parse_with_year(&field(r, 1)?, scope.year)?.apply_activity(&mut a, "at");
             a.participants = present(&field(r, 2)?).into_iter().collect();
             a.coordination = present(&field(r, 3)?);
             a.circuits = r.fields[3..]
@@ -208,8 +208,8 @@ fn communications(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
             a.line = present(&field(r, 1)?);
             a.mode = present(&field(r, 2)?);
             a.material = present(&field(r, 3)?);
-            time::parse(&field(r, 4)?)?.apply_activity(&mut a, "start");
-            time::parse(&field(r, 5)?)?.apply_activity(&mut a, "end");
+            time::parse_with_year(&field(r, 4)?, scope.year)?.apply_activity(&mut a, "start");
+            time::parse_with_year(&field(r, 5)?, scope.year)?.apply_activity(&mut a, "end");
             a.participants = unique_participants(&r.fields[5..]);
         }
     }
@@ -409,13 +409,13 @@ fn task(r: &RecordView<'_>, kind: &str, scope: &Scope) -> Result<Extraction, Par
         "S3 pp.244-245,250,260",
     ))
 }
-fn report(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
+fn report(r: &RecordView<'_>, scope: &Scope) -> Result<Extraction, ParseFailure> {
     arity(r, 5, usize::MAX)?;
     let mut a = activity("reporting_requirement")?;
     a.report = present(&field(r, 1)?);
     a.responsible_party = present(&field(r, 2)?);
-    time::parse(&field(r, 3)?)?.apply_activity(&mut a, "as_of");
-    time::parse(&field(r, 4)?)?.apply_activity(&mut a, "deadline");
+    time::parse_with_year(&field(r, 3)?, scope.year)?.apply_activity(&mut a, "as_of");
+    time::parse_with_year(&field(r, 4)?, scope.year)?.apply_activity(&mut a, "deadline");
     a.delivery = r.fields[4..]
         .iter()
         .map(|f| f.normalized().into_owned())
@@ -426,14 +426,14 @@ fn report(r: &RecordView<'_>) -> Result<Extraction, ParseFailure> {
         "S3 p.252",
     ))
 }
-fn rendezvous(r: &RecordView<'_>, p: Profile) -> Result<Extraction, ParseFailure> {
+fn rendezvous(r: &RecordView<'_>, p: Profile, scope: &Scope) -> Result<Extraction, ParseFailure> {
     arity(r, 2, 4)?;
     let raw = field(r, 1)?;
     if p == Profile::Baseline && !matches!(raw.len(), 8 | 11) {
         return Err(bad("verified_rendezvous_required"));
     }
     let mut a = activity("replenishment_rendezvous")?;
-    time::parse(&raw)?.apply_activity(&mut a, "at");
+    time::parse_with_year(&raw, scope.year)?.apply_activity(&mut a, "at");
     a.position = present(&field(r, 2)?);
     a.course = r.fields.get(2).and_then(|f| present(&f.normalized()));
     a.policy = r.fields.get(3).and_then(|f| present(&f.normalized()));

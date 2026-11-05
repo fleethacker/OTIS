@@ -156,6 +156,42 @@ pub(super) fn extract(
         _ => return Ok(None),
     };
     let mut value = location(kind, label, scope);
+    let source_locations = positions
+        .iter()
+        .map(|position| field(r, *position))
+        .collect::<Result<Vec<_>, _>>()?;
+    let named = |raw: &str| {
+        if raw == "-" || raw.is_empty() {
+            return false;
+        }
+        if ["NAME:", "PLACE:", "N:", "REF:"]
+            .iter()
+            .any(|prefix| raw.starts_with(prefix) && raw.len() > prefix.len())
+        {
+            return true;
+        }
+        !raw.contains(':') && raw.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+    };
+    if source_locations.iter().any(|raw| named(raw))
+        && source_locations
+            .iter()
+            .all(|raw| named(raw) || point(raw).is_ok())
+    {
+        value.label = source_locations
+            .iter()
+            .map(|raw| raw.as_ref())
+            .collect::<Vec<_>>()
+            .join(" / ");
+        // Unresolved describes geometry only. A supplied place name is valid source
+        // data and never requires fabricated coordinates or a geospatial review flag.
+        value.status = LocationStatus::Unresolved;
+        return Ok(Some(Extraction {
+            facts: vec![Fact::Location(value)],
+            rule: "optask.named_location.v1",
+            source: "source named location; user-approved unmapped location policy",
+            diagnostic: None,
+        }));
+    }
     let geometry = (|| {
         if !matches!(value.datum.as_str(), "WGS84" | "WGS-84" | "WE") {
             return Err(bad("coordinate_datum"));

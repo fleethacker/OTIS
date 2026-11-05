@@ -508,3 +508,59 @@ fn external_optask_regression() {
     // Counts and subset equality guard loss; new participant and uncertainty fields are intentional.
     let _ = json!({"verified_types":seen.len(),"facts":totals});
 }
+
+#[test]
+fn missing_year_uses_intake_year_and_named_locations_are_valid_without_map_geometry() {
+    let parsed = run(
+        &body("OPTASK COMMS", "PERIOD/011200ZJAN/021200ZJAN//"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        parsed.core.get().periods[0]
+            .start_at
+            .as_ref()
+            .unwrap()
+            .as_str(),
+        "2026-01-01T12:00:00Z"
+    );
+    assert!(
+        parsed
+            .audit
+            .iter()
+            .any(|event| event.get().payload.get("rule_id")
+                == Some(&json!("optask.intake_year_default.v1"))
+                && event.get().payload["detail"]["applied_year"] == 2026)
+    );
+    let named = run(&body("OPTASK AAW", "AREA/W123//"), None).unwrap();
+    let location = &named.core.get().locations[0];
+    assert_eq!(location.label, "W123");
+    assert!(location.point.is_none() && location.shape.is_none());
+    assert!(
+        !named
+            .core
+            .get()
+            .review_flags
+            .iter()
+            .any(|v| v == "geospatial_review")
+    );
+    let explicit = run(
+        &body("OPTASK COMMS", "PERIOD/011200ZJAN2008/021200ZJAN2008//"),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        explicit.core.get().periods[0]
+            .start_at
+            .as_ref()
+            .unwrap()
+            .as_str(),
+        "2008-01-01T12:00:00Z"
+    );
+    let no_month = run(
+        &body("OPTASK RAS", "RASKED/011200Z/NAME:EXERCISE HARBOR//"),
+        None,
+    )
+    .unwrap();
+    assert!(no_month.core.get().activities[0].at.is_none());
+}

@@ -37,6 +37,25 @@
   .ships-sidebar { max-height: 30vh; }
 }
 
+/* Narrow view scrolls the page rather than crushing the calendar below wrapped chrome. */
+@media (max-width: 900px) {
+  #root:has(.calendar-page) { height: auto; min-height: 100dvh; }
+  main:has(.calendar-page.calendar-with-ships) { flex: none; }
+  .calendar-page.calendar-with-ships { height: auto; grid-template-rows: auto auto; }
+  .calendar-with-ships .calendar-main .timeline-section { flex: none; }
+  .calendar-page.calendar-with-ships .calendar-scroll { flex: none; height: 460px; min-height: 420px; }
+  .calendar-page.calendar-with-ships .ship-calendar { min-height: 420px; }
+}
+@media (max-width: 640px) {
+  #root .desk-header { height: auto; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
+  .desk-header .header-start { grid-column: 1; gap: 8px; }
+  .desk-header .account { grid-column: 2; grid-row: 1; gap: 4px; }
+  .desk-header .header-clock { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
+  .desk-header .wordmark { gap: 8px; }
+}
+.desk-header .popover-trigger { color: white; }
+.desk-header .avatar > div { background: oklch(78% 0.08 190); color: oklch(25% 0.04 250); }
+
 /* Day resources and Week Fit only; Expanded keeps Parker's lane-proportional width. */
 .calendar-with-ships .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
 .calendar-with-ships .ship-calendar-resources .rbc-time-header-content { min-width: 0; }

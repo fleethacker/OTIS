@@ -1,5 +1,9 @@
 # OTIS UDS packaging (issue #9)
 
+The [architecture overview](../../docs/integration/architecture.md) shows UDS
+Core on Kubernetes beneath OTIS workloads, the runtime integration points and
+the separate local Compose view.
+
 This ARM64 bundle follows current main: OTIS, native Rust OIDC and hidden
 OpenSearch state/custody indices. Prior SQLite/Authservice validation is historical.
 A fresh isolated native identity/migration/workflow/recovery rehearsal remains

@@ -113,7 +113,6 @@ function CalendarPage() {
         returnTo={returnTo}
       />}
       <section className="calendar-controls" aria-label="Calendar controls">
-        <CalendarOutlook date={date} selectedShips={ships} commands={roster.isError ? [] : roster.data?.commands ?? []} dataset={dataset} returnTo={returnTo} />
         <TextInput
           className="schedule-search input-sm"
           type="search"
@@ -228,6 +227,7 @@ function CalendarPage() {
                 })}
             {date === today && <span className="revision">Today</span>}
           </h2>
+          <CalendarOutlook date={date} selectedShips={ships} commands={roster.isError ? [] : roster.data?.commands ?? []} dataset={dataset} returnTo={returnTo} />
         </div>
         {noShips ? <p className="calendar-result-limit">No ships selected. Choose a ship or Unassigned.</p> : <DayTimeline
           newMessageKeys={dataset === "canonical" ? catchup.newMessageKeys : undefined}

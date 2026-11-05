@@ -63,6 +63,9 @@ test("panel prefills sidebar ships, filters types live, downloads a real calenda
     expect(dialog.getByLabelText("Through (UTC)")).toHaveValue("2026-11-12");
     expect(requests[0]).toEqual({ dataset: "canonical", from: "2026-11-05T00:00:00.000Z", to: "2026-11-13T00:00:00.000Z" });
     expect(dialog.getByText("1 without a time, not included")).toBeTruthy();
+    expect(dialog.getByText("05 NOV 2026 0800Z").getAttribute("datetime")).toBe("2026-11-05T08:00:00.000Z");
+    expect(dialog.getByText("06 NOV 2026 2000Z")).toBeTruthy();
+    expect(dialog.queryByText("2026-11-05 08:00 UTC")).toBeNull();
     fireEvent.click(dialog.getByRole("checkbox", { name: "crypto changeover" }));
     expect(dialog.getByText("1 events from 1 messages will sync")).toBeTruthy();
     fireEvent.click(dialog.getByRole("button", { name: "Download .ics" }));

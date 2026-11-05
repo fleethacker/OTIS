@@ -4,6 +4,7 @@ import { Modal } from "./modal";
 import { AppButton, Notice, TextInput } from "./ui";
 import { useSource, type Dataset } from "./source-data";
 import { UNASSIGNED } from "./ship-calendars";
+import { formatMinuteUTC } from "./watch-boundary";
 import {
   calendarExportEnd, calendarExportRange, calendarIcsEvents, calendarIcsUid,
   filterCalendarIcsEvents, generateCalendarIcs,
@@ -126,7 +127,7 @@ function OutlookPanel({ date, selectedShips, commands, dataset, returnTo }: Outl
       <p>{preview.skippedUntimed} without a time, not included</p>
       <ul className="outlook-preview">
         {preview.events.slice(0, 5).map((event) => <li key={calendarIcsUid(event)}>
-          <time dateTime={new Date(event.startMs).toISOString()}>{new Date(event.startMs).toISOString().slice(0, 16).replace("T", " ")} UTC</time>
+          <time dateTime={new Date(event.startMs).toISOString()}>{formatMinuteUTC(event.startMs)}</time>
           <span>{event.title} · {event.ships.map((ship) => ship.name).join(", ")}</span>
         </li>)}
       </ul>

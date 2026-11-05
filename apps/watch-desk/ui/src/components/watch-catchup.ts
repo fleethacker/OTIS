@@ -39,7 +39,7 @@ export function useWatchCatchup({ rawSince, turnovers, filters, now: fixedNow, e
   const unreviewed = tracked.filter((row) => row.reviewedAt === null);
   const newMessageKeys = new Set(items.filter((row) => row.reviewedAt === null && row.messageKey).map((row) => row.messageKey!));
   const open = rawSince !== null ? !closed : unreviewed.length > 0;
-  return { query, valid, unavailable, pages, first, items, unknown, all, tracked, reviewed, unreviewed, newMessageKeys,
+  return { filters, query, valid, unavailable, pages, first, items, unknown, all, tracked, reviewed, unreviewed, newMessageKeys,
     now, until, boundary, basis, choice, invalid, open, sessionAvailable: !!pinned,
     returned: pages.reduce((n, page) => n + page.returnedNewCount, 0),
     hidden: pages.reduce((n, page) => n + page.hiddenCount, 0),

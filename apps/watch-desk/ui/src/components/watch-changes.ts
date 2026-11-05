@@ -32,7 +32,7 @@ export interface WatchChange {
   /** Absent means the server does not expose per-person review state. */
   reviewedAt?: string | null;
   addedEvents?: AddedEvent[];
-  addedEventsLimited?: boolean;
+  eventsLimited?: boolean;
 }
 export interface ChangePage {
   items: WatchChange[];
@@ -94,7 +94,8 @@ export function useReviewChanges() {
   const client = useQueryClient();
   const session = useWatchSession();
   return useMutation({
-    mutationFn: async (request: { messageKeys: string[] } | { watermark: ChangeWatermark }) => {
+    // review-all must echo the list response window and filters so it marks exactly what was shown.
+    mutationFn: async (request: { messageKeys: string[] } | { watermark: ChangeWatermark; since: string; until: string; filters: ChangeRequest["filters"] }) => {
       if ("messageKeys" in request && (!request.messageKeys.length || request.messageKeys.length > 200)) throw new Error("Choose up to 200 messages.");
       return readJson(await sessionFetch(`/api/v1/changes/${"watermark" in request ? "review-all" : "review"}`, {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request),

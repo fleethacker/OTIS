@@ -61,7 +61,7 @@ function ChangeRow({ row, commands, returnTo, pending, review }: {
     {!reviewed && <>
       {row.addedEvents?.slice(0, 20).map((event, index) => <AddedEventLine key={event.key ?? `${event.factId ?? "event"}:${index}`} event={event} commands={commands} />)}
       {row.addedEvents?.length === 0 && <p>No scheduled events in this message.</p>}
-      {row.addedEventsLimited && <p>Event list is limited; open the message for all tasking.</p>}
+      {row.eventsLimited && <p>Event list is limited; open the message for all tasking.</p>}
       <p>{row.sender ? `${row.sender} · ` : ""}{row.issuedAt ? <>Sent <time dateTime={row.issuedAt} title={row.issuedAt}>{formatSinceUTC(Date.parse(row.issuedAt))}</time></> : "No issue time in source — not counted in this watch"} · <CommandChips ids={row.commandIds} commands={commands} /></p>
       {!row.commandIds.length && <p>Ship assignment is not set.</p>}
       <small>{row.recordedAt ? `Received ${formatSinceUTC(Date.parse(row.recordedAt))}` : "Received time unavailable"}</small>
@@ -131,7 +131,7 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
           <div className="turnover-actions">
             <button className="btn btn-sm" disabled={query.isFetching || mark.isPending} onClick={model.refresh}>Refresh messages</button>
             {tracked && <button className="btn btn-primary btn-sm" disabled={mark.isPending || query.isFetching || !model.unreviewed.length || !completeReviewData || !sharedWatermark || model.tracked.length > 200 || query.hasNextPage}
-              onClick={() => mark.mutate({ watermark: first.watermark })}>Mark all reviewed</button>}
+              onClick={() => mark.mutate({ watermark: first.watermark, since: first.since, until: first.until, filters: model.filters })}>Mark all reviewed</button>}
           </div>
           {tracked && <p>Review count covers the messages shown, including undated messages. {query.hasNextPage ? "Load remaining pages before marking all reviewed." : ""}{!completeReviewData ? " Review tracking is unavailable for some messages." : ""}{!sharedWatermark || model.tracked.length > 200 ? " Review messages individually in this window." : ""}</p>}
           <p>{first.scope} Through {formatSinceUTC(model.until - 1)}.</p>

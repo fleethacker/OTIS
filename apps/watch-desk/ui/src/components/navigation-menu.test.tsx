@@ -55,3 +55,22 @@ test("reusable popover dismisses on Escape, outside click and focus departure", 
   });
   expect(view.queryByRole("dialog")).toBeNull();
 });
+test("menu links still navigate when the click does not focus them (Safari/macOS)", () => {
+  const view = renderWithProviders(
+    <>
+      <NavigationMenu />
+      <CurrentRoute />
+    </>,
+    { route: "/calendar" }
+  );
+  for (const [name, path] of [["Message Search", "/messages"], ["Settings", "/settings"]]) {
+    fireEvent.click(view.getByRole("button", { name: "Navigation menu" }));
+    const link = view.getByRole("link", { name });
+    // Mousedown on a non-focusable link: focus leaves to nothing before click fires.
+    fireEvent.blur(view.getByRole("link", { name: "Calendar" }), { relatedTarget: null });
+    expect(view.getByRole("dialog", { name: "Navigation menu" })).toBeTruthy();
+    fireEvent.click(link);
+    expect(view.getByText(`Route: ${path}`)).toBeTruthy();
+    expect(view.queryByRole("dialog")).toBeNull();
+  }
+});

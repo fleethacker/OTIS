@@ -118,26 +118,31 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
         {model.hidden > 0 ? ` · ${model.hidden} hidden` : ""}{unknown.length + unknownHidden > 0 ? ` · ${unknown.length + unknownHidden} without sent time` : ""}{first && query.hasNextPage ? " · more pages" : ""}
       </summary>
       <div className="turnover-content">
-        {boundary !== undefined && <p className="turnover-since" title={formatSinceUTC(boundary)}>{model.basis === "last_seen" ? `Since you were last here · ${formatSinceUTC(boundary)}` : model.basis === "default_24h" ? "Last 24 hours" : model.basis === "turnover" ? `Since ${formatSinceUTC(boundary).split(" ").slice(-1)[0]} turnover` : `Since ${formatSinceUTC(boundary)}`}</p>}
-        <BoundaryEditor key={`${model.choice}:${boundary}`} boundary={boundary} now={now} apply={(at) => changeSince(new Date(at).toISOString())}
-          automatic={() => changeSince("auto")} sessionAvailable={model.sessionAvailable} session={() => changeSince("session")} />
-        <p>Messages by sent time (source DTG), newest first; received time is shown beneath. Ship filters apply; calendar search/date do not filter this history.</p>
-        <p className="turnover-note">Changes and cancellations are not tracked yet.</p>
-        {!valid && <p>{model.invalid ? "Invalid since value in URL." : "A valid watch boundary is unavailable. Configure UTC turnovers in Settings or pin a UTC time above."}</p>}
+        <div className="turnover-head">
+          {boundary !== undefined && <p className="turnover-since" title={formatSinceUTC(boundary)}>{model.basis === "last_seen" ? `Since you were last here · ${formatSinceUTC(boundary)}` : model.basis === "default_24h" ? "Last 24 hours" : model.basis === "turnover" ? `Since ${formatSinceUTC(boundary).split(" ").slice(-1)[0]} turnover` : `Since ${formatSinceUTC(boundary)}`}</p>}
+          <details className="turnover-change" open={!valid ? true : undefined}>
+            <summary>Change…</summary>
+            <BoundaryEditor key={`${model.choice}:${boundary}`} boundary={boundary} now={now} apply={(at) => changeSince(new Date(at).toISOString())}
+              automatic={() => changeSince("auto")} sessionAvailable={model.sessionAvailable} session={() => changeSince("session")} />
+          </details>
+          {first && <div className="turnover-actions">
+            <button className="btn btn-sm" disabled={query.isFetching || mark.isPending} onClick={model.refresh}>Refresh messages</button>
+            {tracked && <button className="btn btn-primary btn-sm" disabled={mark.isPending || query.isFetching || !model.unreviewed.length || !completeReviewData || !sharedWatermark || model.tracked.length > 200 || query.hasNextPage}
+              onClick={() => mark.mutate({ watermark: first.watermark, since: first.since, until: first.until, filters: model.filters })}>Mark all reviewed</button>}
+          </div>}
+        </div>
+        {!valid && <p>{model.invalid ? "Invalid since value in URL." : "A valid watch boundary is unavailable. Configure UTC turnovers in Settings or pin a UTC time under Change…"}</p>}
         {query.isError && <p role="alert">Turnover evidence unavailable. {query.error.message} <button className="btn btn-sm" onClick={() => { void query.refetch(); }}>Retry turnover</button></p>}
         {mark.isError && <p role="alert">Could not mark reviewed. {mark.error.message} Try again.</p>}
         {valid && query.isPending && <p aria-live="polite">Loading messages…</p>}
         {first && <>
-          <div className="turnover-actions">
-            <button className="btn btn-sm" disabled={query.isFetching || mark.isPending} onClick={model.refresh}>Refresh messages</button>
-            {tracked && <button className="btn btn-primary btn-sm" disabled={mark.isPending || query.isFetching || !model.unreviewed.length || !completeReviewData || !sharedWatermark || model.tracked.length > 200 || query.hasNextPage}
-              onClick={() => mark.mutate({ watermark: first.watermark, since: first.since, until: first.until, filters: model.filters })}>Mark all reviewed</button>}
-          </div>
-          {tracked && <p>Review count covers the messages shown, including undated messages. {query.hasNextPage ? "Load remaining pages before marking all reviewed." : ""}{!completeReviewData ? " Review tracking is unavailable for some messages." : ""}{!sharedWatermark || model.tracked.length > 200 ? " Review messages individually in this window." : ""}</p>}
-          <p>{first.scope} Through {formatSinceUTC(model.until - 1)}.</p>
+          <p className="turnover-note" title={`${first.scope} Through ${formatSinceUTC(model.until - 1)}. Review count covers the messages shown, including undated messages.`}>Sorted by sent time (DTG), newest first · received time shown beneath · ship filters apply</p>
+          <p className="turnover-note">Changes and cancellations are not tracked yet.</p>
+          {tracked && (query.hasNextPage || !completeReviewData || !sharedWatermark || model.tracked.length > 200) && <p className="turnover-note">{query.hasNextPage ? "Load remaining pages before marking all reviewed." : ""}{!completeReviewData ? " Review tracking is unavailable for some messages." : ""}{!sharedWatermark || model.tracked.length > 200 ? " Review messages individually in this window." : ""}</p>}
           {(model.hidden > 0 || unknownHidden > 0) && <p className="turnover-hidden">{model.hidden} dated and {unknownHidden} undated records on hidden ships · <button className="btn btn-sm" onClick={() => {
             updateParams((next) => { next.set("ships", ALL_SHIPS); next.delete("q"); });
           }}>Show all ships</button></p>}
+          <div className="turnover-groups">
           <section aria-label="New tasking"><h3>New tasking</h3>
             {newTasking.length ? <ul>{newTasking.map(row)}</ul> : <p>No new tasking for the selected ships.</p>}
           </section>
@@ -150,6 +155,7 @@ function TurnoverContent({ commands = [], returnTo, catchup: model }: PanelProps
             </section>}
             {!needsReview.length && !unknown.length && !first.unknownLimited && <p>No undated or unassigned messages in the returned records.</p>}
           </section>
+          </div>
           {query.hasNextPage && <button className="btn btn-sm" disabled={query.isFetchingNextPage || mark.isPending} onClick={() => { void query.fetchNextPage(); }}>Load more messages</button>}
         </>}
       </div>

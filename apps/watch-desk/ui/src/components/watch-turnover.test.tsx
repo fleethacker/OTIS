@@ -99,6 +99,9 @@ test("turnover uses exact custody sources, keeps unknowns outside counts and val
     await waitFor(() => expect(view.getByRole("link", { name: base.title })).toBeTruthy());
     expect(view.queryByText(/Amended: not available/)).toBeNull();
     expect(view.getByText("Changes and cancellations are not tracked yet.")).toBeTruthy();
+    expect(view.getByText("Sorted by sent time (DTG), newest first · received time shown beneath · ship filters apply")).toBeTruthy();
+    expect(view.queryByText(/Review count covers/)).toBeNull();
+    expect(view.getByText("Change…")).toBeTruthy();
     expect(view.queryByRole("checkbox", { name: /Reviewed:/ })).toBeNull();
     expect(view.queryByRole("button", { name: "Mark all reviewed" })).toBeNull();
     expect(view.getByText(/2 messages sent/)).toBeTruthy();

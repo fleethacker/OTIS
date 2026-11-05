@@ -150,3 +150,12 @@ test("roster failure keeps the retry action accessible", () => {
     expect(retries).toBe(1);
   } finally { view.unmount(); }
 });
+
+test("shipsExclude is true only when the selection omits a roster ship", async () => {
+  const { shipsExclude, UNASSIGNED } = await import("./ship-calendars");
+  expect(shipsExclude(undefined, ["a", "b"])).toBe(false);
+  expect(shipsExclude(new Set(["unit:a", "unit:b", UNASSIGNED]), ["a", "b"])).toBe(false);
+  expect(shipsExclude(new Set(["unit:a", UNASSIGNED]), ["a", "b"])).toBe(true);
+  expect(shipsExclude(new Set(["unit:a", "unit:b"]), ["a", "b"])).toBe(true);
+  expect(shipsExclude(new Set(["unit:a", "unit:b", UNASSIGNED]), undefined)).toBe(true);
+});

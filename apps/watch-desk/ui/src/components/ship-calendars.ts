@@ -64,3 +64,9 @@ export function selectedShipFilters(ships?: Set<string>) {
     noCommands: ships.size === 0 || [...ships].some((v) => !v.startsWith("unit:") && v !== UNASSIGNED),
   } : {};
 }
+/** True only when the selection leaves out a roster ship (or the roster is unavailable to prove otherwise). */
+export function shipsExclude(ships: Set<string> | undefined, commandIds: string[] | undefined): boolean {
+  if (ships === undefined) return false;
+  if (commandIds === undefined) return true;
+  return ![...commandIds.map((id) => `unit:${id}`), UNASSIGNED].every((key) => ships.has(key));
+}

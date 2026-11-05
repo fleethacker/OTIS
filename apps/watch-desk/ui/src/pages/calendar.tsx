@@ -20,6 +20,7 @@ import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
 import { useWatchCatchup } from "../components/watch-catchup";
 import { useCommands } from "../components/command-roster";
 import { ShipsSidebar } from "../components/ships-sidebar";
+import { CalendarOutlook } from "../components/calendar-outlook";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
@@ -112,6 +113,7 @@ function CalendarPage() {
         returnTo={returnTo}
       />}
       <section className="calendar-controls" aria-label="Calendar controls">
+        <CalendarOutlook date={date} selectedShips={ships} commands={roster.isError ? [] : roster.data?.commands ?? []} dataset={dataset} returnTo={returnTo} />
         <TextInput
           className="schedule-search input-sm"
           type="search"

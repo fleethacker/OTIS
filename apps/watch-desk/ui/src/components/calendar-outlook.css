@@ -1,0 +1,35 @@
+.outlook-panel {
+  display: grid;
+  gap: var(--brand-space-3);
+  color: var(--color-base-content);
+  font-size: 14px;
+}
+.outlook-panel fieldset {
+  min-width: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-box);
+  padding: var(--brand-space-3);
+}
+.outlook-panel legend { padding-inline: var(--brand-space-1); font-weight: 600; }
+.outlook-panel p { margin: 0; }
+.outlook-panel fieldset > p { margin-top: var(--brand-space-2); color: var(--color-bc-muted); }
+.outlook-panel .app-notice { font-size: inherit; }
+.outlook-actions, .outlook-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+.outlook-choices {
+  display: grid;
+  gap: var(--brand-space-2);
+  max-height: 180px;
+  overflow: auto;
+  padding-block: var(--brand-space-2);
+}
+.outlook-choices label { display: flex; align-items: center; gap: var(--brand-space-2); }
+.outlook-choices input { flex-shrink: 0; }
+.outlook-dates label { display: grid; gap: var(--brand-space-1); flex: 1; min-width: 0; }
+.outlook-dates input { width: 100%; min-width: 0; color-scheme: inherit; }
+.outlook-preview { display: grid; gap: var(--brand-space-2); margin-block: var(--brand-space-2); }
+.outlook-preview li { display: grid; overflow-wrap: anywhere; }
+.outlook-preview time { color: var(--color-bc-muted); }

@@ -39,7 +39,10 @@ test("sidebar sends explicit IDs/none through the existing JSON URL; Show preser
     expect(JSON.parse(params.get("ships")!)).toEqual(["unit:demo-meridian"]);
     expect(params.get("layout")).toBe("expanded");
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Clear all" })); });
-    await waitFor(() => expect(requests.some((r) => (r.filters as { noCommands?: boolean }).noCommands)).toBe(true));
+    await waitFor(() => expect(view.getByText("No ships selected. Choose a ship or Unassigned.")).toBeTruthy());
+    expect(requests.some((r) => (r.filters as { noCommands?: boolean }).noCommands)).toBe(false);
+    expect(view.getByText("No ships selected; review was not queried.")).toBeTruthy();
+    expect(view.queryByText(/No unresolved times/)).toBeNull();
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(new URLSearchParams(view.getByTestId("location").textContent!).get("ships")).toBe("[]");
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Show all ships and clear search" })); });
@@ -48,6 +51,22 @@ test("sidebar sends explicit IDs/none through the existing JSON URL; Show preser
     expect(params.has("ships")).toBe(false);
     expect(params.get("view")).toBe("week");
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
+});
+
+test("explicit none has the same unqueried empty state in every layout", async () => {
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    if (!String(url).endsWith("/commands/list")) throw new Error("Empty selection must not query messages");
+    return Response.json(roster);
+  });
+  try {
+    for (const suffix of ["view=day", "view=day&shipLayout=side", "view=week", "view=month"]) {
+      const view = renderWithProviders(<Calendar />, { route: `/calendar?date=2026-11-05&ships=%5B%5D&${suffix}` });
+      await waitFor(() => expect(view.getByRole("button", { name: "Only USS Meridian" })).toBeTruthy());
+      expect(view.getByText("No ships selected. Choose a ship or Unassigned.")).toBeTruthy();
+      expect(view.queryByText(/No unresolved times/)).toBeNull();
+      view.unmount();
+    }
+  } finally { fetch.mockRestore(); }
 });
 
 test("canonical chips use all explicit command IDs, never unit or sender", () => {

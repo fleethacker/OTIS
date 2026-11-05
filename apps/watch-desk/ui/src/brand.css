@@ -1,4 +1,4 @@
-/* App-owned brand tokens. Operational flags/symbol colors are independent of these themes. */
+/* App-owned brand tokens. Operational symbol colors are independent of these themes. */
 @plugin "daisyui" {
   themes: false;
 }
@@ -155,11 +155,11 @@
   --noise: 0;
 }
 
-/* Local font names only. Licensed webfont files are not included in this repository. */
+/* Plex Mono is bundled; the body, ship, and hull faces use local font stacks. */
 :root {
   --font-display-stack: "Times New Roman", Times, serif;
   --font-body-stack: "Times New Roman", Times, serif;
-  --font-mono-stack: "Courier New", Courier, monospace;
+  --font-mono-stack: "IBM Plex Mono", "Courier New", Courier, monospace;
   --font-ship-stack: Impact, Eurostile, "Arial Black", sans-serif;
   --font-hull-stack: "ITC Machine", "Machine ITC", "MachineITC", monospace;
   --brand-space-1: 4px;

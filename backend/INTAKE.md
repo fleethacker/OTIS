@@ -90,3 +90,12 @@ the UI API; see the [combined-stack runbook](../docs/integration/combined-stack.
 Verified locally on 2026-11-04: the fourteen external example emails produced fourteen distinct core projections; an additional same-body email with a changed subject remained a separate duplicate receipt, updated the display subject and retained the conflict flag. The transport probe was quarantined independently. An abrupt SIGKILL/restart retained all sixteen receipt records, fourteen projections and 558 pending audit events without duplication.
 
 The local OpenSearch 3.9.0 test indices accepted fourteen message documents and 558 audit documents. Actual nested spatial queries matched five documents with points and two with polygons. The source corpus yielded fifteen points, two polygons and six unresolved locations; synthetic regression cases also exercise channel LineString output. The idle Rust worker measured about 7.3 MiB container memory usage at this small workload within the configured 128 MiB demo cap; this is not a burst/maximum-input capacity measurement.
+
+## Verified IMAP TLS for UDS
+
+The UDS work adds `transport: "tls"` for implicit TLS with hostname and CA
+verification before LOGIN. Optional `tls_ca` selects an additional PEM trust
+bundle. Plaintext-demo host restrictions remain unchanged. This adapter supports
+password LOGIN, not STARTTLS or OAuth/XOAUTH2; validate the target mail service
+before adopting it. See the [UDS runbook](../deploy/uds/README.md) for Secret,
+network, capacity and acceptance inputs.

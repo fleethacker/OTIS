@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import time
 import urllib.error
@@ -14,7 +15,12 @@ from search_config import (ALIAS, FUSION, INDEX, INGEST, ROOT, fusion_pipeline,
                            index_definition, ingest_pipeline, templates)
 
 HERE = Path(__file__).resolve().parent
-BASE = 'http://127.0.0.1:9200'
+BASE = os.environ.get('PARSE_COMMAND_OPENSEARCH_URL', 'http://127.0.0.1:9200').rstrip('/')
+# Never follow a redirect carrying a bootstrap mutation to another endpoint.
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RuntimeError('bootstrap_redirect_rejected')
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
 
 
 def request(method, path, body=None, content_type='application/json'):
@@ -22,11 +28,22 @@ def request(method, path, body=None, content_type='application/json'):
         body = json.dumps(body, allow_nan=False).encode()
     req = urllib.request.Request(BASE + path, data=body, method=method,
                                  headers={'Content-Type': content_type})
-    with urllib.request.urlopen(req, timeout=60) as response:
-        data = response.read(8_388_609)
-        if len(data) > 8_388_608:
-            raise RuntimeError('response_limit')
-        return json.loads(data)
+    # A rejected chunk must resume at the same deterministic number. Restarting
+    # the entire upload on transient heap pressure repeats already stored chunks.
+    # Retry only an explicit HTTP 429 rejection, never an ambiguous connection
+    # failure that may have committed a non-idempotent model/task request.
+    for attempt in range(6):
+        try:
+            with OPENER.open(req, timeout=60) as response:
+                data = response.read(8_388_609)
+                if len(data) > 8_388_608:
+                    raise RuntimeError('response_limit')
+                return json.loads(data)
+        except urllib.error.HTTPError as error:
+            if error.code != 429 or attempt == 5:
+                raise
+            error.close()
+            time.sleep(min(2 ** (attempt + 1), 16))
 
 
 def preflight():
@@ -139,17 +156,27 @@ def deploy():
             raise RuntimeError('index_model_or_chunker_conflict_new_generation_required')
     for name, body in templates(model_id).items():
         request('PUT', '/_scripts/' + name, body)
-    # Creation is not readiness: simulate real inference and check finite vectors.
-    sample = {'text': 'Coordinate the communications plan and reporting requirements.'}
-    result = request('POST', '/_ingest/pipeline/' + INGEST + '/_simulate', {
-        'docs': [{'_index': INDEX, '_id': 'bootstrap-probe', '_source': sample}]})['docs'][0]['doc']['_source']
-    vector = result.get('embedding', [])
-    if result.get('embedding_status') != 'ready' or len(vector) != 384 or not all(
-        isinstance(x, (float, int)) and math.isfinite(x) for x in vector
-    ):
-        raise RuntimeError('local_inference_not_ready')
-    state_dir = HERE / 'state'
-    state_dir.mkdir(exist_ok=True)
+    # Persisted DEPLOYED metadata can outlive the process-local inference cache.
+    # Check real inference, request a bounded redeploy on failure, and wait for warmup.
+    ready = False
+    for attempt in range(120):
+        sample = {'text': 'Coordinate the communications plan and reporting requirements.'}
+        response = request('POST', '/_ingest/pipeline/' + INGEST + '/_simulate', {
+            'docs': [{'_index': INDEX, '_id': 'bootstrap-probe', '_source': sample}]})
+        result = response['docs'][0].get('doc', {}).get('_source', {})
+        vector = result.get('embedding', [])
+        ready = (result.get('embedding_status') == 'ready' and len(vector) == 384
+                 and all(type(x) in (float, int) and math.isfinite(x) for x in vector))
+        if ready:
+            break
+        if attempt == 0:
+            task = request('POST', '/_plugins/_ml/models/' + model_id + '/_deploy', {})
+            await_task(task['task_id'])
+        time.sleep(1)
+    if not ready:
+        raise RuntimeError('local_inference_not_ready_after_redeploy_deadline')
+    state_dir = Path(os.environ.get('PARSE_COMMAND_SEARCH_STATE', str(HERE / 'state')))
+    state_dir.mkdir(parents=True, exist_ok=True)
     state = {'model_id': model_id, 'model_sha256': pin['model_content_hash_value'],
              'dimension': 384, 'index': INDEX, 'alias': ALIAS,
              'ingest_pipeline': INGEST, 'search_pipeline': FUSION,

@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: parse-command-bootstrap
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels: {app: parse-command-bootstrap}
+      annotations:
+        # A completed one-shot job must not be held open by the proxy.
+        sidecar.istio.io/nativeSidecar: "true"
+    spec:
+      serviceAccountName: parse-command-bootstrap
+      automountServiceAccountToken: false
+      nodeSelector: {kubernetes.io/arch: arm64, kubernetes.io/os: linux}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: bootstrap
+          image: {{ .Values.bootstrapImage | quote }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          env:
+            - {name: PARSE_COMMAND_OPENSEARCH_URL, value: "http://opensearch:9200"}
+          resources: {{ .Values.config.bootstrapResources | toJson }}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {sizeLimit: 32Mi}}]

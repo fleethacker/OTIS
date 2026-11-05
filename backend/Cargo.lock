@@ -1896,9 +1896,11 @@ dependencies = [
  "parse-command-state",
  "parse-command-types",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "webpki-roots",
 ]
 
 [[package]]

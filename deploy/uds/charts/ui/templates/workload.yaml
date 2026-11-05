@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: parse-command-ui}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata: {name: web}
+spec:
+  selector: {app: parse-command-ui}
+  ports: [{name: http-web, port: 8080, targetPort: 8080}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: parse-command-ui}
+data:
+  nginx.conf: |
+{{ .Files.Get "nginx.conf" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: parse-command-ui}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: parse-command-ui}
+  template:
+    metadata:
+      labels: {app: parse-command-ui}
+      annotations:
+        checksum/nginx: {{ .Files.Get "nginx.conf" | sha256sum }}
+    spec:
+      serviceAccountName: parse-command-ui
+      automountServiceAccountToken: false
+      nodeSelector: {kubernetes.io/arch: arm64, kubernetes.io/os: linux}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: web
+          image: {{ .Values.image | quote }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          ports: [{containerPort: 8080}]
+          resources: {{ .Values.config.resources | toJson }}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8080}
+          volumeMounts:
+            - {name: nginx, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: nginx, configMap: {name: parse-command-ui}}
+        - {name: tmp, emptyDir: {sizeLimit: 16Mi}}

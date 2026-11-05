@@ -2,6 +2,10 @@
 
 Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.1.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; the application server continuously publishes messages, passages and audit batches to OpenSearch. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
+The [ARM64 UDS deployment work](../deploy/uds/README.md) and
+[ADR 0002](decisions/0002-uds-arm64-deployment.md) describe issue #9 and its
+remaining acceptance gates.
+
 The current [Rust application API](integration/rust-application-api.md) and
 [combined-stack runbook](integration/combined-stack.md) describe the deployed
 React → Rust → OpenSearch boundary and migration of private SQLite state.
@@ -11,7 +15,7 @@ Go import decision, superseded by the approved bulk Rust integration.
 
 The objective is an operational capability; the two-day hackathon milestone is its first proof of concept. Confirmed constraints: Rust ingestion/parsing service, OpenSearch persistence and local embedding inference, hybrid keyword/semantic search, Docker Compose, strict airgap architecture, defensive implementation, resource efficiency, resilience, and initial coverage of all OPTASK messages. A teammate owns the UI.
 
-Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMAP-only mail access with TLS deferred in v1, bursts of hundreds of messages every few hours, and 365 days total searchable retention measured from USMTF issue time: 90 hot days followed by 275 cold days. Use the 2003 USMTF catalog as the parser baseline; infer extensions from later examples where the evidence supports them, recording their provenance and uncertainty. Build the parser extension interface first; teams contribute Rust modules/crates compiled into the server. Physical storage topology, expiry cutoff granularity, and hardware limits remain open.
+Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMAP-only mail access (the original demo deferred TLS; the UDS profile requires verified implicit TLS), bursts of hundreds of messages every few hours, and 365 days total searchable retention measured from USMTF issue time: 90 hot days followed by 275 cold days. Use the 2003 USMTF catalog as the parser baseline; infer extensions from later examples where the evidence supports them, recording their provenance and uncertainty. Build the parser extension interface first; teams contribute Rust modules/crates compiled into the server. Physical storage topology, expiry cutoff granularity, and hardware limits remain open.
 
 | Document | Purpose |
 | --- | --- |

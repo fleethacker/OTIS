@@ -1,0 +1,132 @@
+{{- $intake := required "config.intake (complete TLS IMAP configuration) is required" .Values.config.intake -}}
+{{- if ne $intake.transport "tls" }}{{ fail "UDS requires IMAP transport=tls" }}{{ end -}}
+{{- if or (ne $intake.host .Values.common.imapHost) (ne (int $intake.port) (int .Values.common.imapPort)) }}{{ fail "intake host/port must match common IMAP network inputs" }}{{ end -}}
+{{- if ne $intake.tls_ca "/etc/parse-command/mail/ca.crt" }}{{ fail "intake.tls_ca must use the mounted mail CA" }}{{ end -}}
+{{- if ne $intake.password_env "PARSE_COMMAND_IMAP_PASSWORD" }}{{ fail "intake.password_env must be PARSE_COMMAND_IMAP_PASSWORD" }}{{ end -}}
+{{- if or (hasKey $intake "journal") (hasKey $intake "max_database_bytes") }}{{ fail "SQLite intake settings require migration before native-state deployment" }}{{ end -}}
+{{- if ne $intake.opensearch_url "http://opensearch:9200" }}{{ fail "intake.opensearch_url must use the protected same-namespace search service" }}{{ end -}}
+{{- if not (hasPrefix "." $intake.custody_index) }}{{ fail "intake.custody_index must be hidden" }}{{ end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: parse-command-server}
+data:
+  config.json: {{ $intake | toJson | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: parse-command-server}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata: {name: server}
+spec:
+  selector: {app: parse-command-server}
+  ports: [{name: http-api, port: 8081, targetPort: 8081}]
+---
+{{- if .Values.config.legacyStorage }}
+{{- range $name := list "custody" "private" }}
+{{- $volume := index $.Values.config $name }}
+{{- if not $volume.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: parse-command-{{ $name }}
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if $.Values.common.storageClass }}
+  storageClassName: {{ $.Values.common.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests: {storage: {{ $volume.size }}}
+---
+{{- end }}
+{{- end }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: parse-command-server}
+spec:
+  replicas: 1
+  # A single worker lease protects OpenSearch-backed custody across upgrades.
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: parse-command-server}
+  template:
+    metadata:
+      labels: {app: parse-command-server}
+      annotations:
+        checksum/config: {{ $intake | toJson | sha256sum }}
+    spec:
+      {{- if .Values.common.idpGatewayIp }}
+      hostAliases:
+        - ip: {{ .Values.common.idpGatewayIp | quote }}
+          hostnames: [{{ printf "sso.%s" .Values.common.domain | quote }}]
+      {{- end }}
+      serviceAccountName: parse-command-server
+      automountServiceAccountToken: false
+      nodeSelector: {kubernetes.io/arch: arm64, kubernetes.io/os: linux}
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: server
+          image: {{ .Values.image | quote }}
+          args: [serve, /etc/parse-command/config.json]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          ports: [{containerPort: 8081}]
+          env:
+            - {name: PARSE_COMMAND_AUTH_MODE, value: oidc}
+            - {name: PARSE_COMMAND_DEPLOYMENT_PROFILE, value: uds}
+            - {name: PARSE_COMMAND_DEMO_AUTO_ROLE, value: ""}
+            - {name: PARSE_COMMAND_SEARCH_SECURITY_POLICY, value: uds_mesh_mtls}
+            - {name: PARSE_COMMAND_OIDC_ISSUER, value: {{ printf "https://sso.%s/realms/uds" .Values.common.domain | quote }}}
+            - {name: PARSE_COMMAND_OIDC_CLIENT_ID, value: {{ .Values.common.clientId | quote }}}
+            - {name: PARSE_COMMAND_PUBLIC_URL, value: {{ printf "https://%s.%s" .Values.common.host .Values.common.domain | quote }}}
+            - {name: PARSE_COMMAND_ADMIN_GROUP, value: {{ .Values.config.adminGroup | quote }}}
+            - {name: PARSE_COMMAND_VIEWER_GROUP, value: {{ .Values.config.viewerGroup | quote }}}
+            - {name: PARSE_COMMAND_STATE_INDEX, value: {{ .Values.config.stateIndex | quote }}}
+            - {name: PARSE_COMMAND_REQUIRE_STATE_MIGRATION, value: {{ .Values.config.requireStateMigration | toString | quote }}}
+            - {name: PARSE_COMMAND_OIDC_CLIENT_SECRET_FILE, value: /etc/parse-command/client/secret}
+            - {name: PARSE_COMMAND_SESSION_KEY_FILE, value: /etc/parse-command/sso/session-key}
+            - {name: PARSE_COMMAND_IDP_CA_FILE, value: /etc/parse-command/sso/ca.pem}
+            - {name: PARSE_COMMAND_OPENSEARCH_URL, value: "http://opensearch:9200"}
+            - {name: TOKENIZERS_PARALLELISM, value: "false"}
+            - {name: RAYON_NUM_THREADS, value: "1"}
+            - name: PARSE_COMMAND_IMAP_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.config.imapSecret }}, key: password}
+          resources: {{ .Values.config.resources | toJson }}
+          startupProbe:
+            httpGet: {path: /api/health, port: 8081}
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /api/health, port: 8081}
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: {path: /api/ready, port: 8081}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: config, mountPath: /etc/parse-command/config.json, subPath: config.json, readOnly: true}
+            - {name: client, mountPath: /etc/parse-command/client, readOnly: true}
+            - {name: sso, mountPath: /etc/parse-command/sso, readOnly: true}
+            - {name: mail-ca, mountPath: /etc/parse-command/mail, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: config, configMap: {name: parse-command-server}}
+        - name: client
+          secret: {secretName: {{ .Values.common.clientSecretName }}, items: [{key: secret, path: secret}]}
+        - name: sso
+          secret: {secretName: {{ .Values.config.ssoSecret }}, items: [{key: session-key, path: session-key}, {key: ca.pem, path: ca.pem}]}
+        - name: mail-ca
+          secret: {secretName: {{ .Values.config.imapSecret }}, items: [{key: ca.crt, path: ca.crt}]}
+        - {name: tmp, emptyDir: {sizeLimit: 32Mi}}

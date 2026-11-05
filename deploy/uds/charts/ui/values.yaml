@@ -1,0 +1,10 @@
+common:
+  domain: uds.dev
+  host: parse-command
+  imapHost: ""
+  imapPort: 993
+image: "invalid.example/prepare-first:unbuilt"
+config:
+  resources:
+    requests: {cpu: 25m, memory: 24Mi}
+    limits: {cpu: 250m, memory: 64Mi}

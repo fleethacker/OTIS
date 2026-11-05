@@ -33,7 +33,13 @@ const OPTASK_ICONS: Partial<Record<string, { icon: IconType; name: string }>> = 
 export function OptaskIcon({ type }: { type?: string }) {
   // These are message categories, not verified vessel classes or affiliations.
   if (type === "OPTASK ASUW" || type === "OPTASK ASW") {
-    return <ShipSymbol className="optask-icon" context={`${type} message category`} />;
+    return (
+      <ShipSymbol
+        domain={type === "OPTASK ASW" ? "subsurface" : "surface"}
+        className="optask-icon"
+        context={`${type} message category`}
+      />
+    );
   }
   const Icon = OPTASK_ICONS[type ?? ""]?.icon ?? TbFileText;
   return (

@@ -155,7 +155,9 @@ Authentication has explicit `local_demo` and `oidc` modes; OIDC never falls back
 demo accounts. Browser-supplied identity headers are ignored. See the
 [authentication contract](settings-oidc.md#keycloak--uds-client-contract) for cookie,
 origin, revocation, expiry and role behavior. Production Exchange PKI remains a
-separate intake transport requirement.
+separate intake transport requirement. The UDS profile requires verified implicit
+IMAP TLS and the explicit mesh search policy; see the
+[UDS runbook](../../deploy/uds/README.md).
 
 Confirmed UI behavior: one search input invokes BM25 plus local MiniLM semantic
 search in a single hybrid query, fused by OpenSearch RRF. No search-mode or

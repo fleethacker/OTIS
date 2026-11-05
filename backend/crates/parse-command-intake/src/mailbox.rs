@@ -1,12 +1,15 @@
 //! Read-only IMAP adapter using bounded RFC response parsing; no SEARCH ALL or sequence cursors.
-use crate::{IntakeError, Result, config::Config};
+use crate::{
+    IntakeError, Result,
+    config::{Config, Transport},
+};
 use imap_proto::{AttributeValue, Response, ResponseCode, Status};
 use std::{
     io::{Read, Write},
     net::{TcpStream, ToSocketAddrs},
     time::{Duration, Instant},
 };
-pub struct Mailbox<S = TcpStream> {
+pub struct Mailbox<S = TransportStream> {
     stream: S,
     buffer: Vec<u8>,
     tag: u32,
@@ -22,6 +25,7 @@ mod tests {
     struct Fake {
         input: std::io::Cursor<Vec<u8>>,
         written: Vec<u8>,
+        write_deadline_expired: bool,
     }
     impl Read for Fake {
         fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
@@ -31,6 +35,12 @@ mod tests {
     }
     impl Write for Fake {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if self.write_deadline_expired {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "expired prior command",
+                ));
+            }
             self.written.extend_from_slice(bytes);
             Ok(bytes.len())
         }
@@ -40,6 +50,7 @@ mod tests {
     }
     impl DeadlineStream for Fake {
         fn read_timeout(&mut self, _: Duration) -> std::io::Result<()> {
+            self.write_deadline_expired = false;
             Ok(())
         }
     }
@@ -48,6 +59,7 @@ mod tests {
             stream: Fake {
                 input: std::io::Cursor::new(bytes.to_vec()),
                 written: Vec::new(),
+                write_deadline_expired: false,
             },
             buffer: Vec::new(),
             tag: 0,
@@ -77,6 +89,14 @@ mod tests {
         assert_eq!(c.body(8, &config()).err().unwrap().0, "imap_body_identity");
         let mut c = connection(b"P999 OK done\r\n", 1024);
         assert_eq!(c.body(7, &config()).err().unwrap().0, "imap_command");
+    }
+    #[test]
+    fn each_command_renews_transport_deadline_before_writing() {
+        let bytes = b"* 3 FETCH (UID 7 BODY[]<0> {5}\r\nhello)\r\nP1 OK done\r\n";
+        let mut mailbox = connection(bytes, 1024);
+        // Custody persistence may outlast the previous command's deadline.
+        mailbox.stream.write_deadline_expired = true;
+        assert_eq!(mailbox.body(7, &config()).unwrap().unwrap(), b"hello");
     }
     #[test]
     fn malformed_or_oversized_server_responses_fail_without_allocation_from_literal_length() {
@@ -115,21 +135,36 @@ fn quoted(value: &str) -> Result<String> {
 impl Mailbox {
     pub fn connect(c: &Config, password: &str) -> Result<(Self, Selection)> {
         let timeout = Duration::from_secs(c.io_timeout_seconds);
-        let address = (c.host.as_str(), c.port)
+        let deadline = Instant::now() + timeout;
+        let addresses = (c.host.as_str(), c.port)
             .to_socket_addrs()?
-            .next()
-            .ok_or(IntakeError("imap_address"))?;
-        let private = match address.ip() {
-            std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
-            std::net::IpAddr::V6(ip) => ip.is_loopback() || ip.is_unique_local(),
-        };
-        if !private {
-            return Err(IntakeError("demo_endpoint_not_private"));
+            .take(17)
+            .collect::<Vec<_>>();
+        if addresses.is_empty() || addresses.len() > 16 {
+            return Err(IntakeError("imap_address"));
         }
-        let stream = TcpStream::connect_timeout(&address, timeout)
-            .map_err(|_| IntakeError("imap_connect"))?;
+        let mut connected = None;
+        for address in addresses {
+            let private = match address.ip() {
+                std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
+                std::net::IpAddr::V6(ip) => ip.is_loopback() || ip.is_unique_local(),
+            };
+            if matches!(c.transport, Transport::PlaintextDemo) && !private {
+                return Err(IntakeError("demo_endpoint_not_private"));
+            }
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or(IntakeError("imap_connect_deadline"))?;
+            if let Ok(stream) = TcpStream::connect_timeout(&address, remaining) {
+                connected = Some(stream);
+                break;
+            }
+        }
+        let stream = connected.ok_or(IntakeError("imap_connect"))?;
         stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(timeout))?;
+        let stream = TransportStream::open(stream, c)?;
         let mut result = Self {
             stream,
             buffer: Vec::new(),
@@ -184,6 +219,121 @@ impl Mailbox {
     }
 }
 
+/// Apply one deadline across TLS handshake fragments and protocol I/O, not per TCP read.
+pub struct BoundedSocket {
+    stream: TcpStream,
+    deadline: Instant,
+}
+impl BoundedSocket {
+    fn remaining(&self) -> std::io::Result<Duration> {
+        self.deadline
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::TimedOut, "mailbox deadline"))
+    }
+}
+impl Read for BoundedSocket {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        self.stream.set_read_timeout(Some(self.remaining()?))?;
+        self.stream.read(bytes)
+    }
+}
+impl Write for BoundedSocket {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.stream.set_write_timeout(Some(self.remaining()?))?;
+        self.stream.write(bytes)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.stream.flush()
+    }
+}
+/// TLS terminates here, before any greeting or LOGIN is sent.
+pub enum TransportStream {
+    Demo(BoundedSocket),
+    Tls(Box<rustls::StreamOwned<rustls::ClientConnection, BoundedSocket>>),
+}
+impl TransportStream {
+    fn open(stream: TcpStream, c: &Config) -> Result<Self> {
+        let mut stream = BoundedSocket {
+            stream,
+            deadline: Instant::now() + Duration::from_secs(c.io_timeout_seconds),
+        };
+        if matches!(c.transport, Transport::PlaintextDemo) {
+            return Ok(Self::Demo(stream));
+        }
+        use rustls::pki_types::{CertificateDer, ServerName, pem::PemObject};
+        let mut roots =
+            rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        if let Some(path) = &c.tls_ca {
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)?
+                .take(262145)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > 262144 {
+                return Err(IntakeError("imap_ca_size"));
+            }
+            let mut count = 0;
+            for cert in CertificateDer::pem_slice_iter(&bytes) {
+                roots
+                    .add(cert.map_err(|_| IntakeError("imap_ca"))?)
+                    .map_err(|_| IntakeError("imap_ca"))?;
+                count += 1;
+            }
+            if count == 0 {
+                return Err(IntakeError("imap_ca"));
+            }
+        }
+        let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .map_err(|_| IntakeError("imap_tls_config"))?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+        let name =
+            ServerName::try_from(c.host.clone()).map_err(|_| IntakeError("imap_tls_name"))?;
+        let mut conn = rustls::ClientConnection::new(std::sync::Arc::new(config), name)
+            .map_err(|_| IntakeError("imap_tls_config"))?;
+        while conn.is_handshaking() {
+            conn.complete_io(&mut stream)
+                .map_err(|_| IntakeError("imap_tls_handshake"))?;
+        }
+        // Certificate and hostname verification finish before any IMAP LOGIN.
+        Ok(Self::Tls(Box::new(rustls::StreamOwned::new(conn, stream))))
+    }
+}
+impl Read for TransportStream {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Demo(s) => s.read(out),
+            Self::Tls(s) => s.read(out),
+        }
+    }
+}
+impl Write for TransportStream {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Demo(s) => s.write(bytes),
+            Self::Tls(s) => s.write(bytes),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Self::Demo(s) => s.flush(),
+            Self::Tls(s) => s.flush(),
+        }
+    }
+}
+impl DeadlineStream for TransportStream {
+    fn read_timeout(&mut self, duration: Duration) -> std::io::Result<()> {
+        let s = match self {
+            Self::Demo(s) => s,
+            Self::Tls(s) => &mut s.sock,
+        };
+        s.deadline = Instant::now() + duration;
+        Ok(())
+    }
+}
 pub trait DeadlineStream: Read + Write {
     fn read_timeout(&mut self, duration: Duration) -> std::io::Result<()>;
 }
@@ -251,6 +401,8 @@ impl<S: DeadlineStream> Mailbox<S> {
         self.tag = self.tag.checked_add(1).ok_or(IntakeError("imap_tag"))?;
         let tag = format!("P{}", self.tag);
         self.deadline = Instant::now() + timeout;
+        // The bounded transport also gates writes; retire the prior command deadline first.
+        self.stream.read_timeout(timeout)?;
         write!(self.stream, "{tag} {command}\r\n").map_err(|_| IntakeError("imap_write"))?;
         for _ in 0..self.max_responses {
             let bytes = self.response()?;
@@ -374,5 +526,108 @@ impl<S: DeadlineStream> Mailbox<S> {
             Duration::from_secs(c.io_timeout_seconds),
         )?;
         Ok(body)
+    }
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+    use std::{
+        io::{BufRead, BufReader},
+        net::TcpListener,
+        sync::Arc,
+    };
+    #[test]
+    fn tls_verifies_ca_and_hostname_before_sending_credentials() {
+        let dir =
+            std::env::temp_dir().join(format!("parse-command-mail-tls-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let key = dir.join("key.pem");
+        let cert = dir.join("cert.pem");
+        let status = std::process::Command::new("openssl")
+            .args([
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                "/CN=localhost",
+                "-addext",
+                "subjectAltName=DNS:localhost",
+                "-addext",
+                "basicConstraints=critical,CA:FALSE",
+                "-keyout",
+            ])
+            .arg(&key)
+            .arg("-out")
+            .arg(&cert)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        for (host, trusted, success) in [
+            ("localhost", true, true),
+            ("127.0.0.1", true, false),
+            ("localhost", false, false),
+        ] {
+            let server = rustls::ServerConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![CertificateDer::from_pem_file(&cert).unwrap()],
+                PrivateKeyDer::from_pem_file(&key).unwrap(),
+            )
+            .unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let worker = std::thread::spawn(move || {
+                let (tcp, _) = listener.accept().unwrap();
+                tcp.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+                tcp.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
+                let mut tls = rustls::StreamOwned::new(
+                    rustls::ServerConnection::new(Arc::new(server)).unwrap(),
+                    tcp,
+                );
+                if tls.write_all(b"* OK synthetic mailbox\r\n").is_err() {
+                    return false;
+                }
+                let mut reader = BufReader::new(tls);
+                let mut line = String::new();
+                if reader.read_line(&mut line).is_err() || !line.starts_with("P1 LOGIN ") {
+                    return false;
+                }
+                reader.get_mut().write_all(b"P1 OK login\r\n").unwrap();
+                line.clear();
+                reader.read_line(&mut line).unwrap();
+                assert!(line.starts_with("P2 EXAMINE "));
+                reader.get_mut().write_all(b"* OK [UIDVALIDITY 1] stable\r\n* OK [UIDNEXT 1] next\r\nP2 OK selected\r\n").unwrap();
+                true
+            });
+            let mut c = Config::load(
+                &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../config/demo-intake.json"),
+            )
+            .unwrap();
+            c.host = host.into();
+            c.port = port;
+            c.transport = Transport::Tls;
+            c.tls_ca = trusted.then(|| cert.clone());
+            let result = Mailbox::connect(&c, "synthetic-password");
+            assert_eq!(result.is_ok(), success, "{host} trusted={trusted}");
+            assert_eq!(
+                worker.join().unwrap(),
+                success,
+                "credentials must not reach an unverified peer"
+            );
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

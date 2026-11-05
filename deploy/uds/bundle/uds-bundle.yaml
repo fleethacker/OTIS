@@ -1,0 +1,93 @@
+{
+  "kind": "UDSBundle",
+  "metadata": {
+    "name": "parse-command",
+    "version": "0.1.0",
+    "description": "UI, Rust server and offline inference on an existing UDS Core 1.14.3 ARM64 cluster"
+  },
+  "packages": [
+    {
+      "name": "parse-command-opensearch",
+      "path": "../packages",
+      "ref": "0.1.0",
+      "timeout": "20m",
+      "overrides": {
+        "opensearch": {
+          "parse-command-opensearch": {
+            "variables": [
+              {
+                "name": "COMMON",
+                "path": "common",
+                "default": {}
+              },
+              {
+                "name": "SEARCH",
+                "path": "config",
+                "default": {}
+              }
+            ]
+          }
+        },
+        "uds-config": {
+          "parse-command-config": {
+            "variables": [
+              {
+                "name": "COMMON",
+                "path": "common",
+                "default": {}
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "parse-command-server",
+      "path": "../packages",
+      "ref": "0.1.0",
+      "timeout": "20m",
+      "overrides": {
+        "server": {
+          "parse-command-server": {
+            "variables": [
+              {
+                "name": "COMMON",
+                "path": "common",
+                "default": {}
+              },
+              {
+                "name": "SERVER",
+                "path": "config",
+                "default": {}
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "parse-command-ui",
+      "path": "../packages",
+      "ref": "0.1.0",
+      "timeout": "20m",
+      "overrides": {
+        "ui": {
+          "parse-command-ui": {
+            "variables": [
+              {
+                "name": "COMMON",
+                "path": "common",
+                "default": {}
+              },
+              {
+                "name": "UI",
+                "path": "config",
+                "default": {}
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

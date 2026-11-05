@@ -70,8 +70,8 @@ values through Settings. No public provider or default remote endpoint is config
 
 For UDS packaging, use native `Package.spec.sso` registration and mount its generated
 client secret in Rust. Do not enable the Authservice selector for this application:
-Rust validates the OIDC flow, session, role and ownership itself. Align the separate
-Zarf packaging work with this contract before combining it with this branch.
+Rust validates the OIDC flow, session, role and ownership itself. The [UDS packaging](../../deploy/uds/README.md) follows this native-client
+contract; its pre-rebase Authservice validation remains historical evidence.
 
 Apply `compose.oidc.yml` only after provisioning the client, trusted HTTPS ingress,
 DNS and secret files. `PARSE_COMMAND_SSO_SECRETS` names a private directory outside
@@ -169,7 +169,17 @@ python3 backend/tools/migrate_state.py \
   --custody-index .parse-command-custody-v1 --apply
 ```
 
-Existing demo owners migrate to `demo:<previous-owner>`. SSO owners are distinct;
+Existing demo owners migrate to `demo:<previous-owner>`. For reviewed snapshots
+from the previous UDS implementation, pass `--preserve-oidc-owners` to retain
+canonical `oidc:<64 lowercase hex>` owners, whose issuer/subject hash matches
+the native OIDC implementation. Without that explicit opt-in, OIDC-looking
+owners fail migration rather than becoming unreachable demo owners. Malformed
+OIDC owners always fail. The source issuer, subject provenance and group policy
+must be verified first; display names/emails never authorize reassignment.
+Migrated OIDC rows grant no Admin role; native login validates current IdP
+claims before establishing access.
+
+SSO owners are distinct;
 there is no automatic transfer based on matching names/emails. Demo sessions and
 short-lived search cursors are invalidated; drafts, preparations, orphan records,
 notifications/read state, raw hashes and lifecycle history are preserved.

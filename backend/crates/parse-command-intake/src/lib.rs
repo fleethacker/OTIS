@@ -5,6 +5,8 @@ mod demo_recurrence;
 pub mod journal;
 pub mod mailbox;
 pub mod mime;
+pub mod network;
+pub mod fleet;
 pub mod service;
 
 /// Static diagnostics only. Never log credentials, server prose, email contents or DB bindings.

@@ -6,6 +6,10 @@ use std::{io::Read, path::PathBuf};
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub account_id: String,
+    #[serde(default)]
+    pub arrival_network: Option<crate::network::Network>,
+    #[serde(default)]
+    pub demo_command_ids: Vec<String>,
     pub host: String,
     pub port: u16,
     pub username: String,
@@ -87,6 +91,11 @@ impl Config {
             .map_err(|_| IntakeError("account_id"))?;
         parse_command_types::validate_revision(&self.revision, "revision")
             .map_err(|_| IntakeError("revision"))?;
+        if self.demo_command_ids.len() > 32
+            || self.demo_command_ids.iter().any(|s| s.is_empty() || s.len() > 120 || s.chars().any(char::is_control))
+        {
+            return Err(IntakeError("demo_command_ids"));
+        }
         // This explicit demo transport never sends credentials to a remote Exchange host.
         if matches!(self.transport, Transport::PlaintextDemo)
             && !matches!(self.host.as_str(), "127.0.0.1" | "::1" | "mailserver")

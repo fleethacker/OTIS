@@ -150,6 +150,7 @@ impl Service {
                     continue;
                 }
             };
+            let envelope = crate::network::envelope(&job.raw, self.config.mime, &self.config.demo_command_ids)?;
             let budget = WorkBudget::new(self.config.parser_work_units, cancelled);
             self.journal
                 .identify_body(&job.receipt_id, &email.body, &self.config.revision)?;
@@ -172,7 +173,13 @@ impl Service {
             let context = ParseContext {
                 revision: &self.config.revision,
                 recorded_at: &at,
-                command_ids: assignment.map(|f| f.command_ids.as_slice()).unwrap_or(&[]),
+                // An explicit demo envelope header wins; otherwise the exact-body
+                // fictional allowlist may assign its declared commands.
+                command_ids: if envelope.command_ids.is_empty() {
+                    assignment.map(|f| f.command_ids.as_slice()).unwrap_or(&[])
+                } else {
+                    &envelope.command_ids
+                },
                 security_override: security.as_ref(),
                 reference_time: None,
                 budget: &budget,

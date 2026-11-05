@@ -120,7 +120,7 @@ export default function Settings() {
   return <section className="watch-settings" aria-labelledby="settings-heading">
     <Link className="back-link" to={returnTo}>Return to Calendar</Link>
     <h1 id="settings-heading">Watch settings</h1>
-    <button className="btn btn-sm" disabled={context.isFetching || update.isPending} onClick={() => { void context.refetch(); }}>Refresh context and suggestions</button>
+    <button type="button" className="btn btn-sm settings-refresh" title="Reload settings and message suggestions. Unsaved changes are kept." disabled={context.isFetching || update.isPending} onClick={() => { void context.refetch(); }}>Refresh settings</button>
     <p title="Display settings only, not tasking, access control or acknowledgement authority. Changed fields use last-write-wins; no durable edit history. Refresh preserves unsaved edits; Cancel resets them to the latest loaded settings.">Shared ship and watch settings.</p>
     {context.isPending && <p role="status">Loading settings…</p>}
     {context.isError && <p role="alert">Settings could not be loaded. <button className="btn btn-sm" onClick={() => { void context.refetch(); }}>Retry settings</button></p>}

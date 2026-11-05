@@ -20,6 +20,7 @@ function setup(role = "platform_admin", denyWrites = false, missingSources = fal
     suggestionState: "available", suggestionsLimited: false, suggestionScope: "Bounded fictional metadata", defaultsSource: "backend/config/watchdesk-demo.json",
   };
   const requests: ContextUpdate[] = [];
+  const contextReads: { includeSuggestions?: boolean }[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     if (String(url).endsWith("/commands/list")) return Response.json({ commands: demo ? [{ id: "demo-meridian", name: "USS Meridian", shortLabel: "MERIDIAN", group: "Fictional", colorIndex: 0, isOwnShip: true }] : [], source: "fictional test config", version: "test", provenance: "fictional test", assignmentEnabled: demo, defaultShips: data.context.defaultShips });
     if (String(url).endsWith("/watch-context/update")) {
@@ -39,13 +40,16 @@ function setup(role = "platform_admin", denyWrites = false, missingSources = fal
       data.updatedBy = "dev-admin"; data.updatedAt = source.recordedAt;
       return Response.json(data);
     }
-    if (String(url).endsWith("/watch-context/get")) return Response.json(data);
+    if (String(url).endsWith("/watch-context/get")) {
+      contextReads.push(JSON.parse(String(init?.body)));
+      return Response.json(data);
+    }
     throw new Error("Unexpected test request");
   });
   const transport = createRouterTransport((router) => router.service(AppService, { getIdentity: () => ({ username: role === "platform_admin" ? "dev-admin" : "dev-user", role, email: "fictional@invalid" }) }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = renderWithProviders(<TransportProvider transport={transport}><QueryClientProvider client={client}><WatchContextHeader /><Settings /></QueryClientProvider></TransportProvider>, { route: "/settings?returnTo=%2Fcalendar%3Fdate%3D2026-11-05%26shipLayout%3Dside" });
-  return { view, requests, client, close: () => { view.unmount(); client.clear(); fetch.mockRestore(); } };
+  return { view, requests, contextReads, client, close: () => { view.unmount(); client.clear(); fetch.mockRestore(); } };
 }
 
 test("demo-off header and Settings do not imply a fictional own ship", async () => {
@@ -55,6 +59,23 @@ test("demo-off header and Settings do not imply a fictional own ship", async () 
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(view.queryByRole("option", { name: "USS Meridian" })).toBeNull();
     expect(view.queryByText("Demo defaults")).toBeNull();
+  } finally { close(); }
+});
+
+test("Refresh is a button that reloads settings and suggestions without a write", async () => {
+  const { view, requests, contextReads, client, close } = setup("user");
+  try {
+    await waitFor(() => expect(view.getByText("Demo defaults")).toBeTruthy());
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    const refresh = view.getByRole("button", { name: "Refresh settings" });
+    expect(refresh).toHaveClass("btn", "btn-sm", "settings-refresh");
+    expect(refresh).toHaveAttribute("type", "button");
+    expect(refresh).not.toBeDisabled();
+    const before = contextReads.filter((request) => request.includeSuggestions).length;
+    await act(async () => { fireEvent.click(refresh); });
+    await waitFor(() => expect(contextReads.filter((request) => request.includeSuggestions).length).toBeGreaterThan(before));
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(requests).toHaveLength(0);
   } finally { close(); }
 });
 

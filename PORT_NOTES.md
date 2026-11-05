@@ -409,6 +409,22 @@ Parker must run the external OPTASK regression against his unavailable samples.
   controls or shared-event source URLs. Static diff check only; attach Side light/dark
   screenshots and check text contrast in Claude's browser/container gate.
 
+## Polish 10 — Acknowledgement authorization checked; control unchanged
+
+- `message-acknowledgement.tsx` opens a modal and calls DraftService.SavePreparation
+  with generate=true; Copy draft uses the clipboard. It has no transmission call.
+- `rpc.rs` SavePreparation uses `scope`: `App::identity` validates same-origin/session,
+  then `App::scope` verifies the exact source revision. The returned username scopes
+  private state. No admin role is required, so authenticated `user` is allowed to
+  generate/save their own unsent preparation. Shared Settings permissions are different.
+- `private.rs::save_preparation` validates and saves private fields/text only.
+  RecordAcknowledgement is separate, owner-scoped, and requires confirmed_external
+  to record a user-reported external acknowledgement; neither route sends mail.
+- Files: notes only. No API/UI behavior change, no live write/send attempted.
+  Existing private-state tests cover owner separation; no new runtime test claimed.
+- Attach user modal + Draft saved / unsent screenshots from an isolated container.
+  Parker: rename “Send Acknowledgement” to “Prepare acknowledgement” in a later slice?
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

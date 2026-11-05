@@ -70,7 +70,8 @@ function ContextForm({ data, commands, canEdit, rosterUnavailable, pending, retu
               {commands.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select> : field === "defaultShips" ? <div className="context-ship-options">{choices.map(([key, name]) => <label key={key}>
               <input type="checkbox" checked={values.includes(key)} onChange={(e) => set(field, e.target.checked ? [...values, key] : values.filter((v) => v !== key))} />{name}
-            </label>)}</div> : <input className="input input-sm" aria-label={label} value={values[0]} maxLength={field === "turnoverUtc" ? 192 : 128} onChange={(e) => set(field, [e.target.value])} />}
+            </label>)}</div> : <input className="input input-sm" aria-label={label} value={values[0]} placeholder="Not set" maxLength={field === "turnoverUtc" ? 192 : 128} onChange={(e) => set(field, [e.target.value])} />}
+            {field === "defaultShips" && values.length === 0 && <p className="context-empty">Not set</p>}
             {field === "shipName" && <p>Display override only; does not change roster IDs, tasking or acknowledgement authority.</p>}
             {field === "turnoverUtc" && <p>Comma-separated UTC values, e.g. 0000Z, 0400Z. Does not change the calendar display zone.</p>}
             {field === "defaultShips" && <p>Applied explicitly with “Use app defaults” in the sidebar; shared URLs retain their own selection.</p>}

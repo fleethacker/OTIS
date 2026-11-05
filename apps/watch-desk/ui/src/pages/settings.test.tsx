@@ -58,6 +58,24 @@ test("demo-off header and Settings do not imply a fictional own ship", async () 
   } finally { close(); }
 });
 
+test("empty view-only fields show Not set without replacing stored values", async () => {
+  const { view, requests, client, close } = setup("user");
+  try {
+    await waitFor(() => expect(view.getByLabelText("Display ship name")).toBeDisabled());
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    for (const label of ["Display ship name", "Operation / exercise", "Group / command"]) {
+      const input = view.getByLabelText(label);
+      expect(input).toBeDisabled();
+      expect(input).toHaveValue("");
+      expect(input).toHaveAttribute("placeholder", "Not set");
+    }
+    expect(view.getByLabelText("Own ship")).toHaveValue("demo-meridian");
+    expect(view.getByLabelText("UTC watch turnovers")).toHaveValue("0000Z, 0400Z");
+    expect(view.getByRole("button", { name: "Save settings" })).toBeDisabled();
+    expect(requests).toHaveLength(0);
+  } finally { close(); }
+});
+
 test("Use sends only a group ID and renders confirmed context/citations; Dismiss removes the group", async () => {
   const { view, requests, close } = setup();
   try {

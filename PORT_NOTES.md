@@ -283,7 +283,23 @@ an anchor, and never use issue/receipt time. Keep the synthetic radio-check path
 add a baseline crypto fixture, schema/types/mapping updates and expansion tests.
 Parker must run the external OPTASK regression against his unavailable samples.
 
-## P6 queue from live review (not yet implemented)
+## Polish 1 — One Settings save
+
+- One form, dirty status, disabled unchanged Save settings and Cancel changes.
+  Only changed fields are sent in one request; failures/refresh retain drafts.
+  Use/Dismiss remain distinct actions and wait for manual drafts to be saved/cancelled.
+- Minimal server seam: `watch_context.rs` accepts `changes` (1–6 unique fields),
+  validates and commits atomically in the existing transaction; legacy single-field
+  requests still work. Existing server-session admin checks, actor/citations and
+  last-write-wins semantics remain. There is no `expectedRevision` in this base.
+  No routes, intake/parser, changes or recurrence modules touched.
+- Tests added/updated: form batching/reset/read-only/revocation, batch rollback and
+  forged/duplicate/mixed inputs, admin/user/no-session batch authorization.
+- Validation: static diff review only; Claude must run container build/tests.
+- Screenshots to attach: Settings pristine/dirty/saved, hide-Unassigned confirmation,
+  read-only user, light/dark and 400px. Parker: accept changed-fields last-write-wins?
+
+## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live
   Rust/OpenSearch stack. Screenshots: `specs/watchdesk/port/e4c7ddc/` in the handoff repo.

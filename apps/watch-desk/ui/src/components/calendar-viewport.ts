@@ -1,13 +1,29 @@
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import moment from "moment-timezone";
 import { civilDate, civilHour } from "./display-time";
 import type { CalendarView } from "./calendar-time";
 
-/** Fit keeps seven days visible; Expanded retains Parker's lane-proportional width. */
-export function calendarGridWidth(view: CalendarView, side: boolean, resources: number, lanes: number, expanded = false) {
-  if (view === "week") return expanded ? 52 + 7 * Math.max(1, lanes) * 128 : 52 + 7 * 112;
-  if (side) return 52 + resources * 168;
+/** Fit widens only busy days. Expanded retains equal lane-proportional columns. */
+export function calendarGridWidth(view: CalendarView, side: boolean, resources: number, lanes: number, expanded = false, dayLanes: number[] = []) {
+  if (view === "week") return expanded ? 52 + 7 * Math.max(1, lanes) * 128 : 52 + (dayLanes.length ? dayLanes : Array(7).fill(lanes)).reduce((sum, count) => sum + Math.max(128, count * 128), 0);
+  if (side) return 52 + resources * Math.max(168, lanes * 128);
   return 52 + Math.max(1, lanes) * 128;
+}
+
+export function useCalendarOverflow(root: RefObject<HTMLDivElement | null>, width: number) {
+  const [overflow, setOverflow] = useState(false);
+  useLayoutEffect(() => {
+    const element = root.current;
+    if (!element) return;
+    const measure = () => setOverflow(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    const grid = element.querySelector(".rbc-time-view");
+    if (grid) observer.observe(grid);
+    return () => observer.disconnect();
+  }, [root, width]);
+  return overflow;
 }
 
 /** Scroll position only. Never change an event instant or infer a source time. */

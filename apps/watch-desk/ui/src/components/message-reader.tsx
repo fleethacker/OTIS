@@ -5,6 +5,7 @@ import { StructuredMessage } from "./structured-message";
 import { messageTitle } from "./structured-message-format";
 import { MessageLifecycle } from "./message-lifecycle";
 import { MessageAcknowledgement } from "./message-acknowledgement";
+import { MessageMap } from "./message-map";
 import { RecordStatus } from "./ui";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
 
@@ -32,6 +33,7 @@ export function MessageReader({ message }: { message: MessageRecord }) {
           </div>
         </header>
         <div className="reader-content">
+          <MessageMap message={message} />
           <div role="tablist" aria-label="Message views" className="tabs tabs-border">
             {views.map((view, index) => (
               <button
@@ -81,7 +83,9 @@ export function MessageReader({ message }: { message: MessageRecord }) {
             ) : (
               <section aria-label="Raw message">
                 {message.rawText ? (
-                  <pre className="usmtf-raw">{message.rawText}</pre>
+                  <pre className="usmtf-raw" tabIndex={0} role="region" aria-label="Raw message text">
+                    <code>{message.rawText}</code>
+                  </pre>
                 ) : (
                   <p className="text-sm">Raw message unavailable.</p>
                 )}

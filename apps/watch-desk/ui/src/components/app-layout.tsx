@@ -2,7 +2,6 @@ import { SettingsProvider } from "./SettingsProvider";
 import { Link, Outlet } from "react-router-dom";
 import otisIcon from "../assets/otis/otis-icon.webp";
 import { HeaderClock } from "./header-clock";
-import { WatchContextHeader } from "./watch-context-header";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
 import { SettingsButton } from "./settings-button";

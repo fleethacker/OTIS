@@ -44,7 +44,7 @@ export function ShipsSidebar({ roster, selected, pending, error, retry, onChange
           <div className="ship-actions">
             <button className="btn btn-xs" onClick={() => onChange(undefined)}>Select all</button>
             <button className="btn btn-xs" onClick={() => onChange(new Set())}>Clear all</button>
-            {roster.defaultShips && <button className="btn btn-xs" onClick={() => onChange(new Set(roster.defaultShips))}>Use app defaults</button>}
+            {roster.defaultShips && <button className="btn btn-xs" onClick={() => onChange(roster.defaultShips?.length ? new Set(roster.defaultShips) : undefined)}>Use app defaults</button>}
           </div>
           {[...groups].map(([group, values]) => {
             const visible = values.filter((key) => commandName(key, commands).toLowerCase().includes(search.toLowerCase()));

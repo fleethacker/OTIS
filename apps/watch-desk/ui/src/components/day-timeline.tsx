@@ -1,5 +1,5 @@
 import { AppButton } from "./ui";
-import { create } from "@bufbuild/protobuf";
+import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
 import type { TimelineItem } from "./source-data";
@@ -474,7 +474,7 @@ export function DayTimeline({
               {showIndex ? (
                 <ul>
                   {rows.map((row) => (
-                    <li key={String(row.event.id)}>
+                    <li key={eventKey(row)}>
                       <AppButton
                         variant="ghost"
                         onClick={() => {

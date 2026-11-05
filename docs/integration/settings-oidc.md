@@ -23,6 +23,11 @@ same page session. Viewers retain Preferences in the account menu. Shared values
 UTC; each user may select an IANA zone. Calendar boundaries, issue-date filters,
 clock, message presentation, and notifications use that preference. Stored source
 instants and generated USMTF drafts remain UTC. Existing drafts are preserved.
+Settings version 2 adds the Watch Desk fields `turnoverUtc`, `defaultShips`,
+`operationName` and `groupCommand`; stored version 1 documents load with their
+defaults. The first `commandIds` entry is the own ship shown in the header and
+`shipName` is its display name. With `PARSE_COMMAND_WATCHDESK_DEMO=true`, an empty
+store is seeded from the fictional roster in `backend/config/watchdesk-demo.json`.
 An absent outgoing command or action authority blocks new draft generation.
 Sending remains unavailable and does not create a sent timestamp.
 
@@ -36,6 +41,9 @@ same-origin cookies. Mutations require an exact configured `Origin`.
 | `save-preferences` | Both | `{timezone}` |
 | `options` | Admin | Indexed command IDs, approved model endpoints and credential references |
 | `update` | Admin | `{settings, revision}`; stale saves return 409 |
+| `suggestions` | Both | Operation/exercise names found in published messages, with line citations; dismissed ones omitted |
+| `use-suggestion` | Admin | `{suggestion, revision}`; sets `operationName` through the `update` checks; the audit entry records the citations |
+| `dismiss-suggestion` | Admin | `{suggestion, revision}`; hides the suggestion for all users |
 | `test-ai` | Admin | Test saved connection with bounded `GET /models`; no source content sent |
 | `users` | Admin | `{after?}`; up to 50 users with `nextAfter` |
 | `update-user` | Admin | `{user, revision, action: enable\|disable\|revoke}` |

@@ -180,9 +180,26 @@ pub fn timeline_with_limit(core: &Value, from: &str, to: &str, limit: usize) -> 
             }
         }
         item["kind"] = json!("unresolved");
-        item["reason"] = json!(
-            "Date/time or positive interval is unresolved; no duration or date has been inferred"
-        );
+        // Presentation-only seam: canonical status/clock/label fields, never raw-body fan-out.
+        let mut details = Vec::new();
+        for endpoint in ["time", "start", "end", "as_of", "deadline"] {
+            let clock = if endpoint == "time" { "time".to_owned() } else { format!("{endpoint}_time") };
+            let label = format!("{endpoint}_label");
+            let status = format!("{endpoint}_status");
+            let at = if endpoint == "time" { "at".to_owned() } else { format!("{endpoint}_at") };
+            let mut detail = json!({"endpoint":endpoint});
+            for (source, target) in [(&clock, "clock"), (&label, "label"), (&status, "status"), (&at, "at")] {
+                if let Some(value) = fact[source.as_str()].as_str() {
+                    detail[target] = json!(value.chars().take(128).collect::<String>());
+                }
+            }
+            if detail.as_object().is_some_and(|value| value.len() > 1) { details.push(detail); }
+        }
+        item["reasonCode"] = json!(if fact["start_at"].is_string() && fact["end_at"].is_string() {
+            "non_positive_interval"
+        } else if details.is_empty() { "missing_time" } else { "unresolved_time" });
+        item["timeDetails"] = json!(details);
+        item["reason"] = json!("Source time cannot be placed on the calendar; no date or duration is inferred");
         timeline_add(&mut review, items.len(), item, limit)?;
     }
     Ok((items, review))

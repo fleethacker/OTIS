@@ -1,84 +1,173 @@
-use axum::{body::{Body, to_bytes}, extract::State, http::{HeaderMap, Request, StatusCode}, routing::post, Json};
-use parse_command_server::{access, api::App, commands, config::Config, private::Private, publisher::Status, search::Search};
-use std::sync::{Arc, Mutex, atomic::AtomicBool};
+use axum::{
+    Router,
+    body::{Body, to_bytes},
+    http::{Request, StatusCode},
+    routing::post,
+};
+use parse_command_server::{
+    api::{App, role_identity},
+    auth, commands,
+    config::Config,
+    private::Private,
+    publisher::Status,
+    search::Search,
+    settings::{self, Settings},
+};
+use std::sync::{Arc, atomic::AtomicBool};
 use tower::ServiceExt;
+mod support;
 
-#[tokio::test]
-async fn roster_reads_and_shared_write_check_use_server_sessions() {
-    for demo in [false, true] {
-    let dir = std::env::temp_dir().join(format!("watchdesk-commands-{}-{demo}", std::process::id()));
-    let mut intake = parse_command_intake::config::Config::load(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../config/demo-compose-intake.json"))).unwrap();
+/// App whose state endpoints are unreachable: only checks that fail before any
+/// state read can pass.
+fn offline_app(demo: bool) -> Arc<App> {
+    let mut intake = parse_command_intake::config::Config::load(std::path::Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../config/demo-compose-intake.json"
+    )))
+    .unwrap();
     assert!(!intake.demo_fixture_assignments);
     intake.demo_fixture_assignments = demo;
-    intake.journal = dir.join("absent-custody.sqlite");
+    let state =
+        parse_command_state::Store::new("http://127.0.0.1:9", ".parse-command-offline").unwrap();
     let config = Config {
         intake,
-        search: "http://127.0.0.1:9".into(), private: dir.join("private.sqlite"), legacy: None,
-        tokenizer: dir.join("unused"), tokenizer_hash: String::new(), listen: "127.0.0.1:0".into(),
-        auto_role: None, allow_fixtures: false,
+        search: "http://127.0.0.1:9".into(),
+        state_index: state.index().into(),
+        auth: support::auth_config(),
+        tokenizer: "unused".into(),
+        tokenizer_hash: String::new(),
+        listen: "127.0.0.1:0".into(),
+        auto_role: None,
+        allow_fixtures: false,
     };
-    let private = Private::open(&config.private, None).unwrap();
-    let app = Arc::new(App {
-        search: Search::new(config.search.clone()).unwrap(), config,
-        private: Arc::new(Mutex::new(private)),
-        status: Status { ready: Arc::new(AtomicBool::new(false)), model: Arc::new(AtomicBool::new(false)) },
+    Arc::new(App {
+        search: Search::new(config.search.clone()).unwrap(),
+        auth: auth::Auth::new(config.auth.clone(), state.clone()).unwrap(),
+        config,
+        private: Private::new(state.clone()),
+        custody: state,
+        notification_sync: Arc::new(tokio::sync::Mutex::new(())),
+        status: Status {
+            ready: Arc::new(AtomicBool::new(false)),
+            model: Arc::new(AtomicBool::new(false)),
+        },
         inference: Arc::new(tokio::sync::Semaphore::new(1)),
-    });
-    // Test-only write probe: production exposes no roster mutation endpoint.
-    async fn write(State(app): State<Arc<App>>, headers: HeaderMap) -> parse_command_server::Result<Json<serde_json::Value>> {
-        let actor = access::require_admin(&app, &headers)?;
-        Ok(Json(serde_json::json!({"actor":actor.username})))
+    })
+}
+fn routes(app: Arc<App>) -> Router {
+    Router::new()
+        .route("/commands/list", post(commands::list))
+        .route("/changes/list", post(parse_command_server::changes::list))
+        .with_state(app)
+}
+async fn call(
+    routes: &Router,
+    path: &str,
+    cookie: Option<&str>,
+    body: &str,
+) -> (StatusCode, serde_json::Value) {
+    let mut request = Request::post(path).header("content-type", "application/json");
+    if let Some(cookie) = cookie {
+        request = request.header("cookie", cookie);
     }
-    let routes = axum::Router::new().route("/commands/list", post(commands::list)).route("/write-probe", post(write))
-        .route("/watch-context/{operation}", post(parse_command_server::watch_context::handle))
-        .route("/changes/list", post(parse_command_server::changes::list)).with_state(app.clone());
-    for (role, expected) in [("user", StatusCode::FORBIDDEN), ("platform_admin", StatusCode::OK)] {
-        let session = app.store().unwrap().create_session(role).unwrap();
-        for path in ["/commands/list", "/watch-context/get", "/write-probe", "/watch-context/update"] {
-            let response = routes.clone().oneshot(Request::post(path).header("content-type", "application/json")
-                .header("cookie", format!("parse_command_session={session}"))
-                .header("origin", "http://localhost").header("host", "localhost")
-                .body(Body::from(if path == "/watch-context/update" { r#"{"changes":[{"field":"operationName","values":["FICTIONAL COPPER"]},{"field":"shipName","values":["DISPLAY"]}],"includeSuggestions":true}"# } else if path == "/watch-context/get" { r#"{"includeSuggestions":true}"# } else { "{}" })).unwrap()).await.unwrap();
-            assert_eq!(response.status(), if path == "/commands/list" || path == "/watch-context/get" { StatusCode::OK } else { expected });
-            if response.status() == StatusCode::OK {
-                let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
-                let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-                if path == "/write-probe" { assert_eq!(value["actor"], "dev-admin"); }
-                else if path == "/watch-context/get" {
-                    assert_eq!(value["canEdit"], role == "platform_admin");
-                    assert_eq!(value["context"]["ownShipId"], if demo { "demo-meridian" } else { "" });
-                    assert_eq!(value["demoRoster"], demo);
-                    assert_eq!(value["suggestionState"], "unavailable");
-                }
-                else if path == "/watch-context/update" {
-                    assert_eq!(value["suggestionState"], "unavailable");
-                    assert_eq!(value["updatedBy"], "dev-admin");
-                    assert_eq!(value["context"]["operationName"], "FICTIONAL COPPER");
-                    assert_eq!(value["context"]["shipName"], "DISPLAY");
-                    assert_eq!(value["confirmations"]["operationName"]["actor"], "dev-admin");
-                } else { assert_eq!(value["commands"].as_array().unwrap().len(), if demo { 4 } else { 0 }); }
-            }
-        }
-    }
+    let response = routes
+        .clone()
+        .oneshot(request.body(Body::from(body.to_owned())).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+#[tokio::test]
+async fn roster_and_turnover_reads_require_a_session_and_reject_write_fields() {
+    let routes = routes(offline_app(true));
     let bounds = r#"{"since":"2026-11-05T04:00:00Z","until":"2026-11-05T08:00:00Z"}"#;
-    let response = routes.clone().oneshot(Request::post("/changes/list").header("content-type", "application/json").body(Body::from(bounds)).unwrap()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let session = app.store().unwrap().create_session("user").unwrap();
-    let response = routes.clone().oneshot(Request::post("/changes/list").header("content-type", "application/json")
-        .header("cookie", format!("parse_command_session={session}"))
-        .header("origin", "http://localhost").header("host", "localhost").body(Body::from(bounds)).unwrap()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE); // missing custody is not an empty watch
-    assert!(!app.config.intake.journal.exists()); // read-only handler did not create a database
-    let actor: String = app.store().unwrap().db.query_row("SELECT json_extract(document,'$.updatedBy') FROM watch_context", [], |r| r.get(0)).unwrap();
-    assert_eq!(actor, "dev-admin");
-    let response = routes.clone().oneshot(Request::post("/watch-context/update").header("content-type", "application/json").body(Body::from(r#"{"changes":[{"field":"operationName","values":["NO SESSION"]}]}"#)).unwrap()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let response = routes.clone().oneshot(Request::post("/commands/list").header("content-type", "application/json").body(Body::from("{}")).unwrap()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let response = routes.clone().oneshot(Request::post("/commands/list").header("content-type", "application/json").body(Body::from(r#"{"commands":[]}"#)).unwrap()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    drop(routes);
-    drop(app);
-    std::fs::remove_dir_all(dir).unwrap();
+    assert_eq!(
+        call(&routes, "/changes/list", None, bounds).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&routes, "/commands/list", None, "{}").await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&routes, "/commands/list", None, r#"{"commands":[]}"#)
+            .await
+            .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+}
+
+#[tokio::test]
+async fn watch_settings_writes_are_admin_only_before_any_state_read() {
+    let app = offline_app(true);
+    let viewer = role_identity("viewer").unwrap();
+    for operation in ["update", "use-suggestion", "dismiss-suggestion"] {
+        let error = settings::execute(
+            &app,
+            &viewer,
+            operation,
+            settings::Request {
+                settings: Some(Settings::default()),
+                suggestion: Some("context:fictional".into()),
+                ..settings::Request::default()
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "permission_denied", "{operation}");
+    }
+    // Retired platform_admin identities map to admin; viewers never do.
+    assert_eq!(role_identity("platform_admin").unwrap().role, "admin");
+    assert!(settings::admin(&role_identity("user").unwrap()).is_err());
+}
+
+#[tokio::test]
+#[ignore = "requires isolated OpenSearch test indices"]
+async fn roster_own_ship_comes_from_shared_settings() {
+    for demo in [false, true] {
+        let app = support::app().await;
+        let mut config = app.config.clone();
+        config.intake.demo_fixture_assignments = demo;
+        let store = app.private.state.clone();
+        if demo {
+            let doc = store.get("settings", "shared").await.unwrap().unwrap();
+            let mut row = doc.record.clone();
+            row.payload["settings"] =
+                serde_json::to_value(Settings::demo(&commands::catalog(true).unwrap())).unwrap();
+            store.put(&row, Some(&doc)).await.unwrap();
+        }
+        let app = Arc::new(App {
+            search: Search::new(config.search.clone()).unwrap(),
+            auth: auth::Auth::new(config.auth.clone(), store.clone()).unwrap(),
+            config,
+            private: Private::new(store.clone()),
+            custody: store.clone(),
+            notification_sync: Arc::new(tokio::sync::Mutex::new(())),
+            status: Status {
+                ready: Arc::new(AtomicBool::new(false)),
+                model: Arc::new(AtomicBool::new(false)),
+            },
+            inference: Arc::new(tokio::sync::Semaphore::new(1)),
+        });
+        let token = app.private.create_session("viewer").await.unwrap();
+        let cookie = format!("parse_command_session={token}");
+        let (status, value) = call(&routes(app), "/commands/list", Some(&cookie), "{}").await;
+        assert_eq!(status, StatusCode::OK);
+        let commands = value["commands"].as_array().unwrap();
+        assert_eq!(commands.len(), if demo { 4 } else { 0 });
+        if demo {
+            assert!(
+                commands
+                    .iter()
+                    .any(|c| c["id"] == "demo-meridian" && c["isOwnShip"] == true)
+            );
+        }
+        support::cleanup(&store).await;
     }
 }

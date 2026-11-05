@@ -1,19 +1,28 @@
-use parse_command_server::changes::{read_connection, Filters, Request};
-use rusqlite::{Connection, params};
+use parse_command_server::changes::{Filters, Request, Source, compute, sources};
+use parse_command_state::{Document, Record};
 use serde_json::{json, Value};
 
-fn db() -> Connection {
-    let db = Connection::open_in_memory().unwrap();
-    db.execute_batch("CREATE TABLE projections(message_id TEXT,revision TEXT,core TEXT,delivery_state TEXT); CREATE TABLE receipts(sequence INTEGER PRIMARY KEY,id TEXT,body_id TEXT,revision TEXT,received_at TEXT,subject TEXT)").unwrap();
-    db
+/// In-memory stand-in for the published custody projections in OpenSearch.
+#[derive(Default)]
+struct Custody(Vec<Document>);
+impl Custody {
+    fn high(&self) -> i64 { self.0.iter().map(|d| d.record.order).max().unwrap_or(0) }
+    fn sources(&self) -> Vec<Source> { sources(&self.0) }
 }
-fn add(db: &Connection, name: &str, sequence: Option<i64>, at: Option<&str>, commands: &[&str]) -> String {
+fn read_connection(db: &Custody, request: &Request) -> parse_command_server::Result<Value> {
+    compute(&db.sources(), db.high(), request)
+}
+fn db() -> Custody { Custody::default() }
+fn projection(db: &mut Custody, id: &str, revision: &str, sequence: i64, core: Value, received: Option<&str>) {
+    let mut row = Record::new("projection", &format!("{id}@{revision}"), json!({"core":core,"audits":[],"first_receipt":format!("receipt-{sequence}"),"selected_received_at":received}));
+    row.state = "published".into();
+    row.order = sequence;
+    db.0.push(Document { record: row, seq: 0, term: 1 });
+}
+fn add(db: &mut Custody, name: &str, sequence: Option<i64>, at: Option<&str>, commands: &[&str]) -> String {
     let id = parse_command_types::message_id(name);
-    let core = json!({"subject":format!("Fictional {name}"),"type":"OPTASK COMMS","command_ids":commands,"issued_at":at});
-    db.execute("INSERT INTO projections VALUES(?,'r1',?,'published')", params![id,core.to_string()]).unwrap();
-    if let Some(sequence) = sequence {
-        db.execute("INSERT INTO receipts VALUES(?,?,?,'r1',?,?)", params![sequence,format!("receipt-{sequence}"),id,at,format!("Fictional {name}")]).unwrap();
-    }
+    let core = json!({"id":id,"subject":format!("Fictional {name}"),"type":"OPTASK COMMS","command_ids":commands,"issued_at":at});
+    projection(db, &id, "r1", sequence.unwrap_or(0), core, at);
     id
 }
 fn request() -> Request {
@@ -21,12 +30,12 @@ fn request() -> Request {
 }
 #[test]
 fn boundaries_hidden_records_and_unknown_times_are_distinct() {
-    let db = db();
-    let exact = add(&db, "exact boundary", Some(1), Some("2026-11-05T04:00:00Z"), &["demo-tern"]);
-    add(&db, "hidden", Some(2), Some("2026-11-05T07:00:00Z"), &["demo-halyard"]);
-    add(&db, "upper excluded", Some(3), Some("2026-11-05T08:00:00Z"), &[]);
-    add(&db, "before excluded", Some(4), Some("2026-11-05T03:59:59Z"), &[]);
-    add(&db, "unknown timestamp", None, None, &[]);
+    let mut db = db();
+    let exact = add(&mut db, "exact boundary", Some(1), Some("2026-11-05T04:00:00Z"), &["demo-tern"]);
+    add(&mut db, "hidden", Some(2), Some("2026-11-05T07:00:00Z"), &["demo-halyard"]);
+    add(&mut db, "upper excluded", Some(3), Some("2026-11-05T08:00:00Z"), &[]);
+    add(&mut db, "before excluded", Some(4), Some("2026-11-05T03:59:59Z"), &[]);
+    add(&mut db, "unknown timestamp", None, None, &[]);
     let mut request = request();
     request.filters.command_ids = vec!["demo-tern".into()];
     let result = read_connection(&db, &request).unwrap();
@@ -50,9 +59,9 @@ fn boundaries_hidden_records_and_unknown_times_are_distinct() {
 }
 #[test]
 fn exact_comparison_does_not_round_submillisecond_receipt_times_into_the_window() {
-    let db = db();
-    add(&db, "before precise boundary", Some(1), Some("2026-11-05T04:00:00.0006Z"), &[]);
-    let exact = add(&db, "at precise boundary", Some(2), Some("2026-11-05T04:00:00.001Z"), &["demo-tern", "demo-halyard"]);
+    let mut db = db();
+    add(&mut db, "before precise boundary", Some(1), Some("2026-11-05T04:00:00.0006Z"), &[]);
+    let exact = add(&mut db, "at precise boundary", Some(2), Some("2026-11-05T04:00:00.001Z"), &["demo-tern", "demo-halyard"]);
     let mut request = request(); request.since = "2026-11-05T04:00:00.001Z".into();
     request.filters.command_ids = vec!["demo-tern".into()];
     let result = read_connection(&db, &request).unwrap();
@@ -63,27 +72,28 @@ fn exact_comparison_does_not_round_submillisecond_receipt_times_into_the_window(
 }
 #[test]
 fn duplicate_receipts_and_parser_revisions_do_not_create_new_custody_records() {
-    let db = db();
-    let id = add(&db, "old body", Some(1), Some("2026-11-05T03:00:00Z"), &[]);
-    db.execute("INSERT INTO receipts VALUES(2,'duplicate',?,'r2','2026-11-05T06:00:00Z','Later subject')", [&id]).unwrap();
-    db.execute("INSERT INTO projections VALUES(?,'r2',?,'published')", params![id,json!({"type":"OPTASK COMMS","command_ids":[],"issued_at":"2026-11-05T03:00:00Z"}).to_string()]).unwrap();
+    let mut db = db();
+    let id = add(&mut db, "old body", Some(1), Some("2026-11-05T03:00:00Z"), &[]);
+    // A later parser revision of the same body, selected by a later duplicate receipt.
+    projection(&mut db, &id, "r2", 2, json!({"id":id,"type":"OPTASK COMMS","command_ids":[],"issued_at":"2026-11-05T03:00:00Z"}), Some("2026-11-05T06:00:00Z"));
     assert_eq!(read_connection(&db, &request()).unwrap()["returnedNewCount"], 0);
     let mut scope = request(); scope.since = "2026-11-05T02:00:00Z".into();
     let value = read_connection(&db, &scope).unwrap();
-    assert_eq!(value["items"][0]["messageKey"], format!("{id}@r1")); // first receipt's actual revision
-    db.execute("DELETE FROM projections WHERE revision='r1'", []).unwrap();
-    assert_eq!(read_connection(&db, &scope).unwrap()["items"][0]["messageKey"], Value::Null);
+    assert_eq!(value["returnedNewCount"], 1);
+    assert_eq!(value["items"][0]["messageKey"], format!("{id}@r1")); // earliest receipt's revision
+    db.0.retain(|d| !d.record.key.ends_with("@r1"));
+    assert_eq!(read_connection(&db, &scope).unwrap()["items"][0]["messageKey"], format!("{id}@r2"));
 }
 #[test]
 fn bounded_pages_keep_a_receipt_watermark_and_reject_invalid_requests() {
-    let db = db();
-    for sequence in 1..=201 { add(&db, &format!("page-{sequence}"), Some(sequence), Some("2026-11-05T04:00:00Z"), &[]); }
+    let mut db = db();
+    for sequence in 1..=201 { add(&mut db, &format!("page-{sequence}"), Some(sequence), Some("2026-11-05T04:00:00Z"), &[]); }
     let mut request = request();
     let first = read_connection(&db, &request).unwrap();
     assert_eq!(first["items"].as_array().unwrap().len(), 200);
     request.before = first["nextBefore"].as_i64();
     request.watermark = first["watermark"].as_i64();
-    add(&db, "later arrival", Some(202), Some("2026-11-05T07:00:00Z"), &[]);
+    add(&mut db, "later arrival", Some(202), Some("2026-11-05T07:00:00Z"), &[]);
     let next = read_connection(&db, &request).unwrap();
     assert_eq!(next["items"].as_array().unwrap().len(), 1);
     assert_eq!(next["nextBefore"], Value::Null);
@@ -93,13 +103,13 @@ fn bounded_pages_keep_a_receipt_watermark_and_reject_invalid_requests() {
 }
 #[test]
 fn sent_time_not_receipt_time_places_and_orders_messages() {
-    let db = db();
+    let mut db = db();
     // Sent 0500Z but received after the window; sent before the window but received inside it.
-    let late = add(&db, "sent in window", Some(1), Some("2026-11-05T05:00:00Z"), &[]);
-    db.execute("UPDATE receipts SET received_at='2026-11-05T09:30:00Z' WHERE sequence=1", []).unwrap();
-    add(&db, "sent before window", Some(2), Some("2026-11-05T02:00:00Z"), &[]);
-    db.execute("UPDATE receipts SET received_at='2026-11-05T06:00:00Z' WHERE sequence=2", []).unwrap();
-    let newest = add(&db, "sent later", Some(3), Some("2026-11-05T07:00:00Z"), &[]);
+    let late = add(&mut db, "sent in window", Some(1), Some("2026-11-05T05:00:00Z"), &[]);
+    db.0[0].record.payload["selected_received_at"] = json!("2026-11-05T09:30:00Z");
+    add(&mut db, "sent before window", Some(2), Some("2026-11-05T02:00:00Z"), &[]);
+    db.0[1].record.payload["selected_received_at"] = json!("2026-11-05T06:00:00Z");
+    let newest = add(&mut db, "sent later", Some(3), Some("2026-11-05T07:00:00Z"), &[]);
     let result = read_connection(&db, &request()).unwrap();
     assert_eq!(result["returnedNewCount"], 2);
     assert_eq!(result["items"][0]["id"], newest);

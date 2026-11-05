@@ -1,10 +1,11 @@
 //! Bounded, metadata-only suggestions from published scanner evidence in custody.
-//! SQLite verifies byte spans and computes line bounds; raw bodies never leave SQLite here.
+//! Reads published custody projections; byte spans are verified against the preserved
+//! source and only line bounds leave this module, never raw bodies.
 use crate::{Error, Result, private::timestamp};
-use rusqlite::{Connection, OpenFlags};
+use serde_json::json;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, path::Path, time::Duration};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -31,78 +32,66 @@ pub struct Metadata {
     pub suggestions: Vec<Suggestion>,
     pub limited: bool,
 }
-pub fn read(path: &Path) -> Result<Metadata> {
-    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    db.busy_timeout(Duration::from_millis(250))?;
-    db.execute_batch("BEGIN")?;
-    read_connection(&db)
+const PROFILES: [&str; 2] = ["usmtf-2003-subset-v1", "observed-optask-extensions-v1"];
+/// Bounded custody read: the 200 most recently received published projections.
+pub async fn read(store: &parse_command_state::Store) -> Result<Metadata> {
+    let value = store.search(json!({"size":201,"query":{"bool":{"filter":[{"term":{"kind":"projection"}},{"term":{"state":"published"}}]}},
+        "sort":[{"order":"desc"},"key"]})).await?;
+    let docs = parse_command_state::hits(&value)?;
+    from_projections(&docs)
 }
-fn unsigned(value: i64) -> Result<u64> {
-    u64::try_from(value).map_err(|_| Error::unavailable())
+fn line(raw: &[u8], end: usize) -> u64 {
+    1 + raw[..end].iter().filter(|b| **b == b'\n').count() as u64
 }
-pub fn read_connection(db: &Connection) -> Result<Metadata> {
-    let count: i64 = db.query_row("SELECT count(*) FROM (SELECT 1 FROM projections WHERE delivery_state='published' LIMIT 201)", [], |r| r.get(0))?;
-    // Only EXER/OPER first fields from supported profiles, matched byte-for-byte to
-    // the same revision's source-preserved audit. No participant/originator candidates.
-    let mut query = db.prepare(r#"
-      WITH recent AS (
-        SELECT message_id,revision FROM projections WHERE delivery_state='published'
-        ORDER BY rowid DESC LIMIT 200
-      ), fields AS (
-        SELECT a.message_id,a.revision,a.id AS audit_id,
-          json_extract(a.document,'$.recorded_at') AS recorded,
-          json_extract(r.value,'$.set_id') AS set_id,
-          json_extract(f.value,'$.raw_text') AS value,
-          json_extract(f.value,'$.start_byte') AS first,
-          json_extract(f.value,'$.end_byte') AS last,
-          CAST(json_extract(s.document,'$.payload.source.raw_text') AS BLOB) AS raw
-        FROM recent p
-        JOIN audit_outbox a ON a.message_id=p.message_id AND a.revision=p.revision
-        JOIN audit_outbox s ON s.message_id=p.message_id AND s.revision=p.revision
-        JOIN json_each(a.document,'$.payload.records') r
-        JOIN json_each(r.value,'$.fields') f
-        WHERE a.delivery_state='published' AND s.delivery_state='published'
-          AND json_extract(a.document,'$.kind')='parse_completed'
-          AND json_extract(s.document,'$.kind')='source_preserved'
-          AND json_extract(s.document,'$.payload.source.sha256')=substr(p.message_id,8)
-          AND json_extract(a.document,'$.payload.profile') IN ('usmtf-2003-subset-v1','observed-optask-extensions-v1')
-          AND json_extract(r.value,'$.set_id') IN ('EXER','OPER')
-          AND json_extract(f.value,'$.position')=1
-          AND json_type(f.value,'$.start_byte')='integer' AND json_type(f.value,'$.end_byte')='integer'
-      )
-      SELECT message_id,revision,audit_id,recorded,set_id,value,first,last,
-        1+length(CAST(substr(raw,1,first) AS TEXT))-length(replace(CAST(substr(raw,1,first) AS TEXT),char(10),'')),
-        1+length(CAST(substr(raw,1,last-1) AS TEXT))-length(replace(CAST(substr(raw,1,last-1) AS TEXT),char(10),''))
-      FROM fields WHERE first>=0 AND last>first AND last<=length(raw)
-        AND length(CAST(value AS BLOB))=last-first
-        AND substr(raw,first+1,last-first)=CAST(value AS BLOB)
-        AND length(value) BETWEEN 1 AND 128
-      ORDER BY recorded DESC,message_id,first LIMIT 401
-    "#)?;
-    let records = query.query_map([], |r| Ok((
-        r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?,
-        r.get::<_, String>(3)?, r.get::<_, String>(4)?, r.get::<_, String>(5)?,
-        r.get::<_, i64>(6)?, r.get::<_, i64>(7)?, r.get::<_, i64>(8)?, r.get::<_, i64>(9)?,
-    )))?;
+/// Only EXER/OPER first fields from supported profiles, matched byte-for-byte to the
+/// same revision's source-preserved audit. No participant/originator candidates.
+pub fn from_projections(docs: &[parse_command_state::Document]) -> Result<Metadata> {
+    let mut rows: Vec<_> = docs.iter().filter(|d| d.record.kind == "projection" && d.record.state == "published").collect();
+    rows.sort_by(|a, b| b.record.order.cmp(&a.record.order).then(a.record.key.cmp(&b.record.key)));
+    let mut limited = rows.len() > 200;
+    rows.truncate(200);
+    let mut fields = Vec::new();
+    for doc in rows {
+        let core = &doc.record.payload["core"];
+        let (Some(id), Some(revision)) = (core["id"].as_str(), core["revision"].as_str()) else { continue };
+        let Some(audits) = doc.record.payload["audits"].as_array() else { continue };
+        let Some(raw) = audits.iter().find(|a| a["kind"] == "source_preserved"
+            && a["payload"]["source"]["sha256"].as_str() == id.strip_prefix("sha256:"))
+            .and_then(|a| a["payload"]["source"]["raw_text"].as_str()) else { continue };
+        let raw = raw.as_bytes();
+        for audit in audits.iter().filter(|a| a["kind"] == "parse_completed"
+            && a["payload"]["profile"].as_str().is_some_and(|p| PROFILES.contains(&p))) {
+            let (Some(audit_id), Some(recorded)) = (audit["id"].as_str(), audit["recorded_at"].as_str()) else { continue };
+            for record in audit["payload"]["records"].as_array().into_iter().flatten() {
+                let Some(set) = record["set_id"].as_str().filter(|s| matches!(*s, "EXER" | "OPER")) else { continue };
+                for field in record["fields"].as_array().into_iter().flatten().filter(|f| f["position"] == 1) {
+                    let (Some(first), Some(last), Some(value)) = (field["start_byte"].as_u64(), field["end_byte"].as_u64(), field["raw_text"].as_str()) else { continue };
+                    let (Ok(first), Ok(last)) = (usize::try_from(first), usize::try_from(last)) else { continue };
+                    if last <= first || last > raw.len() || raw[first..last] != *value.as_bytes() || !(1..=128).contains(&value.chars().count()) { continue; }
+                    fields.push((id, revision, audit_id, recorded, set, value, first, last, line(raw, first), line(raw, last - 1)));
+                }
+            }
+        }
+    }
+    fields.sort_by(|a, b| b.3.cmp(a.3).then(a.0.cmp(b.0)).then(a.6.cmp(&b.6)));
     let mut groups: BTreeMap<String, Suggestion> = BTreeMap::new();
-    let mut limited = count > 200;
-    for (index, record) in records.enumerate() {
+    for (index, record) in fields.into_iter().enumerate() {
         if index == 400 { limited = true; break; }
-        let (id, revision, audit, recorded, set, raw_value, start, end, line_start, line_end) = record?;
-        let (start, end, line_start, line_end) = (unsigned(start)?, unsigned(end)?, unsigned(line_start)?, unsigned(line_end)?);
+        let (id, revision, audit, recorded, set, raw_value, start, end, line_start, line_end) = record;
+        let (start, end) = (start as u64, end as u64);
         let value = raw_value.split_whitespace().collect::<Vec<_>>().join(" ");
         if value.is_empty() || value == "-" || value.len() > 128 { continue; }
-        parse_command_types::validate_hash_id(&id, "message_id").map_err(|_| Error::unavailable())?;
-        parse_command_types::validate_revision(&revision, "revision").map_err(|_| Error::unavailable())?;
-        parse_command_types::validate_event_id(&audit, "audit_id").map_err(|_| Error::unavailable())?;
+        parse_command_types::validate_hash_id(id, "message_id").map_err(|_| Error::unavailable())?;
+        parse_command_types::validate_revision(revision, "revision").map_err(|_| Error::unavailable())?;
+        parse_command_types::validate_event_id(audit, "audit_id").map_err(|_| Error::unavailable())?;
         let group = groups.entry(value.clone()).or_insert_with(|| Suggestion {
             id: format!("context:{:x}", Sha256::digest(format!("operationName\0{value}").as_bytes())),
             field: "operationName", values: vec![value], sources: Vec::new(),
         });
         if !group.sources.iter().any(|s| s.message_key == format!("{id}@{revision}") && s.start_byte == start) {
             group.sources.push(Citation {
-                message_key: format!("{id}@{revision}"), audit_id: audit, set_id: set,
-                recorded_at: timestamp(&recorded)?, start_byte: start, end_byte: end, line_start, line_end,
+                message_key: format!("{id}@{revision}"), audit_id: audit.into(), set_id: set.into(),
+                recorded_at: timestamp(recorded)?, start_byte: start, end_byte: end, line_start, line_end,
             });
         }
     }
@@ -121,36 +110,32 @@ pub fn read_connection(db: &Connection) -> Result<Metadata> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
-    fn evidence(db: &Connection, index: usize, corrupt: bool) {
+    use parse_command_state::{Document, Record};
+    fn evidence(docs: &mut Vec<Document>, index: usize, corrupt: bool) {
         let raw = format!("MSGID/FICTIONAL É{index}//\nEXER/FICTIONAL COPPER//\nGENTEXT/PRIVATE BODY NEVER RETURNED//");
         let id = parse_command_types::message_id(&raw);
         let start = raw.find("FICTIONAL COPPER").unwrap();
         let field = json!({"position":1,"raw_text":"FICTIONAL COPPER","start_byte":start,"end_byte":start+if corrupt { 1 } else { "FICTIONAL COPPER".len() }});
-        db.execute("INSERT INTO projections VALUES(?,'r1','published')", [&id]).unwrap();
-        for (kind, payload) in [
+        let audits: Vec<_> = [
             ("source_preserved", json!({"source":{"raw_text":raw,"sha256":id.trim_start_matches("sha256:")}})),
             ("parse_completed", json!({"profile":"observed-optask-extensions-v1","records":[{"set_id":"EXER","fields":[field],"rows":[]}]})),
-        ] {
-            let audit = parse_command_types::event_id(&[&id, kind]);
-            let doc = json!({"id":audit,"kind":kind,"recorded_at":format!("2026-11-05T{index:02}:00:00Z"),"payload":payload});
-            db.execute("INSERT INTO audit_outbox VALUES(?,?,'r1',?,'published')", rusqlite::params![audit,id,doc.to_string()]).unwrap();
-        }
-    }
-    #[test]
-    fn sqlite_signed_bounds_are_checked_without_exposing_input() {
-        assert_eq!(unsigned(0).unwrap(), 0);
-        assert_eq!(unsigned(i64::MAX).unwrap(), 9_223_372_036_854_775_807u64);
-        assert_eq!(unsigned(-1).err().unwrap().code, "unavailable");
+        ].into_iter().map(|(kind, payload)| json!({"id":parse_command_types::event_id(&[&id, kind]),"kind":kind,"recorded_at":format!("2026-11-05T{index:02}:00:00Z"),"payload":payload})).collect();
+        let mut row = Record::new("projection", &format!("{id}@r1"), json!({"core":{"id":id,"revision":"r1"},"audits":audits}));
+        row.state = "published".into();
+        row.order = index as i64 + 1;
+        docs.push(Document { record: row, seq: 0, term: 1 });
     }
     #[test]
     fn grouped_metadata_verifies_spans_counts_unicode_lines_and_caps_citations() {
-        let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE projections(message_id TEXT,revision TEXT,delivery_state TEXT); CREATE TABLE audit_outbox(id TEXT,message_id TEXT,revision TEXT,document TEXT,delivery_state TEXT)").unwrap();
-        evidence(&db, 0, true);
-        assert!(read_connection(&db).unwrap().suggestions.is_empty());
-        for index in 1..=21 { evidence(&db, index, false); }
-        let metadata = read_connection(&db).unwrap();
+        let mut docs = Vec::new();
+        evidence(&mut docs, 0, true);
+        assert!(from_projections(&docs).unwrap().suggestions.is_empty());
+        for index in 1..=21 { evidence(&mut docs, index, false); }
+        let mut pending = docs[1].clone();
+        pending.record.state = "pending".into();
+        pending.record.key = "unpublished".into();
+        docs.push(pending);
+        let metadata = from_projections(&docs).unwrap();
         assert!(metadata.limited);
         assert_eq!(metadata.suggestions.len(), 1);
         let group = &metadata.suggestions[0];

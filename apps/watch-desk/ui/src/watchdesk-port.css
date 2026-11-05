@@ -46,15 +46,6 @@
   .calendar-page.calendar-with-ships .calendar-scroll { flex: none; height: 460px; min-height: 420px; }
   .calendar-page.calendar-with-ships .calendar-scroll .ship-calendar { min-height: 420px; }
 }
-@media (max-width: 640px) {
-  #root .desk-header { height: auto; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; }
-  .desk-header .header-start { grid-column: 1; gap: 8px; }
-  .desk-header .account { grid-column: 2; grid-row: 1; gap: 4px; }
-  .desk-header .header-clock { grid-column: 1 / -1; grid-row: 2; font-size: 14px; }
-  .desk-header .wordmark { gap: 8px; }
-}
-.desk-header .popover-trigger { color: white; }
-.desk-header .avatar > div { background: oklch(78% 0.08 190); color: oklch(25% 0.04 250); }
 
 /* Day resources and Week Fit only; Expanded keeps Parker's lane-proportional width. */
 .calendar-with-ships .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
@@ -90,59 +81,38 @@
 .calendar-event-copy { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: auto; }
 .calendar-with-ships .ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }
 
-/* App-owned Settings; read-only users see the same confirmed context. */
-.watch-settings { width: 100%; max-width: 800px; margin: 0 auto; font-size: 14px; line-height: 1.5; }
-.watch-settings .settings-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 8px; }
-.watch-settings h1 { font-size: 24px; line-height: 1.25; font-weight: 650; margin: 0; }
-.watch-settings .btn { font-size: 14px; font-weight: 600; min-height: 32px; height: auto; max-width: 100%; white-space: normal; }
-.watch-settings p { margin: 6px 0; overflow-wrap: anywhere; }
-.watch-settings :is(.settings-refresh, .context-suggestion-dismiss) { background-color: var(--color-base-100); color: var(--color-base-content); border: 1px solid var(--color-border-strong); }
-.watch-settings :is(.settings-refresh, .context-suggestion-dismiss):hover:not(:disabled) { background-color: var(--color-base-300); }
-.watch-settings :is(.settings-refresh, .context-suggestion-dismiss):disabled { color: var(--color-bc-muted); cursor: not-allowed; }
-.watch-settings .context-suggestion-use { background-color: var(--color-primary); color: var(--color-primary-content); border: 1px solid var(--color-primary); }
-.watch-settings .context-suggestion-use:hover:not(:disabled) { background-color: color-mix(in oklch, var(--color-primary) 90%, var(--color-base-content)); }
-.watch-settings .context-suggestion-use:disabled { background-color: var(--color-base-200); color: var(--color-bc-muted); border-color: var(--color-border-strong); cursor: not-allowed; }
-.watch-settings > p, .watch-settings .context-editor p, .watch-settings .context-suggestions > p { color: var(--color-bc-muted); font-size: inherit; }
-.watch-settings .settings-view-only { font-size: inherit; font-weight: 400; }
-.watch-settings .settings-provenance, .watch-settings p.context-confirmation { font-size: 12px; color: var(--color-bc-muted); }
-.settings-defaults { display: inline-block; padding: 2px 6px; border: 1px solid var(--color-border-strong); border-radius: 3px; background: var(--color-base-100); font-size: 12px; font-weight: 500; }
-.watch-settings .context-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
-.watch-settings .context-editor { min-width: 0; border-top: 1px solid var(--color-base-300); padding: 12px 0; }
-.watch-settings .context-editor-wide { grid-column: 1 / -1; }
-.watch-settings fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
-.watch-settings legend { font-size: inherit; font-weight: 600; margin-bottom: 6px; padding: 0; }
-.watch-settings .context-editor :is(.input, .select) { display: block; width: 100%; max-width: 480px; min-width: 0; min-height: 32px; height: 32px; font: inherit; }
+/* Watch fields and message suggestions inside the shared Settings form. */
 /* Disabled fields stay legible on both theme surfaces, including Safari text fill. */
-.watch-settings .context-editor :is(.input, .select):disabled {
+.settings-content fieldset:disabled :is(.input, .select),
+.settings-content :is(.input, .select):disabled {
   background-color: var(--color-base-100);
   border: 1px solid var(--color-border-strong);
   color: var(--color-base-content);
   -webkit-text-fill-color: var(--color-base-content);
   opacity: 1;
 }
-.watch-settings .context-editor .input::placeholder {
+.settings-content .input::placeholder {
   color: var(--color-bc-muted);
   -webkit-text-fill-color: var(--color-bc-muted);
   opacity: 1;
 }
-.watch-settings .context-editor .context-empty { color: var(--color-bc-muted); }
-.watch-settings .context-ship-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; }
-.watch-settings .context-ship-options label, .watch-settings .context-hide-confirm { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: inherit; }
-.watch-settings .context-ship-options label:last-child { grid-column: 1 / -1; }
-.watch-settings input[type="checkbox"] { flex: none; }
-.context-hide-confirm { border-left: 3px solid var(--color-warning); padding: 8px; }
-.watch-settings .context-suggestions { margin-top: 16px; }
-.watch-settings .context-suggestions h2 { font-size: 16px; font-weight: 650; }
-.watch-settings .context-suggestion { border: 1px solid var(--color-base-300); padding: 12px; margin: 8px 0; overflow-wrap: anywhere; }
-.watch-settings .context-suggestion h3 { font-size: 14px; font-weight: 600; }
-.watch-settings .context-suggestion small { font-size: 12px; font-weight: 400; }
-.context-suggestion a, .context-confirmation a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
-.watch-settings .context-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.watch-settings .context-actions p { margin: 0; font-size: 12px; color: var(--color-bc-muted); }
+.settings-content label small, .settings-default-ships small, .settings-view-only { color: var(--color-bc-muted); font-size: 12px; }
+.settings-default-ships { grid-column: 1 / -1; display: grid; gap: 5px; font-size: 12px; }
+.settings-content .context-ship-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.settings-content .context-ship-options label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.settings-content .context-ship-options input[type="checkbox"] { flex: none; width: auto; }
+.context-suggestions { border-top: 1px solid var(--color-base-300); padding-top: 12px; font-size: 13px; }
+.context-suggestions > p { color: var(--color-bc-muted); margin: 4px 0; overflow-wrap: anywhere; }
+.context-suggestions-heading { justify-content: space-between; }
+.context-suggestions h2 { font-size: 14px; font-weight: 650; }
+.context-suggestion { border: 1px solid var(--color-base-300); padding: 10px; margin: 8px 0; overflow-wrap: anywhere; }
+.context-suggestion h3 { font-size: 13px; font-weight: 600; }
+.context-suggestion small { font-size: 12px; font-weight: 400; }
+.context-suggestion a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
+.context-suggestion .settings-actions { justify-content: flex-start; margin-top: 6px; }
 .context-conflict { border-left: 3px solid var(--color-warning); padding-left: 10px; }
-.watch-settings [role="alert"] { color: var(--color-error); font-size: 14px; }
-@media (max-width: 640px) {
-  .watch-settings .context-fields, .watch-settings .context-ship-options { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 600px) {
+  .settings-content .context-ship-options { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* P5: source-owned turnover, independent of scheduled date/search and existing inbox. */

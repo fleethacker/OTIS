@@ -63,7 +63,7 @@ test("menu links still navigate when the click does not focus them (Safari/macOS
     </>,
     { route: "/calendar" }
   );
-  for (const [name, path] of [["Message Search", "/messages"], ["Settings", "/settings"]]) {
+  for (const [name, path] of [["Message Search", "/messages"], ["About OTIS", "/about"]]) {
     fireEvent.click(view.getByRole("button", { name: "Navigation menu" }));
     const link = view.getByRole("link", { name });
     // Mousedown on a non-focusable link: focus leaves to nothing before click fires.

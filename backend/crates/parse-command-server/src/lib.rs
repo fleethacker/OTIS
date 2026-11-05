@@ -3,6 +3,9 @@ pub mod proto {
     connectrpc::include_generated!();
 }
 pub mod auth;
+pub mod changes;
+pub mod commands;
+pub mod context_metadata;
 pub mod config;
 pub mod error;
 pub mod http;

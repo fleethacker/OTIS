@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { messageHref } from "./calendar-links";
 import { CommandChips, type Command } from "./command-roster";
-import { readShips, selectedShipFilters } from "./ship-calendars";
+import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "./ship-calendars";
+import { useSettings } from "./settings-data";
 import { useChanges, type WatchChange } from "./watch-changes";
 import { formatSinceUTC, parseSinceUTC, sinceState, useWatchClock } from "./watch-boundary";
 
@@ -36,12 +37,13 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
   const clock = useWatchClock(fixedNow === undefined);
   const now = fixedNow ?? clock;
   const [params, setParams] = useSearchParams();
+  const { shared } = useSettings();
   const state = sinceState(params.get("since"), now, turnovers);
   const valid = state.boundary !== undefined && state.boundary <= now && now + 1 - state.boundary <= 42 * 86400000;
   const query = useChanges({
     since: state.boundary === undefined ? "" : new Date(state.boundary).toISOString(),
     // Include the currently observed millisecond with an exclusive upper endpoint.
-    until: new Date(now + 1).toISOString(), filters: selectedShipFilters(readShips(params.get("ships"))),
+    until: new Date(now + 1).toISOString(), filters: selectedShipFilters(effectiveShips(params.get("ships"), shared?.settings)),
   }, valid);
   const unavailable = !valid || query.isError;
   const pages = unavailable || query.isRefetching ? [] : query.data?.pages ?? [];
@@ -72,7 +74,7 @@ export function WatchTurnoverPanel({ turnovers, commands = [], returnTo, now: fi
         {first && <>
           <p>{first.scope} Through {formatSinceUTC(now)}.</p>
           {(hidden > 0 || unknownHidden > 0) && <p className="turnover-hidden">{hidden} dated and {unknownHidden} undated records on hidden ships · <button className="btn btn-sm" onClick={() => {
-            const next = new URLSearchParams(params); next.delete("ships"); next.delete("q"); setParams(next);
+            const next = new URLSearchParams(params); next.set("ships", ALL_SHIPS); next.delete("q"); setParams(next);
           }}>Show all ships</button></p>}
           {items.length ? <ul>{items.map((row) => <ChangeRow key={row.id} row={row} commands={commands} returnTo={returnTo} />)}</ul> : <p>No messages sent since this watch began for the selected ships.</p>}
           {query.hasNextPage && <button className="btn btn-sm" disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }}>Load more messages</button>}

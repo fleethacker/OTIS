@@ -1,12 +1,12 @@
 //! Read-only turnover evidence, windowed and ordered by source issue time (the message DTG).
-//! First receipt time is kept as custody metadata only; it is not when the message was sent.
+//! Receipt time is kept as custody metadata only; it is not when the message was sent.
+//! Reads published projections from the OpenSearch custody index.
 use crate::{Error, Result, api::App, private::timestamp};
 use axum::{Json, extract::State, http::HeaderMap};
 use chrono::{DateTime, SecondsFormat, Utc};
-use rusqlite::{Connection, OpenFlags, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeSet, path::Path, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 const PAGE: usize = 200;
 #[derive(Clone, Default, Deserialize)]
@@ -57,77 +57,59 @@ fn bound(value: &str) -> Result<DateTime<Utc>> {
     }
     Ok(at)
 }
-const SOURCE: &str = r#"
-  WITH first_receipts AS (
-    SELECT body_id,min(sequence) AS sequence FROM receipts WHERE body_id IS NOT NULL GROUP BY body_id
-  ), sources AS (
-    SELECT p.message_id, p.revision,
-      CASE WHEN r.sequence IS NULL THEN p.message_id||'@'||p.revision
-           WHEN original.message_id IS NOT NULL THEN p.message_id||'@'||r.revision ELSE NULL END AS message_key,
-      r.id AS receipt_id,r.sequence,r.received_at,
-      json_extract(coalesce(original.core,p.core),'$.issued_at') AS issued_at,
-      substr(CASE WHEN r.sequence IS NULL THEN coalesce(json_extract(p.core,'$.subject'),json_extract(p.core,'$.type'),'Source record')
-        ELSE coalesce(r.subject,json_extract(p.core,'$.type'),'Source record') END,1,256) AS title,
-      json_extract(coalesce(original.core,p.core),'$.command_ids') AS command_ids
-    FROM projections p
-    LEFT JOIN first_receipts f ON f.body_id=p.message_id
-    LEFT JOIN receipts r ON r.sequence=f.sequence
-    LEFT JOIN projections original ON original.message_id=p.message_id AND original.revision=r.revision AND original.delivery_state='published'
-    WHERE p.delivery_state='published'
-      AND p.rowid=(SELECT max(other.rowid) FROM projections other WHERE other.message_id=p.message_id AND other.delivery_state='published')
-      AND (r.sequence IS NULL OR r.sequence<=?1)
-  )
-"#;
-type Raw = (String, Option<String>, Option<String>, Option<i64>, Option<String>, Option<String>, String, String);
-fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Raw> {
-    Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?))
+/// One published custody projection, reduced to the metadata Since last watch needs.
+/// `sequence` is the custody receipt order of the projection's selected receipt.
+#[derive(Clone)]
+pub struct Source {
+    pub id: String,
+    pub message_key: Option<String>,
+    pub receipt_id: Option<String>,
+    pub sequence: Option<i64>,
+    pub recorded_at: Option<String>,
+    pub issued_at: Option<String>,
+    pub title: String,
+    pub command_ids: Vec<String>,
 }
-fn change(raw: Raw, unknown: bool) -> Result<Change> {
-    let (id, key, receipt, sequence, received, issued, title, ids) = raw;
-    parse_command_types::validate_hash_id(&id, "message_id").map_err(|_| Error::unavailable())?;
-    if ids.len() > 16384 { return Err(Error::new("resource_exhausted", "Command metadata exceeds bound")); }
-    let ids: Vec<String> = serde_json::from_str(&ids).map_err(|_| Error::unavailable())?;
-    if ids.len() > 32 || ids.iter().any(|id| id.is_empty() || id.len()>256) { return Err(Error::unavailable()); }
-    Ok(Change { id, message_key: key, receipt_id: receipt, sequence, title, command_ids: ids,
-        issued_at: if unknown { None } else { Some(timestamp(issued.as_deref().ok_or_else(Error::unavailable)?)?) },
-        recorded_at: received.as_deref().and_then(|at| timestamp(at).ok()),
+fn change(source: &Source, unknown: bool) -> Result<Change> {
+    parse_command_types::validate_hash_id(&source.id, "message_id").map_err(|_| Error::unavailable())?;
+    let ids = &source.command_ids;
+    if ids.len() > 32 || ids.iter().any(|id| id.is_empty() || id.len() > 256) { return Err(Error::unavailable()); }
+    Ok(Change { id: source.id.clone(), message_key: source.message_key.clone(), receipt_id: source.receipt_id.clone(),
+        sequence: source.sequence, title: source.title.chars().take(256).collect(), command_ids: ids.clone(),
+        issued_at: if unknown { None } else { Some(timestamp(source.issued_at.as_deref().ok_or_else(Error::unavailable)?)?) },
+        recorded_at: source.recorded_at.as_deref().and_then(|at| timestamp(at).ok()),
         basis: if unknown { "issue_time_unavailable" } else { "source_issue_time" },
     })
 }
-pub fn read(path: &Path, request: &Request) -> Result<Value> {
-    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    db.busy_timeout(Duration::from_millis(250))?;
-    db.execute_batch("BEGIN")?;
-    read_connection(&db, request)
+fn issued(source: &Source) -> Option<DateTime<Utc>> {
+    source.issued_at.as_deref().and_then(|v| DateTime::parse_from_rfc3339(v).ok()).map(|v| v.with_timezone(&Utc))
 }
-pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
+/// Pure window/paging computation over published custody sources. `high` is the
+/// current custody receipt watermark.
+pub fn compute(sources: &[Source], high: i64, request: &Request) -> Result<Value> {
     request.filters.validate()?;
     let start = bound(&request.since)?;
     let end = bound(&request.until)?;
     if end <= start || end.signed_duration_since(start) > chrono::Duration::days(42) {
         return Err(Error::invalid("Watch window must be positive and at most 42 days"));
     }
-    let high: i64 = db.query_row("SELECT coalesce(max(sequence),0) FROM receipts", [], |r| r.get(0))?;
     let watermark = request.watermark.unwrap_or(high);
     if watermark < 0 || watermark > high || request.before.is_some_and(|v| v <= 0 || v > watermark) {
         return Err(Error::invalid("Invalid custody cursor; refresh the watch"));
     }
     let since = start.to_rfc3339_opts(SecondsFormat::Millis, true);
     let until = end.to_rfc3339_opts(SecondsFormat::Millis, true);
-    // SQLite dates prune coarsely; chrono enforces the exact half-open boundary below.
-    // Keep the cursor over candidate rows so excluded submillisecond edges cannot stall paging.
-    let sql = format!("{SOURCE} SELECT message_id,message_key,receipt_id,sequence,received_at,issued_at,title,command_ids FROM sources WHERE julianday(issued_at)>=julianday(?2)-1.0/86400 AND julianday(issued_at)<julianday(?3)+1.0/86400 AND (?4 IS NULL OR sequence<?4) ORDER BY sequence DESC LIMIT 201");
-    let mut q = db.prepare(&sql)?;
-    let mut candidates = Vec::new();
-    for r in q.query_map(params![watermark,since,until,request.before], row)? { candidates.push(change(r?, false)?); }
+    let current: Vec<&Source> = sources.iter().filter(|s| s.sequence.is_none_or(|v| v <= watermark)).collect();
+    // Exact half-open [since, until) on the source issue time (DTG); the cursor follows receipt order.
+    let mut candidates: Vec<&Source> = current.iter().copied()
+        .filter(|s| issued(s).is_some_and(|at| at >= start && at < end))
+        .filter(|s| request.before.is_none_or(|before| s.sequence.is_some_and(|v| v < before)))
+        .collect();
+    candidates.sort_by(|a, b| b.sequence.cmp(&a.sequence).then(a.id.cmp(&b.id)));
     let more = candidates.len() > PAGE;
     candidates.truncate(PAGE);
     let next = if more { candidates.last().and_then(|r| r.sequence) } else { None };
-    let mut dated = Vec::new();
-    for candidate in candidates {
-        let at = DateTime::parse_from_rfc3339(candidate.issued_at.as_deref().ok_or_else(Error::unavailable)?).map_err(|_| Error::unavailable())?.with_timezone(&Utc);
-        if at >= start && at < end { dated.push(candidate); }
-    }
+    let mut dated = candidates.into_iter().map(|s| change(s, false)).collect::<Result<Vec<_>>>()?;
     // Pages follow receipt sequence (stable cursor); within a page, newest sent first.
     dated.sort_by(|a, b| b.issued_at.cmp(&a.issued_at).then(b.sequence.cmp(&a.sequence)));
     let returned = dated.len();
@@ -143,12 +125,11 @@ pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
         }
     }
     // Unknown evidence has no position within [since,until); keep it outside dated counts.
-    let sql = format!("{SOURCE} SELECT message_id,message_key,receipt_id,sequence,received_at,issued_at,title,command_ids FROM sources WHERE julianday(issued_at) IS NULL ORDER BY message_id LIMIT 51");
-    let mut q = db.prepare(&sql)?;
-    let mut unknown = Vec::new();
-    for r in q.query_map([watermark], row)? { unknown.push(change(r?, true)?); }
+    let mut unknown: Vec<&Source> = current.iter().copied().filter(|s| issued(s).is_none()).collect();
+    unknown.sort_by(|a, b| a.id.cmp(&b.id));
     let unknown_limited = unknown.len() > 50;
     unknown.truncate(50);
+    let mut unknown = unknown.into_iter().map(|s| change(s, true)).collect::<Result<Vec<_>>>()?;
     let unknown_hidden = unknown.iter().filter(|r| !request.filters.matches(&r.command_ids)).count();
     unknown.retain(|r| request.filters.matches(&r.command_ids));
     Ok(json!({
@@ -159,16 +140,55 @@ pub fn read_connection(db: &Connection, request: &Request) -> Result<Value> {
         "scope":"Published messages by source issue time (DTG); counts cover returned pages only. Messages without an issue time are listed separately.",
     }))
 }
+/// Reduce published custody projections to one source per message body. The
+/// earliest receipt keeps the message key, so later parser revisions or duplicate
+/// receipts never appear as new records.
+pub fn sources(docs: &[parse_command_state::Document]) -> Vec<Source> {
+    let mut rows: Vec<&parse_command_state::Document> = docs.iter()
+        .filter(|d| d.record.kind == "projection" && d.record.state == "published").collect();
+    rows.sort_by(|a, b| a.record.order.cmp(&b.record.order).then(a.record.key.cmp(&b.record.key)));
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for doc in rows {
+        let core = &doc.record.payload["core"];
+        let Some(id) = core["id"].as_str() else { continue };
+        if !seen.insert(id.to_owned()) { continue; }
+        let ids = core["command_ids"].as_array().map(|v| v.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+        let title = core["subject"].as_str().or(core["type"].as_str()).unwrap_or("Source record");
+        out.push(Source {
+            id: id.into(), message_key: Some(doc.record.key.clone()),
+            receipt_id: doc.record.payload["first_receipt"].as_str().map(str::to_owned),
+            sequence: (doc.record.order > 0).then_some(doc.record.order),
+            recorded_at: doc.record.payload["selected_received_at"].as_str().map(str::to_owned),
+            issued_at: core["issued_at"].as_str().map(str::to_owned),
+            title: title.into(), command_ids: ids,
+        });
+    }
+    out
+}
+/// Bounded custody read: at most 1000 published projections at or below the watermark.
+pub async fn read(store: &parse_command_state::Store, request: &Request) -> Result<Value> {
+    let filter = |extra: Vec<Value>| {
+        let mut f = vec![json!({"term":{"kind":"projection"}}), json!({"term":{"state":"published"}})];
+        f.extend(extra);
+        json!({"bool":{"filter":f}})
+    };
+    let stats = store.search(json!({"size":0,"query":filter(vec![]),"aggs":{"high":{"max":{"field":"order"}}}})).await?;
+    let high = stats["aggregations"]["high"]["value"].as_f64().unwrap_or(0.0).max(0.0) as i64;
+    let watermark = request.watermark.unwrap_or(high).clamp(0, high);
+    let page = store.search(json!({"size":parse_command_state::MAX_HITS,"query":filter(vec![json!({"range":{"order":{"lte":watermark}}})]),
+        "sort":[{"order":"desc"},"key"]})).await?;
+    let docs = parse_command_state::hits(&page)?;
+    compute(&sources(&docs), high, request)
+}
 static CHANGE_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
 pub async fn list(State(app): State<Arc<App>>, headers: HeaderMap, Json(request): Json<Request>) -> Result<Json<Value>> {
-    app.headers_identity(&headers)?;
+    app.headers_identity(&headers).await?;
     let permit = CHANGE_READS.try_acquire().map_err(|_| Error::new("resource_exhausted", "Turnover reads are busy; retry shortly"))?;
-    let path = app.config.intake.journal.clone();
-    let value = tokio::time::timeout(Duration::from_secs(7), tokio::task::spawn_blocking(move || {
-        let _permit = permit; // keep the bound even if the HTTP deadline expires
-        read(&path, &request)
-    }))
-        .await.map_err(|_| Error::unavailable())?.map_err(|_| Error::unavailable())??;
+    let value = tokio::time::timeout(Duration::from_secs(7), async {
+        let _permit = permit;
+        read(&app.custody, &request).await
+    }).await.map_err(|_| Error::unavailable())??;
     if value.to_string().len() > 2_097_152 { return Err(Error::new("resource_exhausted", "Turnover response exceeds bound")); }
     Ok(Json(value))
 }

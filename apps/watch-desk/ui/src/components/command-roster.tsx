@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { readJson } from "./source-data";
 import { UNASSIGNED } from "./ship-calendars";
+import { useSettings } from "./settings-data";
 
 export interface Command {
   id: string;
@@ -16,9 +17,8 @@ export interface CommandRoster {
   version: string;
   provenance: string;
   assignmentEnabled: boolean;
+  /** Shared default ships from Settings (empty shows every ship). */
   defaultShips?: string[];
-  turnoverUtc?: string[];
-  contextUpdatedBy?: string | null;
 }
 export async function readCommands(signal?: AbortSignal): Promise<CommandRoster> {
   const payload = await readJson(await fetch("/api/v1/commands/list", {
@@ -34,12 +34,6 @@ export async function readCommands(signal?: AbortSignal): Promise<CommandRoster>
       typeof payload.provenance !== "string" || typeof payload.assignmentEnabled !== "boolean") {
     throw new Error("Ship roster response is invalid");
   }
-  if (payload.defaultShips !== undefined && (!Array.isArray(payload.defaultShips) || !payload.defaultShips.every((v) => typeof v === "string"))) {
-    throw new Error("Default ship selection is invalid");
-  }
-  if (payload.turnoverUtc !== undefined && (!Array.isArray(payload.turnoverUtc) || !payload.turnoverUtc.every((v) => typeof v === "string"))) {
-    throw new Error("UTC watch turnover configuration is invalid");
-  }
   const roster = payload as unknown as CommandRoster;
   if (new Set(roster.commands.map((c) => c.id)).size !== roster.commands.length) {
     throw new Error("Ship roster has duplicate identifiers");
@@ -47,9 +41,11 @@ export async function readCommands(signal?: AbortSignal): Promise<CommandRoster>
   return roster;
 }
 export function useCommands() {
+  const defaults = useSettings().shared?.settings.defaultShips;
   return useQuery({
     queryKey: ["watchdesk-commands"], queryFn: ({ signal }) => readCommands(signal),
     staleTime: 30_000, gcTime: 60_000, retry: false,
+    select: (roster: CommandRoster) => (defaults === undefined ? roster : { ...roster, defaultShips: defaults }),
   });
 }
 

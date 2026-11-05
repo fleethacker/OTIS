@@ -1,6 +1,6 @@
 import { AppButton, Notice, TextInput } from "../components/ui";
+import { useCalendarParams } from "../components/calendar-params";
 import { useSettings } from "../components/settings-data";
-import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
@@ -15,7 +15,7 @@ import {
   type CalendarView,
 } from "../components/calendar-time";
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
-import { readShips, selectedShipFilters } from "../components/ship-calendars";
+import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "../components/ship-calendars";
 import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
 import { useCommands } from "../components/command-roster";
 import { ShipsSidebar } from "../components/ships-sidebar";
@@ -41,20 +41,15 @@ export default function Calendar() {
   const to = month ? bounds.to : week ? weekly.to : civilHour(date, 24, zone);
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const ships = params.has("ships")
-    ? readShips(params.get("ships"))
-    : (shared?.settings.commandIds.length ?? 0) > 0
-      ? new Set((shared?.settings.commandIds ?? []).map((id) => `unit:${id}`))
-      : null;
+  const ships = effectiveShips(params.get("ships"), shared?.settings);
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
+  const filters = selectedShipFilters(ships);
+  const noShips = ships !== undefined && (filters.noCommands === true ||
+    (!!roster.data && !roster.isError && ![...ships].some((key) => key === "unassigned:" || roster.data.commands.some((c) => key === `unit:${c.id}`))));
   const result = useSource("timeline", {
-    dataset,
-    query: debounced,
-    mode: "hybrid",
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
-    filters: selectedShipFilters(ships),
-  });
+    dataset, query: debounced, mode: "hybrid",
+    from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
+  }, !noShips);
   const messages = result.data?.messages ?? [];
   const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
   const canonical = new URLSearchParams(params);
@@ -95,13 +90,13 @@ export default function Calendar() {
         error={roster.isError ? roster.error.message : undefined}
         retry={() => { void roster.refetch(); }}
         onChange={(selected) => setParams((next) => {
-          if (selected === undefined) next.delete("ships");
+          if (selected === undefined) next.set("ships", ALL_SHIPS);
           else next.set("ships", JSON.stringify([...selected].sort()));
         })}
       />
       <div className="calendar-main">
       {dataset === "canonical" && <WatchTurnoverPanel
-        turnovers={roster.isError ? undefined : roster.data?.turnoverUtc}
+        turnovers={shared?.settings.turnoverUtc}
         commands={roster.isError ? [] : roster.data?.commands}
         returnTo={returnTo}
       />}
@@ -142,6 +137,26 @@ export default function Calendar() {
             Month
           </AppButton>
         </div>
+        {view === "day" && (
+          <div className="join" aria-label="Day ship layout">
+            <AppButton
+              size="sm"
+              className="join-item"
+              aria-pressed={params.get("shipLayout") !== "side"}
+              onClick={() => update("shipLayout", "combined")}
+            >
+              Combined
+            </AppButton>
+            <AppButton
+              size="sm"
+              className="join-item"
+              aria-pressed={params.get("shipLayout") === "side"}
+              onClick={() => update("shipLayout", "side")}
+            >
+              Side by side
+            </AppButton>
+          </div>
+        )}
         <AppButton size="sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
           ← Previous
         </AppButton>
@@ -165,12 +180,14 @@ export default function Calendar() {
           />
         </label>
       </section>
-      {!noShips && query.trim() && !refreshing && !result.isError && result.data && <p className="calendar-search-status">
-        Calendar filtered by “{query}” · Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
-        {result.data.meta.executedMode === "hybrid" && " Ranked results may include related messages without a literal word match."}
-      </p>}
+      {!noShips && query.trim() && !refreshing && !result.isError && result.data && (
+        <p className="calendar-search-status">
+          Calendar filtered by “{query}” · Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
+          {result.data.meta.executedMode === "hybrid" && " Ranked results may include related messages without a literal word match."}
+        </p>
+      )}
       {refreshing && <p role="status">Loading schedule…</p>}
-      {result.isError && (
+      {!noShips && result.isError && (
         <Notice role="alert" tone="error">
           Calendar could not be loaded. {result.error.message}
           <AppButton size="sm" onClick={() => void result.refetch()}>
@@ -237,7 +254,7 @@ export default function Calendar() {
           filtered={ships !== undefined || query.trim() !== ""}
           returnTo={returnTo}
           onShowAll={() => setParams((next) => {
-            next.delete("ships");
+            next.set("ships", ALL_SHIPS);
             next.delete("q");
           })}
         />

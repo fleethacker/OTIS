@@ -18,17 +18,28 @@ installs a demo mailbox, or connects to a public model service.
 | Architecture | Linux ARM64 only |
 | UDS CLI | 0.38.0 |
 | Zarf | 0.86.0, embedded in `uds zarf` (standalone 0.82.0 is not used) |
-| UDS Core | 1.14.3, upstream standard profile with Keycloak/Authservice |
-| Local platform | Official `k3d-core-demo:1.14.3`, UDS K3d 0.21.0-airgap |
+| UDS Core | 1.14.3, base + identity layers with Keycloak/Authservice |
+| Local platform | Official `k3d-core-slim-dev:1.14.3`, UDS K3d 0.21.0-airgap |
 | Kubernetes in that profile | `v1.36.4-k3s1` |
 | OpenSearch | 3.9.0, base digest in its existing Dockerfile |
 | Model | all-MiniLM-L6-v2 1.0.1, 384 dimensions; archive SHA in `versions.json` |
 
 [`profiles/local-arm64.json`](profiles/local-arm64.json) records the proposed local
-profile. Budget 8 CPUs, 24 GiB Docker memory and 50 GiB free disk for the full
-platform plus application; measure actual usage before setting team capacity.
-The current host Docker engine has about 16 GiB, and no Kubernetes context was
-configured during implementation. A full platform installation is not validated.
+profile. Start local validation with 8 CPUs, 16 GiB Docker memory and 50 GiB
+free disk. This is an unmeasured validation target, not a minimum capacity claim.
+Record peak startup and workload consumption with `docker stats` before choosing
+team capacity. A slim-dev cluster installation has not been validated yet.
+
+The official slim-dev bundle contains `core-base` and
+`core-identity-authorization`: Istio, Pepr/UDS Operator, Keycloak and Authservice,
+plus the K3d development support services such as local storage, ingress and
+Minio. It omits the full demo's monitoring/logging, runtime-security and backup
+layers. Keep the application's SSO, verified IMAP TLS, local semantic/hybrid
+search and three retained PVCs. Required backup/recovery tests still apply.
+Preflight also supports the standard `core` package at the same pinned release;
+partial identity/base installs and mismatched Core package versions are rejected.
+Use the pinned tag rather than `latest` so the validation target remains stable.
+
 Node prerequisites: working DNS, a default persistent StorageClass (or an explicit
 one), storage permissions via `fsGroup`, sufficient file descriptors and
 `vm.max_map_count >= 262144` on the Linux nodes. Set node sysctls through the
@@ -50,6 +61,7 @@ and image builds. No Python packages are installed in the bootstrap image.
 From the repository root:
 
 ```sh
+python3 -m unittest discover -s deploy/uds/tools/tests -v
 python3 deploy/uds/tools/validate.py
 python3 deploy/uds/tools/build.py --version 0.1.0-dev.1 --prepare-assets
 ```
@@ -82,8 +94,8 @@ publishing/signing identity remains a team decision.
 The official platform can be prepared separately on a connected machine:
 
 ```sh
-uds inspect oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-demo:1.14.3 --architecture arm64
-uds pull oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-demo:1.14.3 --architecture arm64 --output /secure/transfer/platform
+uds inspect oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.14.3 --architecture arm64
+uds pull oci://ghcr.io/defenseunicorns/packages/uds/bundles/k3d-core-slim-dev:1.14.3 --architecture arm64 --output /secure/transfer/platform
 ```
 
 Transfer the platform archive if needed, application release directory and

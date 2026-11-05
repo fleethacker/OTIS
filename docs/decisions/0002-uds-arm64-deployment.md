@@ -6,8 +6,8 @@ and platform acceptance are in progress under issue #9.
 The user approved Linux ARM64 with a pinned local UDS profile, UDS Core Keycloak
 SSO, and deployment-time hostnames, storage and mailbox inputs. The first target
 is UDS Core 1.14.3, UDS CLI 0.38.0 / embedded Zarf 0.86.0 and the matching official
-local ARM64 K3d profile. The embedded Zarf version supersedes the initially
-suggested standalone 0.82.0 after checking the installed CLI and release bundle.
+local ARM64 K3d slim-dev profile. The embedded Zarf version supersedes the
+initially suggested standalone 0.82.0 after checking the installed CLI and release bundle.
 Only ARM64 has a validated native inference dependency lock.
 
 Three application packages contain OpenSearch/bootstrap, the Rust server, and
@@ -46,6 +46,15 @@ SSO key rotation/logout, and a future AMD64 native lock remain team decisions.
 The implementation runbook lists upgrade, recovery and acceptance gates; none is
 established merely by successful package creation.
 
+On 2026-11-05 the user selected `k3d-core-slim-dev` for local validation. Pin
+version 1.14.3, whose published ARM64 bundle includes both `core-base` and
+`core-identity-authorization`. The earlier full demo/24 GiB planning budget is
+replaced by an unmeasured slim-dev target of 16 GiB. A cluster deployment and
+resource measurements remain required before any capacity claim. Preflight
+accepts both pinned layers or a pinned standard Core install, and rejects
+missing identity or mismatched Core versions. SSO, TLS, search and data retention
+remain part of the application profile.
+
 Primary references: [UDS Authservice integration](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/docs/how-to-guides/identity-and-authorization/protect-apps-with-authservice.mdx),
-[matching platform bundle](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/bundles/k3d-standard/uds-bundle.yaml),
+[matching platform bundle](https://github.com/defenseunicorns/uds-core/blob/v1.14.3/bundles/k3d-slim-dev/uds-bundle.yaml),
 [package requirements](https://docs.defenseunicorns.com/core/v1-16/concepts/configuration--packaging/package-requirements/).

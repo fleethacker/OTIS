@@ -14,6 +14,21 @@ def capture(*command, **kwargs):
     return subprocess.check_output(command, text=True, **kwargs)
 
 
+def require_platform(packages, expected_version):
+    """Require SSO-capable Core, installed either together or as functional layers."""
+    if not isinstance(packages, list) or any(not isinstance(p, dict) for p in packages):
+        raise ValueError('Expected the pinned Zarf package-list JSON array')
+    names = {'core', 'core-base', 'core-identity-authorization'}
+    core = [p for p in packages if p.get('package') in names]
+    versions = {expected_version, *(expected_version + '-' + flavor for flavor in ('upstream', 'registry1', 'unicorn'))}
+    if any(p.get('version') not in versions for p in core):
+        raise ValueError('All installed Core packages must match pinned version ' + expected_version)
+    installed = {p['package'] for p in core}
+    if 'core' in installed or {'core-base', 'core-identity-authorization'} <= installed:
+        return
+    raise ValueError('UDS Core ' + expected_version + ' is required: install core-base and core-identity-authorization (slim-dev), or the standard core package')
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--context', required=True, help='Explicit target context; current-context is never changed')
@@ -44,9 +59,11 @@ def main():
         subprocess.run(['kubectl', 'get', 'crd', 'packages.uds.dev'], env=env, check=True, stdout=subprocess.DEVNULL)
         packages = json.loads(capture('uds', 'zarf', 'package', 'list', '-o', 'json', env=env))
         # Pinned Zarf 0.86 emits rows with package/version (not metadata.name).
-        entries = packages
-        if not any(p.get('package') == 'core' and p.get('version', '').startswith('1.14.3') for p in entries):
-            raise SystemExit('Pinned UDS Core 1.14.3 standard package is required; inspect zarf package list')
+        pins = json.loads((Path(__file__).resolve().parents[1] / 'versions.json').read_text())
+        try:
+            require_platform(packages, pins['uds_core'])
+        except ValueError as error:
+            raise SystemExit(str(error)) from None
         namespace = shared['NAMESPACE']
         if namespace in {'default', 'zarf', 'keycloak', 'pepr-system'} or namespace.startswith(('kube-', 'istio-', 'uds-')):
             raise SystemExit('Use a dedicated application namespace; UDS policy applies to the whole namespace')

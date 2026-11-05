@@ -34,9 +34,26 @@ clean pinned UDS Core cluster, public-egress-disabled installation, browser SSO
 and private state isolation, real synthetic SMTP→IMAP→publication→UI/search,
 UDS bootstrap/restart, negative configuration tests and backup/upgrade/
 rollback/restoration rehearsal. No Kubernetes context was configured for this
-work. The host Docker engine currently provides roughly 16 GiB, below the
-proposed 24 GiB budget for the full local platform plus application. No existing
-mail, application volumes or clusters were deleted or repurposed.
+work. The host Docker engine provides roughly 16 GiB. The 2026-11-05 slim-dev
+profile uses that allocation as an unmeasured validation target, replacing the
+earlier full-demo 24 GiB planning budget. No existing mail, application volumes
+or clusters were deleted or repurposed.
 
 The runbook makes these gates explicit. Development archives, source traffic,
 credentials, local caches, generated SBOM reports and logs remain outside Git.
+
+## Slim-dev profile update (2026-11-05)
+
+The official published ARM64 `k3d-core-slim-dev:latest` metadata was inspected
+without deployment and reported version 1.14.3, with Zarf init 0.86.0 and both
+Core base and identity/authorization layers at 1.14.3. The local profile pins
+`k3d-core-slim-dev:1.14.3` for repeatability. This changes the selected platform
+and deployment preflight; application images and chart resource limits are
+unchanged. The existing development archives predate this tooling/profile
+update; build a new artifact version when preparing the updated candidate.
+
+Six platform tests passed, covering complete slim and standard installs, missing
+identity/base, mixed versions, version-prefix collisions and the profile/version
+lock. Chart rendering and the three Zarf definition checks also passed.
+Actual slim-dev admission, SSO, workflow, resource-use and recovery gates remain
+open. No cluster was deployed by this update.

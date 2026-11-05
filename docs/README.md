@@ -1,6 +1,6 @@
 # Parse Command design and knowledge
 
-Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.1.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; the application server continuously publishes messages, passages and audit batches to OpenSearch. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
+Contract baseline: 2026-11-04. The compact parsed-message structure is approved; ICD 1.2.0 and the schemas specify the contributor contract. The [Rust backend](../backend/README.md) implements the parser SDK, in-memory host and OPTASK contribution, with regression coverage against the supplied examples. The demo intake worker durably stages email receipts and parser results; the application server continuously publishes messages, passages and audit batches to OpenSearch. The [supported-message list](../README.md#supported-optask-messages) identifies tested profiles.
 
 The [ARM64 UDS deployment work](../deploy/uds/README.md) and
 [ADR 0002](decisions/0002-uds-arm64-deployment.md) describe issue #9 and its
@@ -19,7 +19,7 @@ Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMA
 
 | Document | Purpose |
 | --- | --- |
-| [Parsed-message ICD 1.1.0](ICD.md) | Normative compact message/passage/audit contract and parser contribution rules |
+| [Parsed-message ICD 1.2.0](ICD.md) | Normative compact message/passage/audit contract and parser contribution rules |
 | [JSON Schemas](schemas/README.md) | Locally resolvable validation resources for the approved wire shape |
 | [Stored search templates and frontend contract](opensearch/search-contract.md) | Local CPU narrative embeddings, typed filters and keyword/semantic/hybrid requests |
 | [UI test mappings](opensearch/README.md) | Isolated lexical test index definitions; fixtures stay outside Git |
@@ -34,8 +34,10 @@ Evidence labels used throughout: **Confirmed** means specified by the user; **So
 
 The existing `.pdlc-docs/` files capture the earlier WHY/WHAT discussion. These files develop the engineering plan requested subsequently. This folder contains summaries and design notes, not copies of the manuals or operational traffic.
 
-Email framing is confirmed: SMTP delivery, IMAP retrieval, body beginning with `MSGID`, and an email subject prefixed by `SUBJ:`. Core `subject` is the decoded display/search value; original header and transformation details go to audit. Existing body-only fixtures have null subjects.
+Email framing is confirmed: SMTP delivery, IMAP retrieval, body beginning with `MSGID/`, or optional `EXER/` or `OPER/` preamble before MSGID, and an email subject prefixed by `SUBJ:`. Core `subject` is the decoded display/search value; original header and transformation details go to audit. Existing body-only fixtures have null subjects.
 
 Detailed USMTF knowledge and manual-derived notes are kept outside Git at `../OPTASK_Messages/knowledge`; they are distributed with the external sample data. Do not recreate a knowledge corpus under this documentation folder.
 
 - [Settings, OIDC and hidden state](integration/settings-oidc.md): implementation contract, roles, configuration and migration.
+
+- [CASREP support](integration/casrep.md): profiles, typed casualty reports, indexing, search and source-history rules.

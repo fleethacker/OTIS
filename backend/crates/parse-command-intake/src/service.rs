@@ -18,7 +18,10 @@ impl Service {
     pub fn open(config: Config) -> Result<Self> {
         config.validate()?;
         let registry = Registry::new(
-            vec![Box::new(parse_command_optask::OptaskParser)],
+            vec![
+                Box::new(parse_command_optask::OptaskParser),
+                Box::new(parse_command_casrep::CasrepParser),
+            ],
             config.enabled_types.iter().cloned().collect(),
         )
         .map_err(|_| IntakeError("parser_registry"))?;

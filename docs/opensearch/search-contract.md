@@ -103,3 +103,12 @@ candidate window, plus list/detail/timeline/evidence/status templates. See the
 [application API](../integration/rust-application-api.md). The v1 templates above
 remain a diagnostic compatibility contract. Continuous publication is active;
 validation indices intentionally retain historical messages without expiry.
+
+## CASREP metadata (ICD 1.2.0)
+
+CASREP source sets join narrative passages. Compact casualty metadata provides
+identical serial/UIC/category/action/EIC/identifier filters in keyword and semantic
+branches; canonical results are checked again. Keyword search boosts an exact
+`casualty.identifiers` match. The canonical index uses nested logistics/publication
+arrays; the passage stores only filter fields. See the [CASREP contract](../integration/casrep.md)
+for the separately rebuildable source-history index and unresolved-history rules.

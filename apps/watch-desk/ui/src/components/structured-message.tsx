@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
+import { CasualtySummary } from "./casualty-summary";
 import { structuredPayload } from "./structured-message-format";
 import {
   sourceSets,
@@ -114,16 +115,24 @@ export function StructuredMessage({ message }: { message: MessageRecord }) {
   const payload = structuredPayload(message);
   const sets = sourceSets(payload);
   if (sets === undefined || sets.length === 0) {
-    return <p className="text-sm">Parsed sets unavailable.</p>;
+    return (
+      <>
+        <CasualtySummary message={message} />
+        <p className="text-sm">Parsed sets unavailable.</p>
+      </>
+    );
   }
   const examples =
-    payload?.source_profile === "observed-optask-extensions-v1"
+    payload?.source_profile === "observed-optask-extensions-v1" ||
+    payload?.source_profile === "observed-casrep-b10112-v1"
       ? true
-      : payload?.source_profile === "usmtf-2003-subset-v1"
+      : payload?.source_profile === "usmtf-2003-subset-v1" ||
+          payload?.source_profile === "usmtf-2003-casrep-v1"
         ? false
         : undefined;
   return (
     <div className="usmtf-set-list">
+      <CasualtySummary message={message} />
       {sets.map((set, index) => (
         <SetCard key={index} set={set} examples={examples} />
       ))}

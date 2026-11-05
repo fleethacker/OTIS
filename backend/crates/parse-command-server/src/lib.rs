@@ -3,6 +3,7 @@ pub mod proto {
     connectrpc::include_generated!();
 }
 pub mod auth;
+pub mod casualties;
 pub mod config;
 pub mod error;
 pub mod http;

@@ -89,7 +89,7 @@ def generate():
                 if fn:
                     checks.append(f'{fn}({current}, "{container}.{field}")?;')
                 else:
-                    prefix = {"period": "v", "frequency": "f", "activity": "a", "contact": "c", "location": "g"}.get(container)
+                    prefix = {"period": "v", "frequency": "f", "activity": "a", "contact": "c", "location": "g", "casualty": "q"}.get(container)
                     prefix_arg = f"Some(b'{prefix}')" if field == "id" and prefix else "None"
                     checks.append(f'validate_subject_id({current}, {prefix_arg}, "{container}.{field}")?;')
             if "minimum" in spec:

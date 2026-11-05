@@ -6,9 +6,18 @@ export interface MessageFilters {
   sender: string;
   fromDate: string;
   throughDate: string;
+  casualtySerial?: string;
+  casualtyUic?: string;
+  casualtyCategory?: string;
+  casualtyReportType?: string;
 }
 export function messageFilters(params: URLSearchParams): MessageFilters {
   return {
+    ...Object.fromEntries(
+      ["casualtySerial", "casualtyUic", "casualtyCategory", "casualtyReportType"]
+        .filter((key) => params.has(key))
+        .map((key) => [key, params.get(key) ?? ""])
+    ),
     messageType: params.get("messageType") ?? "",
     sender: params.get("sender") ?? "",
     fromDate: params.get("fromDate") ?? "",
@@ -61,6 +70,18 @@ export function messageSearchState(
   if (through !== undefined && error === undefined) {
     filters.issuedTo = moment.tz(through, zone).add(1, "day").toISOString();
   }
+  if (fields.casualtySerial !== undefined && fields.casualtySerial !== "") {
+    filters.casualtySerials = [fields.casualtySerial];
+  }
+  if (fields.casualtyUic !== undefined && fields.casualtyUic !== "") {
+    filters.casualtyUics = [fields.casualtyUic];
+  }
+  if (fields.casualtyCategory !== undefined && fields.casualtyCategory !== "") {
+    filters.casualtyCategories = [fields.casualtyCategory];
+  }
+  if (fields.casualtyReportType !== undefined && fields.casualtyReportType !== "") {
+    filters.casualtyReportTypes = [fields.casualtyReportType];
+  }
   const request: SourceRequest = {
     query,
     mode: "hybrid",
@@ -77,6 +98,10 @@ export function messageSearchState(
     activeFilters: [
       fields.messageType,
       fields.sender,
+      fields.casualtySerial ?? "",
+      fields.casualtyUic ?? "",
+      fields.casualtyCategory ?? "",
+      fields.casualtyReportType ?? "",
       fields.fromDate !== "" || fields.throughDate !== "" ? "date" : "",
     ].filter((v) => v !== "").length,
   };

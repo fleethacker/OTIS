@@ -128,3 +128,21 @@ fn search_headers_expose_only_source_type_originator_and_issue_time() {
         json!({})
     );
 }
+
+#[test]
+fn casualty_filters_target_the_same_passage_and_canonical_metadata() {
+    let filters:Filters=serde_json::from_value(json!({"messageTypes":["CASREP"],"casualtySerials":["2026001"],"casualtyUics":["N54321"],"casualtyCategories":["2"],"casualtyReportTypes":["INITIAL"],"casualtyIdentifiers":["1234-01-123-4567"]})).unwrap();
+    let query = filters.validate().unwrap();
+    for field in [
+        "casualty.serial",
+        "casualty.reporting_uic",
+        "casualty.category",
+        "casualty.report_type",
+        "casualty.identifiers",
+    ] {
+        assert!(query.to_string().contains(field));
+    }
+    let oversized: Filters =
+        serde_json::from_value(json!({"casualtySerials":["x".repeat(257)]})).unwrap();
+    assert!(oversized.validate().is_err());
+}

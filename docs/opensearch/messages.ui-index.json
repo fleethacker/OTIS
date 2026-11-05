@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "icd_version": "1.1.0",
+      "icd_version": "1.2.0",
       "profile": "ui_fixture_lexical_no_retention"
     },
     "properties": {
@@ -361,6 +361,239 @@
             "type": "double"
           },
           "scope": {
+            "type": "keyword"
+          }
+        }
+      },
+      "casualty": {
+        "type": "object",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "serial": {
+            "type": "keyword"
+          },
+          "reporting_uic": {
+            "type": "keyword"
+          },
+          "equipment": {
+            "type": "text",
+            "fields": {
+              "exact": {
+                "type": "keyword"
+              }
+            }
+          },
+          "eic": {
+            "type": "keyword"
+          },
+          "category": {
+            "type": "keyword"
+          },
+          "cause": {
+            "type": "keyword"
+          },
+          "update_sequence": {
+            "type": "keyword"
+          },
+          "initial_report_label": {
+            "type": "keyword"
+          },
+          "fleet": {
+            "type": "keyword"
+          },
+          "repair_estimate_date": {
+            "type": "keyword"
+          },
+          "repair_estimate_comments": {
+            "type": "text"
+          },
+          "repair_requirement_status": {
+            "type": "keyword"
+          },
+          "report_type": {
+            "type": "keyword"
+          },
+          "correction": {
+            "type": "object",
+            "dynamic": "strict",
+            "properties": {
+              "hours_between_failures": {
+                "type": "keyword"
+              },
+              "usage_code": {
+                "type": "keyword"
+              },
+              "hours_repair": {
+                "type": "keyword"
+              },
+              "hours_waiting_parts": {
+                "type": "keyword"
+              }
+            }
+          },
+          "assistance": {
+            "type": "nested",
+            "dynamic": "strict",
+            "properties": {
+              "action": {
+                "type": "keyword"
+              },
+              "kind": {
+                "type": "keyword"
+              },
+              "location": {
+                "type": "keyword"
+              },
+              "coordinates": {
+                "type": "keyword"
+              }
+            }
+          },
+          "technical_data": {
+            "type": "nested",
+            "dynamic": "strict",
+            "properties": {
+              "action": {
+                "type": "keyword"
+              },
+              "allowance_list": {
+                "type": "keyword"
+              },
+              "component_id": {
+                "type": "keyword"
+              },
+              "job_control_number": {
+                "type": "keyword"
+              },
+              "publications": {
+                "type": "nested",
+                "dynamic": "strict",
+                "properties": {
+                  "publication": {
+                    "type": "keyword"
+                  },
+                  "availability": {
+                    "type": "keyword"
+                  }
+                }
+              }
+            }
+          },
+          "parts": {
+            "type": "nested",
+            "dynamic": "strict",
+            "properties": {
+              "sequence": {
+                "type": "keyword"
+              },
+              "stock_reference": {
+                "type": "keyword"
+              },
+              "stock_number": {
+                "type": "keyword"
+              },
+              "quantity_required": {
+                "type": "keyword"
+              },
+              "allowance": {
+                "type": "keyword"
+              },
+              "quantity_onboard": {
+                "type": "keyword"
+              },
+              "not_in_stock": {
+                "type": "keyword"
+              },
+              "not_carried": {
+                "type": "keyword"
+              },
+              "circuit": {
+                "type": "keyword"
+              },
+              "material_control": {
+                "type": "keyword"
+              },
+              "special_material": {
+                "type": "keyword"
+              }
+            }
+          },
+          "requisitions": {
+            "type": "nested",
+            "dynamic": "strict",
+            "properties": {
+              "parts_sequence": {
+                "type": "keyword"
+              },
+              "number": {
+                "type": "keyword"
+              },
+              "quantity": {
+                "type": "keyword"
+              },
+              "priority": {
+                "type": "keyword"
+              },
+              "project": {
+                "type": "keyword"
+              },
+              "required_date": {
+                "type": "keyword"
+              },
+              "routing": {
+                "type": "keyword"
+              },
+              "status": {
+                "type": "keyword"
+              },
+              "issued_label": {
+                "type": "keyword"
+              }
+            }
+          },
+          "receipts": {
+            "type": "nested",
+            "dynamic": "strict",
+            "properties": {
+              "parts_sequence": {
+                "type": "keyword"
+              },
+              "number": {
+                "type": "keyword"
+              },
+              "received_date": {
+                "type": "keyword"
+              },
+              "satisfaction_code": {
+                "type": "keyword"
+              },
+              "quantity": {
+                "type": "keyword"
+              },
+              "satisfaction_designator": {
+                "type": "keyword"
+              }
+            }
+          },
+          "narratives": {
+            "type": "nested",
+            "dynamic": "strict",
+            "properties": {
+              "subject": {
+                "type": "keyword"
+              },
+              "text": {
+                "type": "text"
+              }
+            }
+          },
+          "casualty_identifiers": {
+            "type": "keyword"
+          },
+          "identifiers": {
             "type": "keyword"
           }
         }

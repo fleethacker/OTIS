@@ -127,6 +127,22 @@ def ensure_model(pin):
     return model_id
 
 
+def compatible_mapping_upgrade(current, expected):
+    """Only additive ICD metadata/fields; model and vector geometry stay pinned."""
+    meta = current.get('_meta', {})
+    target = expected['_meta']
+    pinned = (meta.get('profile') == target['profile']
+              and meta.get('model_sha256') == target['model_sha256']
+              and meta.get('chunker') == target['chunker'])
+    runtime = (meta.get('profile') == 'ui_fixture_lexical_no_retention'
+               and not any(key in meta for key in ('model_sha256', 'model_id', 'chunker')))
+    if (meta.get('icd_version') not in ('1.1.0', '1.2.0') or not (pinned or runtime)
+            or current.get('properties', {}).get('embedding') != expected['properties']['embedding']):
+        raise RuntimeError('index_model_or_chunker_conflict_new_generation_required')
+    return {'_meta': {**meta, **target},
+            'properties': {'casualty': expected['properties']['casualty']}}
+
+
 def deploy():
     preflight()
     pin = pin_and_verify()
@@ -152,8 +168,8 @@ def deploy():
             raise
         request('PUT', '/' + INDEX, expected)
     else:
-        if existing[INDEX]['mappings'].get('_meta') != expected['mappings']['_meta']:
-            raise RuntimeError('index_model_or_chunker_conflict_new_generation_required')
+        upgrade = compatible_mapping_upgrade(existing[INDEX]['mappings'], expected['mappings'])
+        request('PUT', '/' + INDEX + '/_mapping', upgrade)
     for name, body in templates(model_id).items():
         request('PUT', '/_scripts/' + name, body)
     # Persisted DEPLOYED metadata can outlive the process-local inference cache.

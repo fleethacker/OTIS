@@ -22,8 +22,8 @@ SENDER = "exercise-control@parse-command.test"
 
 def make_message(body, subject):
     body.decode("utf-8")  # Fail before delivery on an unsupported source encoding.
-    if not body.startswith(b"MSGID"):
-        raise ValueError("The source body must begin with MSGID (see docs/ICD.md).")
+    if not body.startswith((b"MSGID/", b"EXER/", b"OPER/")):
+        raise ValueError("The source body must begin with MSGID/, EXER/, or OPER/ (see docs/ICD.md).")
     if not subject.startswith("SUBJ:"):
         raise ValueError("The demo email subject must begin with SUBJ:.")
     message = EmailMessage(policy=email.policy.SMTP)

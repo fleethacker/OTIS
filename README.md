@@ -22,6 +22,8 @@ Hackathon Event**.
 - **Parse operational tasking:** extract activities, frequency plans, crypto
   changeover times, reporting requirements, locations, and source points of contact
   from supported OPTASK layouts.
+- **Read casualty reports:** parse CASREP INITIAL, UPDATE, CORRECT and CANCEL reports,
+  including equipment, repair estimates, assistance and parts; retain linked source history.
 - **Search message traffic:** combine keyword and local semantic search through
   OpenSearch, with filters for command, message type, originator, and issue date.
 - **Build the watch picture:** browse day, week, and month schedules in Zulu or
@@ -67,7 +69,7 @@ local demo authentication. OpenSearch is available at `http://localhost:9200`;
 SMTP and IMAP use loopback ports `1025` and `1143`. This profile uses plaintext
 mail and disables OpenSearch authentication/TLS for local development.
 
-Send a UTF-8 test message whose body starts with `MSGID`:
+Send a UTF-8 test message whose body starts with `MSGID/`, `EXER/` or `OPER/`:
 
 ```sh
 python3 demo/mail.py send /absolute/path/to/message.txt \
@@ -91,6 +93,10 @@ For offline transfers, restarts, or existing-state migration, follow the
 Example-based regression coverage includes **AAW, ASUW, ASW, COMMS, COP-CTP, EW,
 GENERAL, IM, LINK, LINK ID SUPP, MCM, MINING, NUC, and RAS**. See the
 [Rust backend guide](backend/README.md) for parser implementation and verification.
+
+**CASREP** is also supported as a separate message family. See the
+[CASREP guide](docs/integration/casrep.md) for report actions, indexing and search.
+GENADMIN remains a separate unsupported type.
 
 Support applies to the tested layouts, rather than every USMTF edition or message
 type. Extracted tasking requires human review, and missing or uncertain values

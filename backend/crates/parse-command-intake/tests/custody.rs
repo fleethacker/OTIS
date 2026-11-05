@@ -347,3 +347,25 @@ fn burst_is_bounded_and_resumes_without_duplicate_receipts() {
     ));
     assert_eq!(service.journal.status().unwrap(), status);
 }
+
+#[test]
+fn mime_accepts_usmtf_preamble_without_rewriting_or_searching_arbitrary_text() {
+    let limits = TestConfig::new().0.mime;
+    for prefix in ["EXER/TEST//\n", "OPER/TEST/OPTIONAL//\n", ""] {
+        let text = format!("{prefix}{}", body());
+        assert_eq!(
+            mime::decode(&email("SUBJ: TEST", &text), limits)
+                .unwrap()
+                .body,
+            text
+        );
+    }
+    assert!(
+        mime::decode(
+            &email("SUBJ: TEST", &format!("Forwarded message\n{}", body())),
+            limits
+        )
+        .is_err()
+    );
+    assert!(mime::decode(&email("SUBJ: TEST", "MSGIDENTIFIER/FAKE//"), limits).is_err());
+}

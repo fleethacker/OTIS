@@ -60,7 +60,7 @@ def main():
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
     validators = {}
     for kind in ["message", "passage", "audit-event"]:
-        schema = resources[f"urn:parse-command:icd:1.1.0:{kind}"]
+        schema = resources[f"urn:parse-command:icd:1.2.0:{kind}"]
         validators[kind] = Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
 
     messages = read_lines(args.samples / "messages.ndjson")
@@ -201,7 +201,7 @@ def main():
     bad = dict(audit[0]); bad.pop("payload"); probes.append(("audit-event", bad))
     for kind, bad in probes:
         require(not validators[kind].is_valid(bad), f"Invalid {kind} accepted")
-    print(json.dumps({"icd_version": "1.1.0", "schemas": len(resources), "messages": len(messages),
+    print(json.dumps({"icd_version": "1.2.0", "schemas": len(resources), "messages": len(messages),
                       "passages": len(passages), "audit_events": len(audit), "result": "PASS",
                       "checks": ["JSON Schema and negative probes", "source hashes/spans", "core/audit/parent linkage",
                                  "time/frequency invariants", "Bulk framing/IDs/aliases"],

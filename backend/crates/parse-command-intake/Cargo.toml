@@ -10,6 +10,7 @@ parse-command-state = { path = "../parse-command-state" }
 parse-command-types.workspace = true
 parse-command-parser-api.workspace = true
 parse-command-core = { path = "../parse-command-core" }
+parse-command-casrep = { path = "../parse-command-casrep" }
 parse-command-optask = { path = "../parse-command-optask" }
 serde.workspace = true
 serde_json.workspace = true

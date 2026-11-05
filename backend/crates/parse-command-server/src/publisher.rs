@@ -88,7 +88,12 @@ impl Publisher {
         if !matches!(health["status"].as_str(), Some("green" | "yellow")) {
             return Err(Error::unavailable());
         }
+        let mut casualty_rebuild = None;
         let definitions = [
+            (
+                crate::casualties::INDEX,
+                include_str!("../../../../docs/opensearch/casualties.index.json"),
+            ),
             (
                 MESSAGES,
                 include_str!("../../../../docs/opensearch/messages.ui-index.json"),
@@ -120,10 +125,51 @@ impl Publisher {
                 }
                 Err(error) => return Err(error),
             };
+            if matches!(name, MESSAGES | PASSAGES)
+                && document[name]["mappings"]["properties"]
+                    .get("casualty")
+                    .is_none()
+            {
+                let definition: Value =
+                    serde_json::from_str(body).map_err(|_| Error::config("Index definition"))?;
+                let mut metadata = document[name]["mappings"]["_meta"]
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default();
+                metadata.insert(
+                    "icd_version".into(),
+                    json!(parse_command_types::ICD_VERSION),
+                );
+                self.request(reqwest::Method::PUT, &format!("/{name}/_mapping"), json!({"_meta":metadata,"properties":{"casualty":definition["mappings"]["properties"]["casualty"]}}))?;
+            }
             let uuid = document[name]["settings"]["index"]["uuid"]
                 .as_str()
                 .ok_or_else(Error::unavailable)?;
-            self.reset_index(name, uuid)?;
+            if name == crate::casualties::INDEX {
+                let previous = self.store.get("publication_index", name)?;
+                if previous
+                    .as_ref()
+                    .is_none_or(|d| d.record.payload["uuid"] != uuid)
+                {
+                    casualty_rebuild = Some(uuid.to_owned());
+                }
+            } else {
+                self.reset_index(name, uuid)?;
+            }
+        }
+        if let Some(uuid) = casualty_rebuild {
+            self.rebuild_casualties()?;
+            let previous = self
+                .store
+                .get("publication_index", crate::casualties::INDEX)?;
+            self.store.put(
+                &Record::new(
+                    "publication_index",
+                    crate::casualties::INDEX,
+                    json!({"uuid":uuid}),
+                ),
+                previous.as_ref(),
+            )?;
         }
         self.request(reqwest::Method::POST,"/_aliases",json!({"actions":[{"add":{"index":MESSAGES,"alias":MESSAGE_ALIAS}},{"add":{"index":PASSAGES,"alias":"parse-command-search-passages"}}]}))?;
         let model=self.request(reqwest::Method::POST,"/_plugins/_ml/models/_search",json!({"size":10,"query":{"bool":{"filter":[{"term":{"model_content_hash_value":MODEL_HASH}},{"exists":{"field":"model_config"}}]}}})).unwrap_or_else(|_|json!({"hits":{"hits":[]}}));
@@ -380,7 +426,25 @@ impl Publisher {
                 ) && matches!(
                     audit["payload"]["set_id"].as_str(),
                     Some("GENTEXT" | "NARR" | "AMPN")
-                ) {
+                ) || (core["type"] == "CASREP"
+                    && matches!(
+                        audit["kind"].as_str(),
+                        Some("record_interpreted" | "fact_interpreted")
+                    )
+                    && matches!(
+                        audit["payload"]["set_id"].as_str(),
+                        Some(
+                            "CASLTY"
+                                | "ESTIMATE"
+                                | "ASSIST"
+                                | "TECHDATA"
+                                | "PARTS"
+                                | "REQNDATA"
+                                | "RCPTDATA"
+                                | "CORRSTAT"
+                        )
+                    ))
+                {
                     records.insert(
                         audit["payload"]["record_sequence"]
                             .as_u64()
@@ -422,6 +486,20 @@ impl Publisher {
                         )
                     );
                     let mut passage = json!({"id":pid,"message_id":id,"revision":revision,"ordinal":ordinal,"text":text,"embedding_status":"pending","mentioned_units":[]});
+                    if let Some(casualty) = core.get("casualty") {
+                        let metadata: serde_json::Map<String, Value> = [
+                            "serial",
+                            "reporting_uic",
+                            "eic",
+                            "category",
+                            "report_type",
+                            "identifiers",
+                        ]
+                        .into_iter()
+                        .filter_map(|key| casualty.get(key).map(|v| (key.to_owned(), v.clone())))
+                        .collect();
+                        passage["casualty"] = json!(metadata);
+                    }
                     for key in [
                         "type",
                         "originator",
@@ -653,6 +731,9 @@ impl Publisher {
                 success = value["_source"]["embedding_status"] == "ready";
                 self.status.model.store(success, Ordering::Relaxed);
             }
+            if success && kind == "message" && row.payload["document"]["type"] == "CASREP" {
+                success = self.refresh_casualties(&row.payload["document"]).is_ok();
+            }
             self.record_delivery(
                 doc,
                 success,
@@ -666,6 +747,67 @@ impl Publisher {
         Ok(selected.len())
     }
 
+    fn rebuild_casualties(&self) -> Result<()> {
+        let mut after = None;
+        loop {
+            let mut query = json!({"size":0,"query":{"term":{"type":"CASREP"}},"aggs":{"families":{"composite":{"size":32,"sources":[{"uic":{"terms":{"field":"casualty.reporting_uic"}}},{"serial":{"terms":{"field":"casualty.serial"}}}]}}}});
+            if let Some(value) = after {
+                query["aggs"]["families"]["composite"]["after"] = value;
+            }
+            let response = self.request(
+                reqwest::Method::POST,
+                &format!("/{MESSAGES}/_search"),
+                query,
+            )?;
+            if response["timed_out"] == true
+                || response["_shards"]["failed"].as_u64().unwrap_or(1) > 0
+            {
+                return Err(Error::unavailable());
+            }
+            let buckets = response["aggregations"]["families"]["buckets"]
+                .as_array()
+                .ok_or_else(Error::unavailable)?;
+            for bucket in buckets {
+                self.refresh_casualties(&json!({"casualty":{"reporting_uic":bucket["key"]["uic"],"serial":bucket["key"]["serial"]}}))?;
+            }
+            if buckets.len() < 32 {
+                break;
+            }
+            after = response["aggregations"]["families"]
+                .get("after_key")
+                .cloned();
+            if after.is_none() {
+                return Err(Error::unavailable());
+            }
+        }
+        Ok(())
+    }
+    fn refresh_casualties(&self, core: &Value) -> Result<()> {
+        let response=self.request(reqwest::Method::POST,&format!("/{MESSAGES}/_search"),json!({"size":crate::casualties::MAX_HISTORY+1,"track_total_hits":true,"_source":["id","revision","type","issued_at","security","command_ids","casualty.report_type","casualty.serial","casualty.reporting_uic","casualty.initial_report_label","casualty.update_sequence","casualty.equipment","casualty.eic","casualty.category","casualty.cause","casualty.repair_estimate_date"],"query":{"bool":{"filter":[{"term":{"type":"CASREP"}},{"term":{"casualty.reporting_uic":core["casualty"]["reporting_uic"]}},{"term":{"casualty.serial":core["casualty"]["serial"]}}]}},"sort":["id","revision"]}))?;
+        if response["timed_out"] == true || response["_shards"]["failed"].as_u64().unwrap_or(1) > 0
+        {
+            return Err(Error::unavailable());
+        }
+        let hits = response["hits"]["hits"]
+            .as_array()
+            .ok_or_else(Error::unavailable)?;
+        let reports = hits
+            .iter()
+            .take(crate::casualties::MAX_HISTORY)
+            .map(|h| h["_source"].clone())
+            .collect::<Vec<_>>();
+        for view in
+            crate::casualties::project(&reports, hits.len() > crate::casualties::MAX_HISTORY)
+        {
+            let id = view["id"].as_str().ok_or_else(Error::unavailable)?;
+            self.request(
+                reqwest::Method::PUT,
+                &format!("/{}/_doc/{id}?refresh=wait_for", crate::casualties::INDEX),
+                view.clone(),
+            )?;
+        }
+        Ok(())
+    }
     pub fn run(mut self, cancelled: Arc<AtomicBool>) {
         let mut cycles = 0u64;
         while !cancelled.load(Ordering::Relaxed) {
@@ -766,8 +908,7 @@ pub fn chunks(
 }
 fn templates(model: Option<&str>) -> Vec<(String, String)> {
     let filters = json!({"bool":{"filter":"__FILTERS__"}});
-    let lexical =
-        json!({"multi_match":{"query":"__QUERY__","fields":["text","subject"],"operator":"or"}});
+    let lexical = json!({"bool":{"should":[{"multi_match":{"query":"__QUERY__","fields":["text","subject"],"operator":"or"}},{"match":{"casualty.identifiers":{"query":"__QUERY__","boost":8}}}],"minimum_should_match":1}});
     let neural = json!({"neural":{"embedding":{"query_text":"__QUERY__","model_id":model.unwrap_or(""),"k":100,"filter":{"bool":{"filter":[filters,{"term":{"embedding_status":"ready"}}]}}}}});
     let mut templates = Vec::new();
     for (mode, query) in [

@@ -1,4 +1,4 @@
-// UI labels from the supplied 2003 USMTF set/field catalog, limited to supplied OPTASK sets.
+// UI labels from the supplied 2003 USMTF set/field catalog, limited to supported OPTASK and CASREP sets.
 // Source manuals and extraction/review notes remain outside the repository.
 export interface CatalogField {
   name: string;
@@ -10,6 +10,318 @@ export interface CatalogSet {
   repeatFrom?: number;
 }
 export const setCatalog: Record<string, CatalogSet | undefined> = {
+  CASLTY: {
+    name: "CASUALTY REPORT",
+    fields: {
+      "1": [
+        {
+          name: "Report action",
+        },
+      ],
+      "2": [
+        {
+          name: "Casualty serial",
+        },
+      ],
+      "3": [
+        {
+          name: "Update sequence",
+        },
+      ],
+      "4": [
+        {
+          name: "Equipment",
+        },
+      ],
+      "5": [
+        {
+          name: "Equipment code",
+        },
+      ],
+      "6": [
+        {
+          name: "Casualty category",
+        },
+      ],
+      "7": [
+        {
+          name: "Cause code",
+        },
+      ],
+      "8": [
+        {
+          name: "Reporting UIC",
+        },
+      ],
+      "9": [
+        {
+          name: "Initial report reference",
+        },
+      ],
+      "10": [
+        {
+          name: "Fleet",
+        },
+      ],
+      "11": [
+        {
+          name: "Casualty identifier",
+        },
+      ],
+    },
+    repeatFrom: 11,
+  },
+  ESTIMATE: {
+    name: "REPAIR ESTIMATE",
+    fields: {
+      "1": [
+        {
+          name: "Estimated repair date",
+        },
+      ],
+      "2": [
+        {
+          name: "Repair comments",
+        },
+      ],
+      "3": [
+        {
+          name: "Repair requirement status",
+        },
+      ],
+    },
+  },
+  ASSIST: {
+    name: "ASSISTANCE REQUIREMENT",
+    fields: {
+      "1": [
+        {
+          name: "Action",
+        },
+      ],
+      "2": [
+        {
+          name: "Required assistance",
+        },
+      ],
+      "3": [
+        {
+          name: "Location",
+        },
+      ],
+      "4": [
+        {
+          name: "Coordinates",
+        },
+      ],
+    },
+  },
+  TECHDATA: {
+    name: "TECHNICAL DATA",
+    fields: {
+      "1": [
+        {
+          name: "Action",
+        },
+      ],
+      "2": [
+        {
+          name: "Allowance list",
+        },
+      ],
+      "3": [
+        {
+          name: "Component identifier",
+        },
+      ],
+      "4": [
+        {
+          name: "Job control number",
+        },
+      ],
+      "5": [
+        {
+          name: "Technical publication",
+        },
+      ],
+      "6": [
+        {
+          name: "Publication availability",
+        },
+      ],
+    },
+    repeatFrom: 5,
+  },
+  PARTS: {
+    name: "PARTS REQUIREMENT",
+    fields: {
+      "1": [
+        {
+          name: "Parts sequence",
+        },
+      ],
+      "2": [
+        {
+          name: "Stock reference",
+        },
+      ],
+      "3": [
+        {
+          name: "Stock number or part number",
+        },
+      ],
+      "4": [
+        {
+          name: "Quantity required",
+        },
+      ],
+      "5": [
+        {
+          name: "Allowance",
+        },
+      ],
+      "6": [
+        {
+          name: "Quantity onboard",
+        },
+      ],
+      "7": [
+        {
+          name: "Not in stock code",
+        },
+      ],
+      "8": [
+        {
+          name: "Not carried code",
+        },
+      ],
+      "9": [
+        {
+          name: "Circuit",
+        },
+      ],
+      "10": [
+        {
+          name: "Material control code",
+        },
+      ],
+      "11": [
+        {
+          name: "Special material identifier",
+        },
+      ],
+    },
+  },
+  REQNDATA: {
+    name: "REQUISITION DATA",
+    fields: {
+      "1": [
+        {
+          name: "Parts sequence",
+        },
+      ],
+      "2": [
+        {
+          name: "Requisition number",
+        },
+      ],
+      "3": [
+        {
+          name: "Quantity ordered",
+        },
+      ],
+      "4": [
+        {
+          name: "Priority",
+        },
+      ],
+      "5": [
+        {
+          name: "Project",
+        },
+      ],
+      "6": [
+        {
+          name: "Required date code",
+        },
+      ],
+      "7": [
+        {
+          name: "Routing",
+        },
+      ],
+      "8": [
+        {
+          name: "Requisition status",
+        },
+      ],
+      "9": [
+        {
+          name: "Requisition time",
+        },
+      ],
+    },
+  },
+  RCPTDATA: {
+    name: "PARTS RECEIPT DATA",
+    fields: {
+      "1": [
+        {
+          name: "Parts sequence",
+        },
+      ],
+      "2": [
+        {
+          name: "Requisition number",
+        },
+      ],
+      "3": [
+        {
+          name: "Received date",
+        },
+      ],
+      "4": [
+        {
+          name: "Satisfaction code",
+        },
+      ],
+      "5": [
+        {
+          name: "Quantity received",
+        },
+      ],
+      "6": [
+        {
+          name: "Satisfaction designator",
+        },
+      ],
+    },
+  },
+  CORRSTAT: {
+    name: "CORRECTION STATISTICS",
+    fields: {
+      "1": [
+        {
+          name: "Hours between failures",
+        },
+      ],
+      "2": [
+        {
+          name: "Equipment usage code",
+        },
+      ],
+      "3": [
+        {
+          name: "Hours repairing",
+        },
+      ],
+      "4": [
+        {
+          name: "Hours awaiting parts",
+        },
+      ],
+    },
+  },
   AKNLDG: {
     name: "ACKNOWLEDGEMENT REQUIREMENT",
     fields: {

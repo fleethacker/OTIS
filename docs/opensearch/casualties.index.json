@@ -1,0 +1,88 @@
+{
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "projection": "casrep-source-history-v1",
+      "icd_version": "1.2.0"
+    },
+    "properties": {
+      "id": {
+        "type": "keyword"
+      },
+      "projection": {
+        "type": "keyword"
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "revision": {
+        "type": "keyword"
+      },
+      "serial": {
+        "type": "keyword"
+      },
+      "reporting_uic": {
+        "type": "keyword"
+      },
+      "state": {
+        "type": "keyword"
+      },
+      "review_flags": {
+        "type": "keyword"
+      },
+      "latest_message_key": {
+        "type": "keyword"
+      },
+      "initial_reference": {
+        "type": "keyword"
+      },
+      "equipment": {
+        "type": "keyword"
+      },
+      "eic": {
+        "type": "keyword"
+      },
+      "category": {
+        "type": "keyword"
+      },
+      "cause": {
+        "type": "keyword"
+      },
+      "repair_estimate_date": {
+        "type": "keyword"
+      },
+      "review_required": {
+        "type": "boolean"
+      },
+      "issued_at": {
+        "type": "date",
+        "format": "strict_date_optional_time"
+      },
+      "security": {
+        "type": "object",
+        "dynamic": "strict",
+        "properties": {
+          "policy": {
+            "type": "keyword"
+          },
+          "classification": {
+            "type": "keyword"
+          },
+          "release_to": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          }
+        }
+      },
+      "command_ids": {
+        "type": "keyword"
+      },
+      "history": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}

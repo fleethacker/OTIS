@@ -71,8 +71,17 @@ export default function Messages() {
   }
   function applyFilters(fields: MessageFilters) {
     const next = new URLSearchParams(params);
-    for (const key of ["messageType", "sender", "fromDate", "throughDate"] as const) {
-      const value = fields[key];
+    for (const key of [
+      "messageType",
+      "sender",
+      "fromDate",
+      "throughDate",
+      "casualtySerial",
+      "casualtyUic",
+      "casualtyCategory",
+      "casualtyReportType",
+    ] as const) {
+      const value = fields[key] ?? "";
       if (value === "") {
         next.delete(key);
       } else {

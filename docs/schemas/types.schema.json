@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:parse-command:icd:1.1.0:types",
-  "title": "Parse Command ICD 1.1.0 types",
+  "$id": "urn:parse-command:icd:1.2.0:types",
+  "title": "Parse Command ICD 1.2.0 types",
   "$comment": "All references resolve from locally supplied schema resources. Core payloads do not repeat the contract version.",
   "$defs": {
     "security": {
@@ -732,6 +732,9 @@
           "items": {
             "$ref": "#/$defs/location"
           }
+        },
+        "casualty": {
+          "$ref": "#/$defs/casualty"
         }
       },
       "required": [
@@ -768,6 +771,20 @@
             "properties": {
               "expires_at": {
                 "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "casualty"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": {
+                "const": "CASREP"
               }
             }
           }
@@ -862,6 +879,9 @@
           ],
           "minLength": 1,
           "description": "Email subject for display/search; null when absent from the provided source. Raw header and framing evidence belong in audit."
+        },
+        "casualty": {
+          "$ref": "#/$defs/casualtySearch"
         }
       },
       "required": [
@@ -929,7 +949,7 @@
         },
         "subject_id": {
           "type": "string",
-          "pattern": "^[afcvg][1-9][0-9]*$",
+          "pattern": "^[afcvgq][1-9][0-9]*$",
           "description": "Revision-scoped core fact identifier such as a1 or f1; unrelated to the email subject text."
         },
         "recorded_at": {
@@ -1187,6 +1207,571 @@
           }
         }
       ]
+    },
+    "casualtyAssistance": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "coordinates": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "action",
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyTechnicalData": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowance_list": {
+          "type": "string",
+          "minLength": 1
+        },
+        "component_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "job_control_number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyPublication"
+          }
+        }
+      },
+      "required": [
+        "action",
+        "allowance_list"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyPublication": {
+      "type": "object",
+      "properties": {
+        "publication": {
+          "type": "string",
+          "minLength": 1
+        },
+        "availability": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "publication",
+        "availability"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyPart": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stock_reference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stock_number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantity_required": {
+          "type": "string",
+          "minLength": 1
+        },
+        "allowance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantity_onboard": {
+          "type": "string",
+          "minLength": 1
+        },
+        "not_in_stock": {
+          "type": "string",
+          "minLength": 1
+        },
+        "not_carried": {
+          "type": "string",
+          "minLength": 1
+        },
+        "circuit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "material_control": {
+          "type": "string",
+          "minLength": 1
+        },
+        "special_material": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "sequence",
+        "stock_reference",
+        "stock_number",
+        "quantity_required",
+        "allowance",
+        "quantity_onboard",
+        "not_in_stock",
+        "not_carried"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyRequisition": {
+      "type": "object",
+      "properties": {
+        "parts_sequence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "priority": {
+          "type": "string",
+          "minLength": 1
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required_date": {
+          "type": "string",
+          "minLength": 1
+        },
+        "routing": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "issued_label": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "parts_sequence",
+        "number",
+        "quantity",
+        "priority",
+        "project",
+        "required_date",
+        "routing"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyReceipt": {
+      "type": "object",
+      "properties": {
+        "parts_sequence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1
+        },
+        "received_date": {
+          "type": "string",
+          "minLength": 1
+        },
+        "satisfaction_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quantity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "satisfaction_designator": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "parts_sequence",
+        "number",
+        "received_date",
+        "satisfaction_code",
+        "quantity",
+        "satisfaction_designator"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyCorrection": {
+      "type": "object",
+      "properties": {
+        "hours_between_failures": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usage_code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hours_repair": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hours_waiting_parts": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "hours_between_failures",
+        "usage_code",
+        "hours_repair",
+        "hours_waiting_parts"
+      ],
+      "additionalProperties": false
+    },
+    "casualtyNarrative": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "subject",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "casualty": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^q[1-9][0-9]*$"
+        },
+        "serial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reporting_uic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "equipment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cause": {
+          "type": "string",
+          "minLength": 1
+        },
+        "update_sequence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initial_report_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fleet": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repair_estimate_date": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source date in YYYY-MM-DD; an estimate, not a scheduled event or instant."
+        },
+        "repair_estimate_comments": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repair_requirement_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_type": {
+          "type": "string",
+          "enum": [
+            "INITIAL",
+            "UPDATE",
+            "CORRECT",
+            "CANCEL"
+          ]
+        },
+        "correction": {
+          "$ref": "#/$defs/casualtyCorrection"
+        },
+        "assistance": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyAssistance"
+          }
+        },
+        "technical_data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyTechnicalData"
+          }
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyPart"
+          }
+        },
+        "requisitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyRequisition"
+          }
+        },
+        "receipts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyReceipt"
+          }
+        },
+        "narratives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/casualtyNarrative"
+          }
+        },
+        "casualty_identifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "report_type",
+        "serial",
+        "reporting_uic",
+        "equipment",
+        "eic",
+        "category",
+        "cause"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "report_type": {
+                "const": "UPDATE"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "update_sequence"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "update_sequence"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "report_type": {
+                "const": "INITIAL"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "initial_report_label"
+              ]
+            },
+            "properties": {
+              "assistance": {
+                "minItems": 1
+              },
+              "technical_data": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "assistance",
+              "technical_data"
+            ]
+          },
+          "else": {
+            "required": [
+              "initial_report_label"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "report_type": {
+                "enum": [
+                  "INITIAL",
+                  "UPDATE"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "repair_estimate_date"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "repair_estimate_date"
+                  ]
+                },
+                {
+                  "required": [
+                    "repair_estimate_comments"
+                  ]
+                },
+                {
+                  "required": [
+                    "repair_requirement_status"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "report_type": {
+                "const": "CORRECT"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "correction"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "correction"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "casualtySearch": {
+      "type": "object",
+      "properties": {
+        "serial": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reporting_uic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eic": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "report_type": {
+          "type": "string",
+          "enum": [
+            "INITIAL",
+            "UPDATE",
+            "CORRECT",
+            "CANCEL"
+          ]
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "serial",
+        "reporting_uic",
+        "eic",
+        "category",
+        "report_type",
+        "identifiers"
+      ],
+      "additionalProperties": false
     }
   }
 }

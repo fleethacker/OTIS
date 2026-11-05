@@ -16,28 +16,23 @@ Hackathon Event**.
 [Documentation](docs/README.md) · [Architecture](docs/integration/architecture.md) ·
 [Operations](docs/integration/combined-stack.md) · [UDS deployment](#uds-deployment)
 
-## Capabilities
+## What OTIS does for the fleet
 
-- **Monitor an inbox:** continuously ingest SMTP-delivered messages over IMAP,
-  retain original email, deduplicate message bodies, and retry interrupted work.
-- **Parse operational tasking:** extract activities, frequency plans, crypto
-  changeover times, reporting requirements, locations, and source points of contact
-  from supported OPTASK layouts.
-- **Read casualty reports:** parse CASREP INITIAL, UPDATE, CORRECT and CANCEL reports,
-  including equipment, repair estimates, assistance and parts; retain linked source history.
-- **Search message traffic:** combine keyword and local semantic search through
-  OpenSearch, with filters for command, message type, originator, and issue date.
-- **Build the watch picture:** browse day, week, and month schedules in Zulu or
-  local time; keep incomplete times and unresolved facts visible for review.
-- **Review the evidence:** inspect raw messages, structured source sets, extraction
-  evidence, and processing history from the message reader.
-- **Prepare a response:** generate and privately save acknowledgement drafts for
-  review. Drafts remain unsent; SMTP response delivery is not implemented.
-- **Track new traffic:** receive in-app notifications for newly published messages
-  and intake/publication failures and recoveries.
-- **Run locally:** React UI, Rust application/parser server, and OpenSearch with
-  CPU-only embeddings. Prepared runtime assets support disconnected operation;
-  optional Keycloak OIDC provides shared-deployment authentication.
+A ship comes back online after days without connectivity and the inbox floods: family mail, other commands, ads, and dozens of naval messages. One of them moves tomorrow's UNREP. Today someone has to watch the mailbox, move traffic into a public folder by hand, and every department scans the whole pile for what concerns them. OTIS runs on the ship's own server, works without internet, and does that triage the moment traffic arrives.
+
+- **Nobody babysits the mailbox.** OTIS watches the command's message inbox around the clock, files every naval message as it lands, and keeps the original exactly as received.
+- **Tasking becomes a schedule.** OPTASKs are read automatically: activities, comms plan windows, crypto changeovers, reporting deadlines, locations and points of contact go onto one calendar by day, week or month, in Zulu or local time. Recurring events like daily comms checks carry their real times.
+- **Each ship sees its own picture, and the group sees the whole.** Filter the calendar to your ship, or lay several ships side by side, so a strike group, ARG or DESRON staff can see who is doing what and when.
+- **Catch up in minutes after a watch or a blackout.** At login, each person sees what changed since they were last on: new tasking, what it adds to the schedule, and what still needs a human look. They work it off item by item or mark the whole set reviewed, ordered by when each message was actually sent.
+- **Find any message fast.** Search by keyword or by meaning across all traffic, filtered by command, message type, originator and date. Coordinates in a message can be shown on an offline map.
+- **Casualty reports in one place.** CASREPs are read with equipment, repair estimates, assistance and parts requested, and each casualty's INITIAL, UPDATE, CORRECT and CANCEL history stays linked.
+- **Higher-network traffic without the flood.** When traffic for a ship arrives on the higher network, the lower-network watch gets a short "traffic waiting" notice with ship, count and precedence. The notice carries no message content. It clears itself once the traffic has been pulled up, and the higher side can see that the notice was sent and acknowledged.
+- **Tasking goes onto your own calendar.** A sailor picks their ship, the event types they care about and a date range, then syncs just those events into their mailbox calendar, or downloads them for Outlook. Only relevant OPTASKs land on their calendar, and it adds no extra email traffic.
+- **From reading to responding.** Acknowledgement drafts are prepared from the message for the user to review and route through the normal approval chain.
+- **Trust what you see.** Every scheduled item traces back to the exact source text. Incomplete or uncertain times stay visible for review instead of being guessed, and an event log records receipt and processing.
+- **Built for the ship.** It runs entirely on the ship's internal server and keeps working with no internet connection. Access is limited to authorized users by role, and it can use the command's single sign-on.
+
+**Next:** shared calendar visibility across participating commands and for an ISIC across its units; routing drafts for approval through OTIS instead of printing them.
 
 ## Quick start
 

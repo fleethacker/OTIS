@@ -23,8 +23,10 @@ pub struct Fixture {
     pub file: String,
     pub body_hashes: Vec<String>,
     pub command_ids: Vec<String>,
-    #[serde(default)] pub recurrence: Option<String>,
-    #[serde(default)] pub baseline_security: bool,
+    #[serde(default)]
+    pub recurrence: Option<String>,
+    #[serde(default)]
+    pub baseline_security: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -40,12 +42,19 @@ impl Catalog {
             .map_err(|_| IntakeError("demo_config"))?;
         let ids: BTreeSet<_> = value.commands.iter().map(|c| c.id.clone()).collect();
         let mut hashes = BTreeSet::new();
-        if value.commands.len() > 32 || ids.len() != value.commands.len()
-            || value.commands.iter().any(|c| c.id.is_empty() || c.color_index >= 4)
+        if value.commands.len() > 32
+            || ids.len() != value.commands.len()
+            || value
+                .commands
+                .iter()
+                .any(|c| c.id.is_empty() || c.color_index >= 4)
             || value.fixtures.len() > 32
             || value.fixtures.iter().any(|f| {
-                f.body_hashes.is_empty() || f.body_hashes.len() > 2
-                    || f.recurrence.as_deref().is_some_and(|v| v != "daily_radio_check" || f.file != "recurring-radio.txt")
+                f.body_hashes.is_empty()
+                    || f.body_hashes.len() > 2
+                    || f.recurrence.as_deref().is_some_and(|v| {
+                        v != "daily_radio_check" || f.file != "recurring-radio.txt"
+                    })
                     || (f.baseline_security && f.file != "baseline-crypto.txt")
                     || f.command_ids.iter().any(|id| !ids.contains(id))
                     || f.body_hashes.iter().any(|h| {
@@ -64,7 +73,12 @@ impl Catalog {
     }
     pub fn audit(&self, fixture: &Fixture, core: &Message, at: &UtcTimestamp) -> AuditEvent {
         AuditEvent {
-            id: event_id(&[&core.id, &core.revision, &self.version, "demo_command_assignment"]),
+            id: event_id(&[
+                &core.id,
+                &core.revision,
+                &self.version,
+                "demo_command_assignment",
+            ]),
             message_id: core.id.clone(),
             revision: core.revision.clone(),
             kind: "demo_command_assignment".into(),
@@ -79,9 +93,18 @@ impl Catalog {
                 ("version".into(), json!(self.version)),
                 ("fixture".into(), json!(fixture.file)),
                 ("command_ids".into(), json!(fixture.command_ids)),
-                ("assignment_scope".into(), json!("message; synthetic demo only")),
-                ("baseline_security_override".into(), json!(fixture.baseline_security)),
-                ("security_override_scope".into(), json!("Exact fictional fixture only; no production baseline security default")),
+                (
+                    "assignment_scope".into(),
+                    json!("message; synthetic demo only"),
+                ),
+                (
+                    "baseline_security_override".into(),
+                    json!(fixture.baseline_security),
+                ),
+                (
+                    "security_override_scope".into(),
+                    json!("Exact fictional fixture only; no production baseline security default"),
+                ),
             ]),
         }
     }
@@ -106,10 +129,18 @@ mod tests {
         assert_eq!(bodies.len(), c.fixtures.len());
         for (body, fixture) in bodies.iter().zip(&c.fixtures) {
             assert_eq!(c.assignment(body).unwrap().command_ids, fixture.command_ids);
-            assert_eq!(c.assignment(&body.replace('\n', "\r\n")).unwrap().command_ids, fixture.command_ids);
+            assert_eq!(
+                c.assignment(&body.replace('\n', "\r\n"))
+                    .unwrap()
+                    .command_ids,
+                fixture.command_ids
+            );
             assert!(c.assignment(&format!("{body}\n")).is_none());
         }
-        assert!(c.assignment("USS Meridian USS Halyard USNS Tern USS Corvina").is_none());
+        assert!(
+            c.assignment("USS Meridian USS Halyard USNS Tern USS Corvina")
+                .is_none()
+        );
         assert!(c.assignment(bodies[5]).unwrap().command_ids.is_empty());
         assert_eq!(c.assignment(bodies[4]).unwrap().command_ids.len(), 2);
     }

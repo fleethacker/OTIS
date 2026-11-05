@@ -1,7 +1,7 @@
 //! Read-only synthetic roster; this is not operational command-assignment authority.
 use crate::{Error, Result, api::App};
 use axum::{Json, extract::State, http::HeaderMap};
-use parse_command_intake::demo::{Catalog, CONFIG_SOURCE};
+use parse_command_intake::demo::{CONFIG_SOURCE, Catalog};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -15,8 +15,13 @@ pub fn catalog(demo: bool) -> Result<Catalog> {
     if demo {
         Catalog::load().map_err(|_| Error::config("Synthetic roster configuration is invalid"))
     } else {
-        Ok(Catalog { commands: Vec::new(), fixtures: Vec::new(), version: "disabled".into(),
-            provenance: "No command roster configured; fictional Watch Desk demo is disabled".into() })
+        Ok(Catalog {
+            commands: Vec::new(),
+            fixtures: Vec::new(),
+            version: "disabled".into(),
+            provenance: "No command roster configured; fictional Watch Desk demo is disabled"
+                .into(),
+        })
     }
 }
 
@@ -30,7 +35,9 @@ pub async fn list(
     let mut catalog = catalog(demo)?;
     let (settings, _) = crate::settings::shared(&app.private.state).await?;
     let own = settings.own_ship().unwrap_or_default();
-    for command in &mut catalog.commands { command.is_own_ship = command.id == own; }
+    for command in &mut catalog.commands {
+        command.is_own_ship = command.id == own;
+    }
     // Compile-time bounded (<=32 commands). No search request, source body or roster write.
     Ok(Json(json!({
         "commands": catalog.commands,

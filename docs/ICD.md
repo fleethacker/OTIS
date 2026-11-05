@@ -1,14 +1,17 @@
 # Parse Command Interface Control Document
 
-**Contract:** PC-ICD-001 · **Version:** 1.2.0 · **Date:** 2026-11-05
+**Contract:** PC-ICD-001 · **Version:** 1.3.0 · **Date:** 2026-11-05
 
-**Status:** approved compact data shape; initial contributor interface specification. The [Rust foundation](../backend/README.md) implements the SDK and in-memory parser host. Local IMAP intake and SQLite custody/outbox staging are implemented for the demo. Production PKI and continuous OpenSearch delivery remain separate acceptance gates. Fixture interpretation remains partial; approval of the structure does not establish operational correctness of every inferred rule.
+**Status:** compact data contract and compiled contributor interface. The Rust host
+implements parsing, durable IMAP custody in OpenSearch, continuous publication and
+the application read API. Production authentication/PKI and operational interpretation
+remain separate acceptance gates; an extracted report does not establish readiness.
 
 ## 1. Scope and authority
 
 This ICD defines the parsed-message wire format, message-parser contribution boundary, interpretation rules, audit linkage and OpenSearch storage expectations. It does not define the UI's HTTP routes, select an embedding model, or promise a hardware capacity. Contributions are Rust modules/crates compiled into the host; runtime plugin loading is outside v1.
 
-Initial enabled formats are OPTASK. The common interface also permits other teams to implement additional USMTF message types without modifying IMAP intake, persistence or search. Adding a parser does not automatically enable that message type in deployment.
+Enabled message families are OPTASK and CASREP. GENADMIN is a separate message family and is not a CASREP profile. The common interface also permits other teams to implement additional USMTF message types without modifying IMAP intake, persistence or search. Adding a parser does not automatically enable that message type in deployment.
 
 Normative terms **MUST**, **MUST NOT** and **SHOULD** describe conformance requirements. JSON Schema is authoritative for JSON field names, types and structural constraints; the semantic rules here remain mandatory even when JSON Schema cannot express a cross-field or cross-document condition. Changes to the approved shape require a versioned contract update.
 
@@ -53,7 +56,7 @@ The supplied fixtures are bare USMTF text, not full emails. Their `subject` valu
 | --- | --- |
 | Message `id` | `sha256:` plus 64 lowercase hexadecimal digits of the exact UTF-8 decoded USMTF source bytes preserved in audit. Whitespace is not silently rewritten before hashing. Email receipt identity is separate. |
 | `revision` | Nonempty opaque revision token, 1-64 ASCII letters/digits/dot/underscore/hyphen, starting with a letter/digit. Stable for one immutable interpretation. |
-| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN`, `gN` or `rN` for activities, frequencies, contacts, periods, locations and recurrences; N starts at 1. No duplicates within the revision. |
+| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN`, `gN`, `rN` or `qN` for activities, frequencies, contacts, periods, locations, recurrences and casualty reports; N starts at 1. No duplicates within the revision. |
 | Passage `id` | Content-derived `sha256:` identifier assigned by the host, stable for the same source revision and chunking inputs. |
 | Audit `id` | Host-assigned deterministic 64-digit lowercase hexadecimal event identifier for one immutable event. Persist its identity/timestamp/content before retries. |
 
@@ -308,7 +311,7 @@ An array of ordinary objects can produce cross-fact matches, so use `nested` onl
 
 ## 10. Compatibility and validation
 
-The current schemas and new index definitions identify ICD 1.2.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
+The current schemas and new index definitions identify ICD 1.3.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
 
 Use [the validation tool](tools/validate_samples.py) with an external fixture directory. It validates local JSON Schema resources, all three document sets, data linkage, source hashes, source spans, frequency/time invariants, Bulk framing and audit evidence preservation. `jsonschema` is a build/test dependency, not a Rust runtime dependency; local/offline installations may supply it from prepared tooling.
 
@@ -329,3 +332,20 @@ The user has authorized WGS84 as the default when a datum is absent. `datum_sour
 The messages mapping uses nested `locations` with `point: geo_point` and `shape: geo_shape`; it keeps each geometry associated with its label, datum and status. Existing indices require an additive mapping update before receiving the field. See the [OpenSearch geopoint](https://docs.opensearch.org/latest/mappings/supported-field-types/geo-point/) and [geoshape](https://docs.opensearch.org/latest/mappings/supported-field-types/geo-shape/) contracts.
 
 Named locations are valid source locations even when no coordinates are available. `locations.status=unresolved` describes unresolved map geometry, not an invalid name or failed message parse. Preserve the supplied name as the location label, omit unavailable geometry, and do not add a geospatial-review flag solely because the name cannot be plotted. Invalid coordinate/checksum/datum/topology cases remain separate. Parse completion and interpretation uncertainty are distinct presentation states.
+
+## 12. CASREP addition (1.3.0)
+
+Messages MAY carry a typed `casualty` object only when `type` is exactly `CASREP`.
+Its fact ID uses the `q` prefix and participates in the same uniqueness, evidence
+and output-budget checks as other facts. Absent objects MUST be omitted, not null.
+CASREP creates no schedule activities from repair estimates. Date-only estimates
+remain `YYYY-MM-DD` strings, without an inferred time or timezone.
+
+CASLTY fields, action-specific required/prohibited sets and source evidence follow
+[the CASREP integration contract](integration/casrep.md). Structured parts,
+requisitions, receipt and publication arrays preserve their element relationships.
+The passage's optional `casualty` is a compact filter projection, defined separately
+as `casualtySearch`; it does not duplicate narratives or logistics arrays.
+The derived casualty-history index is rebuildable and does not replace immutable
+messages or imply operational validation. Consumers of the strict 1.1 schema must
+upgrade before receiving CASREP fields; existing OPTASK documents remain valid.

@@ -95,3 +95,10 @@ Compiled contributors are trusted code with process authority. Cooperative cance
 `parse-command-server` combines durable intake, continuous batched OpenSearch publication, typed read APIs, generated ConnectRPC services and owner-scoped private state in hidden OpenSearch indices. The parser SDK remains transport independent. See the [combined stack](../docs/integration/combined-stack.md) and [application API](../docs/integration/rust-application-api.md). Building the server requires Rust 1.97.1 in the pinned Docker build; the parser foundation retains its declared minimum. The root build context supplies the original application proto files and canonical index definitions.
 
 Settings, native OIDC, hidden-state migration and verification are documented in [settings-oidc.md](../docs/integration/settings-oidc.md).
+
+## CASREP contribution
+
+The compiled `parse-command-casrep` crate adds exact CASREP dispatch independently
+of OPTASK and GENADMIN. Demo intake enables it explicitly. See the
+[CASREP integration guide](../docs/integration/casrep.md) for supported profiles,
+ICD 1.3.0, immutable reports, derived history, search and acceptance tests.

@@ -114,9 +114,16 @@ fn review_time_details_preserve_status_labels_and_normalized_clocks_across_views
         {"id":"a2","type":"check","time_label":"051200Z","time_status":"missing_month_and_year"},
         {"id":"a3","type":"window","start_at":"2026-11-05T08:00:00Z","end_at":"2026-11-05T08:00:00Z"}
     ]});
-    for (from, to) in [("2026-11-05T00:00:00Z", "2026-11-06T00:00:00Z"), ("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z"), ("2026-11-01T00:00:00Z", "2026-12-01T00:00:00Z")] {
-        let (items, review) = presentation::timeline(&source, &timestamp(from).unwrap(), &timestamp(to).unwrap()).unwrap();
-        assert!(items.is_empty()); assert_eq!(review.len(), 3);
+    for (from, to) in [
+        ("2026-11-05T00:00:00Z", "2026-11-06T00:00:00Z"),
+        ("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z"),
+        ("2026-11-01T00:00:00Z", "2026-12-01T00:00:00Z"),
+    ] {
+        let (items, review) =
+            presentation::timeline(&source, &timestamp(from).unwrap(), &timestamp(to).unwrap())
+                .unwrap();
+        assert!(items.is_empty());
+        assert_eq!(review.len(), 3);
         assert_eq!(review[0]["timeDetails"][0]["status"], "missing_date");
         assert_eq!(review[0]["timeDetails"][0]["clock"], "12:00Z");
         assert!(review[0]["timeDetails"][0].get("label").is_none());
@@ -145,4 +152,22 @@ fn search_headers_expose_only_source_type_originator_and_issue_time() {
         presentation::message_header(&json!({"type":null,"issued_at":null})),
         json!({})
     );
+}
+
+#[test]
+fn casualty_filters_target_the_same_passage_and_canonical_metadata() {
+    let filters:Filters=serde_json::from_value(json!({"messageTypes":["CASREP"],"casualtySerials":["2026001"],"casualtyUics":["N54321"],"casualtyCategories":["2"],"casualtyReportTypes":["INITIAL"],"casualtyIdentifiers":["1234-01-123-4567"]})).unwrap();
+    let query = filters.validate().unwrap();
+    for field in [
+        "casualty.serial",
+        "casualty.reporting_uic",
+        "casualty.category",
+        "casualty.report_type",
+        "casualty.identifiers",
+    ] {
+        assert!(query.to_string().contains(field));
+    }
+    let oversized: Filters =
+        serde_json::from_value(json!({"casualtySerials":["x".repeat(257)]})).unwrap();
+    assert!(oversized.validate().is_err());
 }

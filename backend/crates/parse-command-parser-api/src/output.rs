@@ -1,6 +1,7 @@
 use crate::{ErrorKind, ParseFailure};
 use parse_command_types::{
-    Activity, Contact, Frequency, Location, Period, Recurrence, Security, UtcTimestamp, Validate,
+    Activity, Casualty, Contact, Frequency, Location, Period, Recurrence, Security, UtcTimestamp,
+    Validate,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
@@ -56,8 +57,17 @@ pub trait ParseSink {
             "location_sink",
         ))
     }
+    fn casualty(&mut self, _value: Casualty) -> Result<(), ParseFailure> {
+        Err(ParseFailure::new(
+            ErrorKind::UnsupportedProfile,
+            "casualty_sink",
+        ))
+    }
     fn recurrence(&mut self, _value: Recurrence) -> Result<(), ParseFailure> {
-        Err(ParseFailure::new(ErrorKind::UnsupportedProfile, "recurrence_sink"))
+        Err(ParseFailure::new(
+            ErrorKind::UnsupportedProfile,
+            "recurrence_sink",
+        ))
     }
     fn review_flag(&mut self, value: &str) -> Result<(), ParseFailure>;
     fn audit(&mut self, value: AuditEntry) -> Result<(), ParseFailure>;
@@ -99,6 +109,7 @@ pub struct ParsedFacts {
     pub activities: Vec<Activity>,
     pub contacts: Vec<Contact>,
     pub locations: Vec<Location>,
+    pub casualty: Option<Casualty>,
     pub recurrences: Vec<Recurrence>,
     pub review_flags: Vec<String>,
     pub audit: Vec<AuditEntry>,
@@ -113,6 +124,7 @@ pub struct BoundedOutput {
     activities: Vec<Activity>,
     contacts: Vec<Contact>,
     locations: Vec<Location>,
+    casualty: Option<Casualty>,
     recurrences: Vec<Recurrence>,
     flags: Vec<String>,
     audit: Vec<AuditEntry>,
@@ -133,6 +145,7 @@ impl BoundedOutput {
             activities: Vec::new(),
             contacts: Vec::new(),
             locations: Vec::new(),
+            casualty: None,
             recurrences: Vec::new(),
             flags: Vec::new(),
             audit: Vec::new(),
@@ -195,6 +208,7 @@ impl BoundedOutput {
             activities: self.activities,
             contacts: self.contacts,
             locations: self.locations,
+            casualty: self.casualty,
             recurrences: self.recurrences,
             review_flags: self.flags,
             audit: self.audit,
@@ -236,6 +250,17 @@ impl ParseSink for BoundedOutput {
     fn location(&mut self, value: Location) -> Result<(), ParseFailure> {
         self.core(&value, Some(&value.id))?;
         self.locations.push(value);
+        Ok(())
+    }
+    fn casualty(&mut self, value: Casualty) -> Result<(), ParseFailure> {
+        if self.casualty.is_some() {
+            return self.remember(Err(ParseFailure::new(
+                ErrorKind::InvalidValue,
+                "duplicate_casualty",
+            )));
+        }
+        self.core(&value, Some(&value.id))?;
+        self.casualty = Some(value);
         Ok(())
     }
     fn recurrence(&mut self, value: Recurrence) -> Result<(), ParseFailure> {

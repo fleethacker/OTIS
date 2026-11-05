@@ -40,6 +40,11 @@ function FilterForm({
           sender: text("sender"),
           fromDate: text("fromDate"),
           throughDate: text("throughDate"),
+          ...Object.fromEntries(
+            ["casualtySerial", "casualtyUic", "casualtyCategory", "casualtyReportType"]
+              .filter((key) => text(key) !== "")
+              .map((key) => [key, text(key)])
+          ),
         });
       }}
     >
@@ -98,6 +103,55 @@ function FilterForm({
           onChange={(e) => setDraft({ ...draft, throughDate: e.target.value })}
         />
       </label>
+      <fieldset>
+        <legend>CASREP</legend>
+        <label>
+          Casualty serial
+          <TextInput
+            className="input-sm"
+            name="casualtySerial"
+            defaultValue={initial.casualtySerial ?? ""}
+            maxLength={7}
+            placeholder="2026001"
+          />
+        </label>
+        <label>
+          Reporting UIC
+          <TextInput
+            className="input-sm"
+            name="casualtyUic"
+            defaultValue={initial.casualtyUic ?? ""}
+            maxLength={6}
+            placeholder="N12345"
+          />
+        </label>
+        <label>
+          Category
+          <SelectInput
+            className="select-sm"
+            name="casualtyCategory"
+            defaultValue={initial.casualtyCategory ?? ""}
+          >
+            <option value="">All categories</option>
+            {["1", "2", "3", "4"].map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </SelectInput>
+        </label>
+        <label>
+          Report action
+          <SelectInput
+            className="select-sm"
+            name="casualtyReportType"
+            defaultValue={initial.casualtyReportType ?? ""}
+          >
+            <option value="">All report actions</option>
+            {["INITIAL", "UPDATE", "CORRECT", "CANCEL"].map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </SelectInput>
+        </label>
+      </fieldset>
       {pending && <p role="status">Loading filter options…</p>}
       {failed && (
         <Notice role="alert" tone="error">

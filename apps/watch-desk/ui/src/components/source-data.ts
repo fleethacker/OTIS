@@ -19,6 +19,10 @@ export interface SourceRequest {
   filters?: {
     commandIds?: string[];
     messageTypes?: string[];
+    casualtySerials?: string[];
+    casualtyUics?: string[];
+    casualtyCategories?: string[];
+    casualtyReportTypes?: string[];
     originators?: string[];
     classifications?: string[];
     issuedFrom?: string;
@@ -33,7 +37,13 @@ export interface TimelineItem {
   factId?: string;
   /** Audited rule fact; factId is the stable ruleFactId@instant for an occurrence. */
   sourceFactId?: string;
-  recurrence?: { ruleFactId: string; occurrenceId: string; rule: string; description: string; ongoing: boolean };
+  recurrence?: {
+    ruleFactId: string;
+    occurrenceId: string;
+    rule: string;
+    description: string;
+    ongoing: boolean;
+  };
   /** Explicit message-level applicability from the canonical source, never event.unit. */
   commandIds?: string[];
   sourceType?: string;
@@ -44,7 +54,13 @@ export interface TimelineItem {
   end?: string;
   reason?: string;
   reasonCode?: "non_positive_interval" | "missing_time" | "unresolved_time";
-  timeDetails?: { endpoint: string; status?: string; clock?: string; label?: string; at?: string }[];
+  timeDetails?: {
+    endpoint: string;
+    status?: string;
+    clock?: string;
+    label?: string;
+    at?: string;
+  }[];
   reviewRequired: boolean;
 }
 export interface MessageHeader {

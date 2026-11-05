@@ -596,70 +596,6 @@ impl Validate for Contact {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Recurrence {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub kind: String,
-    #[serde(
-        default,
-        deserialize_with = "crate::optional_present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub activity_id: Option<String>,
-    pub rule: String,
-    #[serde(
-        default,
-        deserialize_with = "crate::optional_present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub dtstart: Option<UtcTimestamp>,
-    #[serde(
-        default,
-        deserialize_with = "crate::optional_present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub until: Option<UtcTimestamp>,
-    #[serde(
-        default,
-        deserialize_with = "crate::optional_present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub count: Option<i64>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub exdates: Vec<UtcTimestamp>,
-    #[serde(
-        default,
-        deserialize_with = "crate::optional_present",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub scope: Option<String>,
-    pub status: RecurrenceStatus,
-}
-impl Validate for Recurrence {
-    fn validate(&self) -> Result<(), ValidationError> {
-        validate_subject_id(&self.id, Some(b'r'), "recurrence.id")?;
-        nonempty(&self.kind, "recurrence.type")?;
-        if let Some(value) = &self.activity_id {
-            validate_subject_id(value, Some(b'a'), "recurrence.activity_id")?;
-        }
-        nonempty(&self.rule, "recurrence.rule")?;
-        if let Some(value) = &self.count {
-            if *value < 1 {
-                return Err(invalid("recurrence.count", "minimum"));
-            }
-            if *value > 1000000 {
-                return Err(invalid("recurrence.count", "maximum"));
-            }
-        }
-        if let Some(value) = &self.scope {
-            nonempty(value, "recurrence.scope")?;
-        }
-        self.validate_semantics()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Message {
     pub id: String,
     pub revision: String,
@@ -685,6 +621,12 @@ pub struct Message {
     pub subject: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub locations: Vec<Location>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub casualty: Option<Casualty>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recurrences: Vec<Recurrence>,
 }
@@ -717,6 +659,9 @@ impl Validate for Message {
         }
         for item in &self.locations {
             item.validate()?;
+        }
+        if let Some(value) = &self.casualty {
+            value.validate()?;
         }
         for item in &self.recurrences {
             item.validate()?;
@@ -752,6 +697,12 @@ pub struct Passage {
     pub embedding: Option<Vec<f32>>,
     #[serde(deserialize_with = "crate::required_nullable")]
     pub subject: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub casualty: Option<CasualtySearch>,
 }
 impl Validate for Passage {
     fn validate(&self) -> Result<(), ValidationError> {
@@ -774,6 +725,9 @@ impl Validate for Passage {
         }
         if let Some(value) = &self.subject {
             nonempty(value, "passage.subject")?;
+        }
+        if let Some(value) = &self.casualty {
+            value.validate()?;
         }
         self.validate_semantics()
     }
@@ -901,6 +855,460 @@ impl Validate for Location {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyAssistance {
+    pub action: String,
+    pub kind: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub location: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub coordinates: Option<String>,
+}
+impl Validate for CasualtyAssistance {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.action, "casualtyAssistance.action")?;
+        nonempty(&self.kind, "casualtyAssistance.kind")?;
+        if let Some(value) = &self.location {
+            nonempty(value, "casualtyAssistance.location")?;
+        }
+        if let Some(value) = &self.coordinates {
+            nonempty(value, "casualtyAssistance.coordinates")?;
+        }
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyTechnicalData {
+    pub action: String,
+    pub allowance_list: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub component_id: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub job_control_number: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub publications: Vec<CasualtyPublication>,
+}
+impl Validate for CasualtyTechnicalData {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.action, "casualtyTechnicalData.action")?;
+        nonempty(&self.allowance_list, "casualtyTechnicalData.allowance_list")?;
+        if let Some(value) = &self.component_id {
+            nonempty(value, "casualtyTechnicalData.component_id")?;
+        }
+        if let Some(value) = &self.job_control_number {
+            nonempty(value, "casualtyTechnicalData.job_control_number")?;
+        }
+        for item in &self.publications {
+            item.validate()?;
+        }
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyPublication {
+    pub publication: String,
+    pub availability: String,
+}
+impl Validate for CasualtyPublication {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.publication, "casualtyPublication.publication")?;
+        nonempty(&self.availability, "casualtyPublication.availability")?;
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyPart {
+    pub sequence: String,
+    pub stock_reference: String,
+    pub stock_number: String,
+    pub quantity_required: String,
+    pub allowance: String,
+    pub quantity_onboard: String,
+    pub not_in_stock: String,
+    pub not_carried: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub circuit: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub material_control: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub special_material: Option<String>,
+}
+impl Validate for CasualtyPart {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.sequence, "casualtyPart.sequence")?;
+        nonempty(&self.stock_reference, "casualtyPart.stock_reference")?;
+        nonempty(&self.stock_number, "casualtyPart.stock_number")?;
+        nonempty(&self.quantity_required, "casualtyPart.quantity_required")?;
+        nonempty(&self.allowance, "casualtyPart.allowance")?;
+        nonempty(&self.quantity_onboard, "casualtyPart.quantity_onboard")?;
+        nonempty(&self.not_in_stock, "casualtyPart.not_in_stock")?;
+        nonempty(&self.not_carried, "casualtyPart.not_carried")?;
+        if let Some(value) = &self.circuit {
+            nonempty(value, "casualtyPart.circuit")?;
+        }
+        if let Some(value) = &self.material_control {
+            nonempty(value, "casualtyPart.material_control")?;
+        }
+        if let Some(value) = &self.special_material {
+            nonempty(value, "casualtyPart.special_material")?;
+        }
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyRequisition {
+    pub parts_sequence: String,
+    pub number: String,
+    pub quantity: String,
+    pub priority: String,
+    pub project: String,
+    pub required_date: String,
+    pub routing: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub status: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub issued_label: Option<String>,
+}
+impl Validate for CasualtyRequisition {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.parts_sequence, "casualtyRequisition.parts_sequence")?;
+        nonempty(&self.number, "casualtyRequisition.number")?;
+        nonempty(&self.quantity, "casualtyRequisition.quantity")?;
+        nonempty(&self.priority, "casualtyRequisition.priority")?;
+        nonempty(&self.project, "casualtyRequisition.project")?;
+        nonempty(&self.required_date, "casualtyRequisition.required_date")?;
+        nonempty(&self.routing, "casualtyRequisition.routing")?;
+        if let Some(value) = &self.status {
+            nonempty(value, "casualtyRequisition.status")?;
+        }
+        if let Some(value) = &self.issued_label {
+            nonempty(value, "casualtyRequisition.issued_label")?;
+        }
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyReceipt {
+    pub parts_sequence: String,
+    pub number: String,
+    pub received_date: String,
+    pub satisfaction_code: String,
+    pub quantity: String,
+    pub satisfaction_designator: String,
+}
+impl Validate for CasualtyReceipt {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.parts_sequence, "casualtyReceipt.parts_sequence")?;
+        nonempty(&self.number, "casualtyReceipt.number")?;
+        nonempty(&self.received_date, "casualtyReceipt.received_date")?;
+        nonempty(&self.satisfaction_code, "casualtyReceipt.satisfaction_code")?;
+        nonempty(&self.quantity, "casualtyReceipt.quantity")?;
+        nonempty(
+            &self.satisfaction_designator,
+            "casualtyReceipt.satisfaction_designator",
+        )?;
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyCorrection {
+    pub hours_between_failures: String,
+    pub usage_code: String,
+    pub hours_repair: String,
+    pub hours_waiting_parts: String,
+}
+impl Validate for CasualtyCorrection {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(
+            &self.hours_between_failures,
+            "casualtyCorrection.hours_between_failures",
+        )?;
+        nonempty(&self.usage_code, "casualtyCorrection.usage_code")?;
+        nonempty(&self.hours_repair, "casualtyCorrection.hours_repair")?;
+        nonempty(
+            &self.hours_waiting_parts,
+            "casualtyCorrection.hours_waiting_parts",
+        )?;
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtyNarrative {
+    pub subject: String,
+    pub text: String,
+}
+impl Validate for CasualtyNarrative {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.subject, "casualtyNarrative.subject")?;
+        nonempty(&self.text, "casualtyNarrative.text")?;
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Casualty {
+    pub id: String,
+    pub serial: String,
+    pub reporting_uic: String,
+    pub equipment: String,
+    pub eic: String,
+    pub category: String,
+    pub cause: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub update_sequence: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub initial_report_label: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub fleet: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub repair_estimate_date: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub repair_estimate_comments: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub repair_requirement_status: Option<String>,
+    pub report_type: CasualtyReportType,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub correction: Option<CasualtyCorrection>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assistance: Vec<CasualtyAssistance>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub technical_data: Vec<CasualtyTechnicalData>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<CasualtyPart>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requisitions: Vec<CasualtyRequisition>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub receipts: Vec<CasualtyReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub narratives: Vec<CasualtyNarrative>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub casualty_identifiers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identifiers: Vec<String>,
+}
+impl Validate for Casualty {
+    fn validate(&self) -> Result<(), ValidationError> {
+        validate_subject_id(&self.id, Some(b'q'), "casualty.id")?;
+        nonempty(&self.serial, "casualty.serial")?;
+        nonempty(&self.reporting_uic, "casualty.reporting_uic")?;
+        nonempty(&self.equipment, "casualty.equipment")?;
+        nonempty(&self.eic, "casualty.eic")?;
+        nonempty(&self.category, "casualty.category")?;
+        nonempty(&self.cause, "casualty.cause")?;
+        if let Some(value) = &self.update_sequence {
+            nonempty(value, "casualty.update_sequence")?;
+        }
+        if let Some(value) = &self.initial_report_label {
+            nonempty(value, "casualty.initial_report_label")?;
+        }
+        if let Some(value) = &self.fleet {
+            nonempty(value, "casualty.fleet")?;
+        }
+        if let Some(value) = &self.repair_estimate_date {
+            nonempty(value, "casualty.repair_estimate_date")?;
+        }
+        if let Some(value) = &self.repair_estimate_comments {
+            nonempty(value, "casualty.repair_estimate_comments")?;
+        }
+        if let Some(value) = &self.repair_requirement_status {
+            nonempty(value, "casualty.repair_requirement_status")?;
+        }
+        if let Some(value) = &self.correction {
+            value.validate()?;
+        }
+        for item in &self.assistance {
+            item.validate()?;
+        }
+        for item in &self.technical_data {
+            item.validate()?;
+        }
+        for item in &self.parts {
+            item.validate()?;
+        }
+        for item in &self.requisitions {
+            item.validate()?;
+        }
+        for item in &self.receipts {
+            item.validate()?;
+        }
+        for item in &self.narratives {
+            item.validate()?;
+        }
+        validate_strings(
+            &self.casualty_identifiers,
+            false,
+            "casualty.casualty_identifiers",
+        )?;
+        validate_strings(&self.identifiers, true, "casualty.identifiers")?;
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CasualtySearch {
+    pub serial: String,
+    pub reporting_uic: String,
+    pub eic: String,
+    pub category: String,
+    pub report_type: CasualtySearchReportType,
+    pub identifiers: Vec<String>,
+}
+impl Validate for CasualtySearch {
+    fn validate(&self) -> Result<(), ValidationError> {
+        nonempty(&self.serial, "casualtySearch.serial")?;
+        nonempty(&self.reporting_uic, "casualtySearch.reporting_uic")?;
+        nonempty(&self.eic, "casualtySearch.eic")?;
+        nonempty(&self.category, "casualtySearch.category")?;
+        validate_strings(&self.identifiers, true, "casualtySearch.identifiers")?;
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Recurrence {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub activity_id: Option<String>,
+    pub rule: String,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub dtstart: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub until: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub count: Option<i64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exdates: Vec<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub scope: Option<String>,
+    pub status: RecurrenceStatus,
+}
+impl Validate for Recurrence {
+    fn validate(&self) -> Result<(), ValidationError> {
+        validate_subject_id(&self.id, Some(b'r'), "recurrence.id")?;
+        nonempty(&self.kind, "recurrence.type")?;
+        if let Some(value) = &self.activity_id {
+            validate_subject_id(value, Some(b'a'), "recurrence.activity_id")?;
+        }
+        nonempty(&self.rule, "recurrence.rule")?;
+        if let Some(value) = &self.count {
+            if *value < 1 {
+                return Err(invalid("recurrence.count", "minimum"));
+            }
+            if *value > 1000000 {
+                return Err(invalid("recurrence.count", "maximum"));
+            }
+        }
+        if let Some(value) = &self.scope {
+            nonempty(value, "recurrence.scope")?;
+        }
+        self.validate_semantics()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecurityClassification {
     #[serde(rename = "UNCLASSIFIED")]
@@ -966,16 +1374,6 @@ pub enum ActivityStatus {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RecurrenceStatus {
-    #[serde(rename = "inferred")]
-    Inferred,
-    #[serde(rename = "validated")]
-    Validated,
-    #[serde(rename = "unresolved")]
-    Unresolved,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MessageStatus {
     #[serde(rename = "ready")]
     Ready,
@@ -1019,6 +1417,40 @@ pub enum LocationDatumSource {
 pub enum LocationStatus {
     #[serde(rename = "inferred")]
     Inferred,
+    #[serde(rename = "unresolved")]
+    Unresolved,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CasualtyReportType {
+    #[serde(rename = "INITIAL")]
+    Initial,
+    #[serde(rename = "UPDATE")]
+    Update,
+    #[serde(rename = "CORRECT")]
+    Correct,
+    #[serde(rename = "CANCEL")]
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CasualtySearchReportType {
+    #[serde(rename = "INITIAL")]
+    Initial,
+    #[serde(rename = "UPDATE")]
+    Update,
+    #[serde(rename = "CORRECT")]
+    Correct,
+    #[serde(rename = "CANCEL")]
+    Cancel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecurrenceStatus {
+    #[serde(rename = "inferred")]
+    Inferred,
+    #[serde(rename = "validated")]
+    Validated,
     #[serde(rename = "unresolved")]
     Unresolved,
 }

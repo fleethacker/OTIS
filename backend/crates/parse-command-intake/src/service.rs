@@ -5,7 +5,9 @@ use crate::{
     mailbox::Mailbox,
 };
 use parse_command_core::{ParserHost, Registry};
-use parse_command_parser_api::{DecodedMessage, ErrorKind, MessageParser, ParseContext, WorkBudget};
+use parse_command_parser_api::{
+    DecodedMessage, ErrorKind, MessageParser, ParseContext, WorkBudget,
+};
 use parse_command_types::UtcTimestamp;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -20,9 +22,11 @@ impl Service {
         config.validate()?;
         let parser: Box<dyn MessageParser> = if config.demo_fixture_assignments {
             Box::new(crate::demo_recurrence::DemoOptaskParser)
-        } else { Box::new(parse_command_optask::OptaskParser) };
+        } else {
+            Box::new(parse_command_optask::OptaskParser)
+        };
         let registry = Registry::new(
-            vec![parser],
+            vec![parser, Box::new(parse_command_casrep::CasrepParser)],
             config.enabled_types.iter().cloned().collect(),
         )
         .map_err(|_| IntakeError("parser_registry"))?;
@@ -154,10 +158,17 @@ impl Service {
             let assignment = self.demo.as_ref().and_then(|c| c.assignment(&email.body));
             // Baseline has no source security marking. Only this exact fictional
             // allowlist may supply its declared, unvalidated demo policy.
-            let security = assignment.filter(|f| f.baseline_security).map(|_| parse_command_types::Security {
-                policy: "FICTIONAL_DEMO_ONLY".into(), classification: Some(parse_command_types::SecurityClassification::Unclassified),
-                release_to: Vec::new(), status: parse_command_types::SecurityStatus::Unvalidated,
-            });
+            let security =
+                assignment
+                    .filter(|f| f.baseline_security)
+                    .map(|_| parse_command_types::Security {
+                        policy: "FICTIONAL_DEMO_ONLY".into(),
+                        classification: Some(
+                            parse_command_types::SecurityClassification::Unclassified,
+                        ),
+                        release_to: Vec::new(),
+                        status: parse_command_types::SecurityStatus::Unvalidated,
+                    });
             let context = ParseContext {
                 revision: &self.config.revision,
                 recorded_at: &at,
@@ -176,17 +187,13 @@ impl Service {
             match parsed {
                 Ok(value) => {
                     let core = value.core.into_inner();
-                    let mut audit: Vec<_> = value.audit.into_iter().map(|e| e.into_inner()).collect();
+                    let mut audit: Vec<_> =
+                        value.audit.into_iter().map(|e| e.into_inner()).collect();
                     if let (Some(catalog), Some(fixture)) = (&self.demo, assignment) {
                         audit.push(catalog.audit(fixture, &core, &at));
                     }
-                    if let Err(error) = self.journal.finish(
-                        &self.config,
-                        &job,
-                        core,
-                        audit,
-                        email,
-                    ) {
+                    if let Err(error) = self.journal.finish(&self.config, &job, core, audit, email)
+                    {
                         self.journal.record_retry(&job.receipt_id, error.0)?;
                         self.journal.release_attempt(&job.receipt_id)?;
                         return Err(error);

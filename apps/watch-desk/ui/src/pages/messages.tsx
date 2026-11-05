@@ -21,9 +21,18 @@ export default function Messages() {
   const debounced = useDebounced(query);
   const criteria = JSON.stringify([
     zone,
-    ...["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) =>
-      params.get(key)
-    ),
+    ...[
+      "q",
+      "messageType",
+      "sender",
+      "fromDate",
+      "throughDate",
+      "sort",
+      "casualtySerial",
+      "casualtyUic",
+      "casualtyCategory",
+      "casualtyReportType",
+    ].map((key) => params.get(key)),
   ]);
   const [page, setPage] = useState<{ criteria: string; token?: string }>({ criteria: "" });
   const pageToken = page.criteria === criteria ? page.token : undefined;
@@ -71,8 +80,17 @@ export default function Messages() {
   }
   function applyFilters(fields: MessageFilters) {
     const next = new URLSearchParams(params);
-    for (const key of ["messageType", "sender", "fromDate", "throughDate"] as const) {
-      const value = fields[key];
+    for (const key of [
+      "messageType",
+      "sender",
+      "fromDate",
+      "throughDate",
+      "casualtySerial",
+      "casualtyUic",
+      "casualtyCategory",
+      "casualtyReportType",
+    ] as const) {
+      const value = fields[key] ?? "";
       if (value === "") {
         next.delete(key);
       } else {

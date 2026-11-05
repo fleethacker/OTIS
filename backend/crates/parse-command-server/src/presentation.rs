@@ -120,22 +120,44 @@ pub fn timeline(core: &Value, from: &str, to: &str) -> Result<(Vec<Value>, Vec<V
     timeline_with_limit(core, from, to, 2048)
 }
 fn timeline_add(target: &mut Vec<Value>, other: usize, item: Value, limit: usize) -> Result<()> {
-    if target.len() + other >= limit { return Err(Error::new("resource_exhausted", "Timeline fact bound reached; narrow the window")); }
+    if target.len() + other >= limit {
+        return Err(Error::new(
+            "resource_exhausted",
+            "Timeline fact bound reached; narrow the window",
+        ));
+    }
     target.push(item);
     Ok(())
 }
-pub fn timeline_with_limit(core: &Value, from: &str, to: &str, limit: usize) -> Result<(Vec<Value>, Vec<Value>)> {
+pub fn timeline_with_limit(
+    core: &Value,
+    from: &str,
+    to: &str,
+    limit: usize,
+) -> Result<(Vec<Value>, Vec<Value>)> {
     let mut items = Vec::new();
     let mut review = Vec::new();
     let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
     let mut represented = std::collections::BTreeSet::new();
     for raw in core["recurrences"].as_array().into_iter().flatten() {
-        let rule: parse_command_types::Recurrence = serde_json::from_value(raw.clone()).map_err(|_| Error::unavailable())?;
-        match crate::recurrence::expand(&rule, from, to, limit.saturating_sub(items.len()+review.len()))? {
-            crate::recurrence::Expansion::Ready { instants, description, ongoing } => {
-                if let Some(activity) = &rule.activity_id { represented.insert(activity.clone()); }
+        let rule: parse_command_types::Recurrence =
+            serde_json::from_value(raw.clone()).map_err(|_| Error::unavailable())?;
+        match crate::recurrence::expand(
+            &rule,
+            from,
+            to,
+            limit.saturating_sub(items.len() + review.len()),
+        )? {
+            crate::recurrence::Expansion::Ready {
+                instants,
+                description,
+                ongoing,
+            } => {
+                if let Some(activity) = &rule.activity_id {
+                    represented.insert(activity.clone());
+                }
                 for at in instants {
-                    let occurrence = format!("{}@{at}",rule.id);
+                    let occurrence = format!("{}@{at}", rule.id);
                     let item = json!({"key":format!("{key}#{occurrence}"),"messageKey":key,"factId":occurrence,
                         "sourceFactId":rule.id,"title":rule.kind.replace('_'," "),"commandIds":core["command_ids"],
                         "reviewRequired":true,"confirmation":"unvalidated","sourceType":core["type"],"kind":"point","at":at,
@@ -156,7 +178,13 @@ pub fn timeline_with_limit(core: &Value, from: &str, to: &str, limit: usize) -> 
     };
     for fact in facts {
         // A companion replaces only the unresolved prototype, never an independently dated fact.
-        if represented.contains(text(fact,"id")) && fact["at"].is_null() && fact["start_at"].is_null() && fact["end_at"].is_null() { continue; }
+        if represented.contains(text(fact, "id"))
+            && fact["at"].is_null()
+            && fact["start_at"].is_null()
+            && fact["end_at"].is_null()
+        {
+            continue;
+        }
         let mut item = json!({"key":format!("{key}#{}",text(fact,"id")),"messageKey":key,"factId":fact["id"],"title":text(fact,"type").replace('_'," "),"commandIds":core["command_ids"],"reviewRequired":true,"confirmation":"unvalidated","sourceType":core["type"]});
         if let Some(at) = fact["at"].as_str() {
             if timestamp(at)?.as_str() >= from && timestamp(at)?.as_str() < to {
@@ -183,23 +211,45 @@ pub fn timeline_with_limit(core: &Value, from: &str, to: &str, limit: usize) -> 
         // Presentation-only seam: canonical status/clock/label fields, never raw-body fan-out.
         let mut details = Vec::new();
         for endpoint in ["time", "start", "end", "as_of", "deadline"] {
-            let clock = if endpoint == "time" { "time".to_owned() } else { format!("{endpoint}_time") };
+            let clock = if endpoint == "time" {
+                "time".to_owned()
+            } else {
+                format!("{endpoint}_time")
+            };
             let label = format!("{endpoint}_label");
             let status = format!("{endpoint}_status");
-            let at = if endpoint == "time" { "at".to_owned() } else { format!("{endpoint}_at") };
+            let at = if endpoint == "time" {
+                "at".to_owned()
+            } else {
+                format!("{endpoint}_at")
+            };
             let mut detail = json!({"endpoint":endpoint});
-            for (source, target) in [(&clock, "clock"), (&label, "label"), (&status, "status"), (&at, "at")] {
+            for (source, target) in [
+                (&clock, "clock"),
+                (&label, "label"),
+                (&status, "status"),
+                (&at, "at"),
+            ] {
                 if let Some(value) = fact[source.as_str()].as_str() {
                     detail[target] = json!(value.chars().take(128).collect::<String>());
                 }
             }
-            if detail.as_object().is_some_and(|value| value.len() > 1) { details.push(detail); }
+            if detail.as_object().is_some_and(|value| value.len() > 1) {
+                details.push(detail);
+            }
         }
-        item["reasonCode"] = json!(if fact["start_at"].is_string() && fact["end_at"].is_string() {
-            "non_positive_interval"
-        } else if details.is_empty() { "missing_time" } else { "unresolved_time" });
+        item["reasonCode"] = json!(
+            if fact["start_at"].is_string() && fact["end_at"].is_string() {
+                "non_positive_interval"
+            } else if details.is_empty() {
+                "missing_time"
+            } else {
+                "unresolved_time"
+            }
+        );
         item["timeDetails"] = json!(details);
-        item["reason"] = json!("Source time cannot be placed on the calendar; no date or duration is inferred");
+        item["reason"] =
+            json!("Source time cannot be placed on the calendar; no date or duration is inferred");
         timeline_add(&mut review, items.len(), item, limit)?;
     }
     Ok((items, review))

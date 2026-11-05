@@ -321,6 +321,29 @@ Parker must run the external OPTASK regression against his unavailable samples.
 - No API change. Static diff check only. Container UI tests and a zero-delay typing
   browser check remain required; attach the final query/URL screenshot.
 
+## Polish 4 — Lexical Calendar and explicit related search (Parker's call)
+
+- Source check: Calendar searched narrative passages first, then restricted timeline
+  to the first message-search page. A title need not have a narrative passage; hybrid
+  top-k does not establish a literal match. No relevance score threshold is calibrated.
+- Least invasive policy implemented entirely in UI: fetch the bounded selected-ship
+  timeline independently, include every returned title/header containing all query
+  words, union with returned keyword-passage message matches. Preserve source limits;
+  disclose first keyword page truncation, search pending/error and actual executed mode.
+  Keyword failure retains local matches with an explicit partial-search warning.
+- Related messages is an explicit link to hybrid Message search, not silent plotting.
+  Message search defaults keyword and offers Related (hybrid); executed mode comes
+  from response metadata, not the requested mode. Hybrid results are labelled ranked,
+  possibly without literal matches. No uncalibrated threshold or completeness claim.
+- Files: Calendar, Messages, `calendar-search{,.test}.tsx`/`.ts`, message search state
+  and tests, port CSS. API contract unchanged; no server edits or new search templates.
+- Tests added: both communications-title hits survive empty passage hits, no automatic
+  radio-rehearsal semantic fallback, keyword requests/limits/mode and explicit related URL.
+- Static diff check only; container tests and live searches pending. Attach communications
+  Calendar, radio rehearsal empty/local versus Related hybrid, and unavailable search.
+- Parker: accept keyword-first default? Server-side exhaustive title/narrative union,
+  relevance calibration and cross-page aggregation remain separate search work.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

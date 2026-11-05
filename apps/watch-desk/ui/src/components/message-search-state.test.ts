@@ -14,7 +14,7 @@ test("search filters use source originator and inclusive Zulu dates across calen
   expect(state.activeFilters).toBe(3);
   expect(state.request).toEqual({
     query: "communications",
-    mode: "hybrid",
+    mode: "keyword",
     dataset: "canonical",
     sort: "issued_asc",
     pageToken: "opaque",

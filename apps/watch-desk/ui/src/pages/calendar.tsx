@@ -1,5 +1,7 @@
 import { useCalendarParams } from "../components/calendar-params";
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { calendarSearch } from "../components/calendar-search";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
@@ -39,13 +41,7 @@ export default function Calendar() {
   const debounced = useDebounced(query);
   const ships = readShips(params.get("ships"));
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
-  const result = useSource("timeline", {
-    dataset,
-    query: debounced,
-    mode: "hybrid",
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
-    filters: ships
+  const filters = ships
       ? {
           commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
           unassignedOnly: ships.has("unassigned:"),
@@ -53,10 +49,20 @@ export default function Calendar() {
             ships.size === 0 ||
             [...ships].some((v) => !v.startsWith("unit:") && v !== "unassigned:"),
         }
-      : {},
+      : {};
+  // Fetch the bounded timeline independently: passage retrieval must not hide title hits.
+  const result = useSource("timeline", {
+    dataset, query: "", mode: "hybrid",
+    from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
   });
+  const searching = dataset === "canonical" && debounced.trim() !== "";
+  const keywords = useSource("search", { dataset, query: debounced, mode: "keyword", filters }, searching && query === debounced);
   const messages = result.data?.messages ?? [];
   const refreshing = result.isPending || result.isFetching || query !== debounced;
+  const keywordKeys = new Set(!keywords.isError && !keywords.isFetching ? keywords.data?.messages.map((m) => m.sourceMessageId) : []);
+  const timelineItems = calendarSearch(result.data?.meta.timelineItems, messages, debounced, keywordKeys);
+  const reviewItems = calendarSearch(result.data?.meta.reviewItems, messages, debounced, keywordKeys);
+  const searchLimited = searching && (keywords.data?.meta.windowLimited === true || !!keywords.data?.meta.nextPageToken);
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
   canonical.set("view", view);
@@ -161,6 +167,13 @@ export default function Calendar() {
           />
         </label>
       </section>
+      {query.trim() && <div className="calendar-search-status">
+        <p>Calendar filtered by “{query}” · local lexical title/header matches are always included within returned records.</p>
+        {searching && (keywords.isPending || keywords.isFetching || query !== debounced ? <p role="status">Loading keyword passage matches…</p> : keywords.isError ? <p role="alert">Keyword search unavailable; showing local title/header matches only. <button className="btn btn-xs" onClick={() => { void keywords.refetch(); }}>Retry search</button></p> : <p>Executed passage search: {keywords.data?.meta.executedMode ?? "not reported by server"}. Passage matching may match any query word; all query words must match a local title/header.</p>)}
+        {searchLimited && <p>Only the returned keyword page is included; additional matches may exist.</p>}
+        <Link to={`/messages?${new URLSearchParams({ q: query, mode: "hybrid", returnTo })}`}>Find related messages (hybrid)</Link>
+        <span> · Related results are not automatically plotted.</span>
+      </div>}
       {refreshing && <p role="status">Loading schedule…</p>}
       {result.isError && (
         <div className="alert" role="alert">
@@ -203,7 +216,7 @@ export default function Calendar() {
             dataset === "canonical"
               ? result.isError || refreshing
                 ? []
-                : (result.data?.meta.timelineItems ?? [])
+                : (timelineItems ?? [])
               : undefined
           }
           from={from}
@@ -222,9 +235,9 @@ export default function Calendar() {
       </section>
       {dataset === "canonical" && result.data && !refreshing && !result.isError && (
         <CalendarReview
-          items={result.data.meta.reviewItems}
+          items={reviewItems}
           commands={roster.isError ? [] : roster.data?.commands}
-          limited={result.data.meta.windowLimited === true}
+          limited={result.data.meta.windowLimited === true || searchLimited}
           filtered={ships !== undefined || query.trim() !== ""}
           returnTo={returnTo}
           onShowAll={() => setParams((next) => {

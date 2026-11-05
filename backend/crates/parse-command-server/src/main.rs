@@ -159,6 +159,10 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 get(parse_command_server::api::status),
             )
             .route(
+                "/api/v1/commands/list",
+                post(parse_command_server::commands::list),
+            )
+            .route(
                 "/api/v1/messages/{operation}",
                 post(parse_command_server::api::read),
             )

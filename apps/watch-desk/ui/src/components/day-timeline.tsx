@@ -1,4 +1,4 @@
-import { create } from "@bufbuild/protobuf";
+import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
 import type { TimelineItem } from "./source-data";
@@ -27,8 +27,7 @@ import { calendarLocalizer } from "./calendar-localizer";
 import { messageHref } from "./calendar-links";
 import { useDisplayTime, civilDate, civilHour } from "./display-time";
 import moment from "moment-timezone";
-import { shipColor, shipKey } from "./ship-calendars";
-import { ShipMarker } from "./ship-marker";
+import { CommandChips, commandColor, commandKeys, commandName, type Command } from "./command-roster";
 import { OptaskIcon } from "./optask-icons";
 import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";
@@ -47,6 +46,8 @@ interface ScheduleEntry {
   point?: boolean;
   reviewRequired?: boolean;
   sourceType?: string;
+  commandIds?: string[];
+  commands: Command[];
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -84,7 +85,8 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
-    `Unit: ${row.event.unit ?? "Unassigned"}`,
+    `Applicability: ${commandKeys(row.commandIds).map((key) => commandName(key, row.commands)).join(", ")}`,
+    row.event.unit ? `Reported unit (not assignment): ${row.event.unit}` : undefined,
     (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
     row.reviewRequired === true ? "Requires review" : undefined,
     row.event.isRevised ? "Revised" : undefined,
@@ -96,7 +98,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const content = (
     <>
       <OptaskIcon type={row.sourceType} />
-      <span className="calendar-event-title">{row.title}</span>
+      <span className="calendar-event-title"><CommandChips ids={row.commandIds} commands={row.commands} /> {row.title}</span>
     </>
   );
   return disclose ? (
@@ -135,6 +137,7 @@ export function DayTimeline({
   endHour,
   onDay,
   expanded = false,
+  commands = [],
 }: {
   messages: MessageRecord[];
   sourceItems?: TimelineItem[];
@@ -147,6 +150,7 @@ export function DayTimeline({
   endHour?: number;
   onDay?: (date: string) => void;
   expanded?: boolean;
+  commands?: Command[];
 }) {
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
@@ -193,6 +197,7 @@ export function DayTimeline({
                 before: position.before || parts.some((part) => part?.before === true),
                 after: position.after || parts.some((part) => part?.after === true),
                 sourceType: sourceType(message),
+                commands,
               },
             ]
           : [];
@@ -220,7 +225,7 @@ export function DayTimeline({
               return [];
             }
             const existing = message.events.find((event) => event.sourceEventId === item.factId);
-            const event = create(ExtractedEventSchema, existing);
+            const event = existing ? clone(ExtractedEventSchema, existing) : create(ExtractedEventSchema);
             event.title = item.title;
             event.sourceEventId = item.factId ?? item.key;
             event.startAt = timestampFromDate(new Date(start));
@@ -239,6 +244,8 @@ export function DayTimeline({
                 point,
                 reviewRequired: item.reviewRequired,
                 sourceType: item.sourceType,
+                commandIds: item.commandIds ?? [],
+                commands,
               },
             ];
           })
@@ -347,7 +354,7 @@ export function DayTimeline({
                 ]
                   .filter(Boolean)
                   .join(" "),
-                style: { borderLeft: `5px solid ${shipColor(shipKey(row.event.unit))}` },
+                style: { borderLeft: `5px solid ${commandColor(commandKeys(row.commandIds)[0], commands)}` },
               })}
               formats={{
                 timeGutterFormat: (date) =>
@@ -416,7 +423,7 @@ export function DayTimeline({
                           setShowIndex(false);
                         }}
                       >
-                        {row.title} · <ShipMarker unit={row.event.unit} />
+                        {row.title} · <CommandChips ids={row.commandIds} commands={commands} />
                         {row.event.isRevised ? " · Revised" : ""}
                       </button>
                     </li>
@@ -426,7 +433,7 @@ export function DayTimeline({
                 selected && (
                   <>
                     <p>
-                      <ShipMarker unit={selected.event.unit} /> ·{" "}
+                      <CommandChips ids={selected.commandIds} commands={commands} /> ·{" "}
                       {(selected.event.location ?? "").trim() !== ""
                         ? selected.event.location
                         : "Location unavailable"}

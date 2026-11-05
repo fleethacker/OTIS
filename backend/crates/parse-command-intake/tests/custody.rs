@@ -49,6 +49,37 @@ fn stage(s: &mut Service, c: &Config, validity: u32, uid: u32, raw: &[u8]) -> bo
         .unwrap()
 }
 #[test]
+fn explicit_demo_config_assigns_only_whitelisted_bodies_and_records_its_evidence() {
+    let mut config = TestConfig::new();
+    config.0.demo_fixture_assignments = true;
+    let c = &config.0;
+    let mut service = Service::open(c.clone()).unwrap();
+    let fixture = include_str!("../../../config/watchdesk-fixtures/shared.txt");
+    stage(&mut service, c, 20, 1, &email("SUBJ: Fictional shared watch", fixture));
+    service.process(&AtomicBool::new(false)).unwrap();
+    let mut output = Vec::new();
+    service.journal.export(&mut output).unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(doc["command_ids"], serde_json::json!(["demo-tern", "demo-halyard"]));
+    assert!(!doc["activities"].as_array().unwrap().is_empty());
+    drop(service);
+    let db = rusqlite::Connection::open(&c.journal).unwrap();
+    let evidence: String = db.query_row("SELECT document FROM audit_outbox WHERE json_extract(document,'$.kind')='demo_command_assignment'", [], |r| r.get(0)).unwrap();
+    let evidence: serde_json::Value = serde_json::from_str(&evidence).unwrap();
+    assert_eq!(evidence["payload"]["config"], "backend/config/watchdesk-demo.json");
+    drop(db);
+
+    let disabled = TestConfig::new();
+    let mut service = Service::open(disabled.0.clone()).unwrap();
+    stage(&mut service, &disabled.0, 20, 1, &email("SUBJ: Fictional disabled assignment", fixture));
+    service.process(&AtomicBool::new(false)).unwrap();
+    let mut output = Vec::new();
+    service.journal.export(&mut output).unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(doc["command_ids"], serde_json::json!([]));
+}
+
+#[test]
 fn staged_bytes_survive_reopen_and_parsing_commits_with_outbox() {
     let config = TestConfig::new();
     let c = &config.0;

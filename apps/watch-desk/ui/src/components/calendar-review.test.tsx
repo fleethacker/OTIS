@@ -69,6 +69,7 @@ test("Calendar consumes reviewItems separately from points and hides stale revie
       timelineItems: [{ ...review, key: `${key}#point`, factId: "point", title: "Fictional point", kind: "point", at: "2026-11-05T08:00:00Z" }],
     },
   });
+  client.setQueryData(["watchdesk-commands"], { commands: [], source: "fictional config", version: "test", provenance: "fictional", assignmentEnabled: false });
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
     new Response(JSON.stringify({ message: "Fictional source unavailable" }), { status: 503 })
   );
@@ -82,7 +83,7 @@ test("Calendar consumes reviewItems separately from points and hides stale revie
     expect(view.getByText(/Partial source results/)).toBeTruthy();
     await act(async () => { await client.invalidateQueries({ queryKey: ["parse-command-source"] }); });
     expect(fetch).toHaveBeenCalled();
-    await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Fictional source unavailable"));
+    await waitFor(() => expect(view.getByText(/Calendar could not be loaded/).textContent).toContain("Fictional source unavailable"));
     expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
     expect(view.queryByRole("link", { name: "Fictional point, source record" })).toBeNull();
   } finally {

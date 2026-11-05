@@ -33,6 +33,7 @@ impl Error {
         match self.code {
             "invalid_argument" => connectrpc::ConnectError::invalid_argument(self.message),
             "unauthenticated" => connectrpc::ConnectError::unauthenticated(self.message),
+            "permission_denied" => connectrpc::ConnectError::permission_denied(self.message),
             "not_found" => connectrpc::ConnectError::not_found(self.message),
             "failed_precondition" => connectrpc::ConnectError::failed_precondition(self.message),
             "resource_exhausted" => connectrpc::ConnectError::resource_exhausted(self.message),
@@ -61,6 +62,7 @@ impl IntoResponse for Error {
         let status = match self.code {
             "invalid_argument" => StatusCode::BAD_REQUEST,
             "unauthenticated" => StatusCode::UNAUTHORIZED,
+            "permission_denied" => StatusCode::FORBIDDEN,
             "not_found" => StatusCode::NOT_FOUND,
             "resource_exhausted" => StatusCode::TOO_MANY_REQUESTS,
             "failed_precondition" => StatusCode::PRECONDITION_FAILED,

@@ -32,6 +32,9 @@ pub struct Config {
     pub parser: parse_command_core::HostLimits,
     pub enabled_types: Vec<String>,
     pub subject_policy: SubjectPolicy,
+    /// Opt-in exact-hash assignments for the checked-in fictional Watch Desk fixtures only.
+    #[serde(default)]
+    pub demo_fixture_assignments: bool,
 }
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]

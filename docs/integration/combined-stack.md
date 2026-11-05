@@ -16,16 +16,74 @@ allowed; runtime needs only local mail, Rust and OpenSearch endpoints.
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
 docker compose config --quiet
-docker compose up --build -d --wait --wait-timeout 180
+# Fresh volume: provision OpenSearch before the application creates its indices.
+docker compose up --build -d --wait --wait-timeout 180 opensearch
+uv run --no-project --python 3.9 --with-requirements backend/search/requirements.lock \
+  python backend/search/deploy.py
+docker compose up --build -d --wait --wait-timeout 180 server web
 curl http://127.0.0.1:8080/api/health
 curl http://127.0.0.1:8080/api/v1/source/status
 ```
 
-Register/deploy the approved model through `backend/search/deploy.py` as described
-in that runbook when provisioning a fresh OpenSearch volume. Rust installs its
-indices/templates and continuously publishes canonical data without requiring
-the model. Enrichment and neural/hybrid search become available when the local
-model is ready. There are no runtime model/dependency downloads.
+Register/deploy the approved model through `backend/search/deploy.py` **before the
+server first creates the passages index on a fresh volume**. The deployment tool
+compares index generation metadata and refuses an existing incompatible index;
+it does not silently take over an index the application already created. For an
+existing volume, inspect the actual mapping/model generation and plan a reviewed
+migration instead of deleting it. Rust installs its indices/templates and continuously
+publishes canonical data without requiring the model. Enrichment and neural/hybrid
+search become available when the local model is ready. There are no runtime
+model/dependency downloads. Provisioning needs prepared local Python dependencies
+or a connected preparation environment; the `uv` command is not an airgap download plan.
+
+### Fictional Watch Desk demo opt-in
+
+The multi-ship demo requires `compose.watchdesk-demo.yml`, which sets server-only
+`PARSE_COMMAND_WATCHDESK_DEMO=true`. The base stack intentionally leaves the fictional
+roster and exact-hash fixture assignment off. After the fresh-volume provisioning
+step above, start the demo application with:
+
+```sh
+docker compose -f docker-compose.yml -f compose.watchdesk-demo.yml config --quiet
+docker compose -f docker-compose.yml -f compose.watchdesk-demo.yml \
+  up --build -d --wait --wait-timeout 180 server web
+```
+
+Only constructed bodies in `backend/config/watchdesk-fixtures/` are demo inputs.
+Verify the isolated mailbox/destination before any explicit submission; startup
+never sends them. Use 5 Nov 2026 in Calendar. Opt-in does not reparse/backfill stored
+messages, erase volumes or establish production command/acknowledgement authority.
+
+### x86_64 (amd64) local notes
+
+These are reported local provisioning observations, not a reviewed cross-platform
+runtime profile. Apply them in a local build/runtime override; this documentation
+change does not alter the committed Dockerfile, Compose environment or native lock.
+
+- **DJL flavour:** x86_64 needs `PYTORCH_FLAVOR=cpu-precxx11` to select the prepared
+  native helper. ARM64 always uses precxx11. The preparation script downloads that
+  flavour for either architecture. Make the variable available to both image-time
+  Java priming and runtime OpenSearch; merely exporting it on the host does not inject
+  it into a Docker build or Compose service.
+- **512m heap:** adding `-XX:MaxNewSize=96m` to `OPENSEARCH_JAVA_OPTS` avoided parent
+  circuit-breaker HTTP 429s during model chunk upload on the local x86_64 run. Retain
+  the existing heap/offline/thread options when adding it. This workaround is
+  **unverified on ARM64** and is not a production sizing recommendation; do not disable
+  circuit breakers or reset data to hide resource failures.
+- **Provisioning Python:** `backend/search/requirements.lock` needs Python **3.9** in
+  the reported setup. Its click/typer pins conflict under Python 3.12. Use the explicit
+  3.9 environment above (also for `prepare_assets.py`), not an unqualified system
+  interpreter or a silent dependency-lock rewrite.
+- **Bootstrap order:** run `deploy.py` before the server first creates the passages
+  index on a fresh volume. Otherwise deployment refuses the existing incompatible
+  index metadata (`index_model_or_chunker_conflict_new_generation_required`). This
+  is a generation guard, not permission to delete an existing index.
+- **Native lock provenance:** the amd64 native lock was computed locally from
+  `publish.djl.ai` downloads and is **unreviewed**. The committed validated baseline
+  is ARM64; this checkout does not supply a reviewed amd64 lock. Preparation's
+  generated `assets/native/amd64/SHA256SUMS` is not independent approval. Review
+  provenance/checksums and run actual offline inference before accepting an amd64
+  image; process health alone is insufficient.
 
 | Service | Persistent state | Local endpoint |
 | --- | --- | --- |

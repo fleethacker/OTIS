@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { HeaderClock } from "./header-clock";
+import { WatchContextHeader } from "./watch-context-header";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
 import { Notifications } from "./notifications";
@@ -27,7 +28,7 @@ function DeskLayout() {
               W<span>/</span>D
             </span>
             <span>
-              Watch Desk<small>Ship schedule workspace</small>
+              Watch Desk<WatchContextHeader />
             </span>
           </div>
         </div>

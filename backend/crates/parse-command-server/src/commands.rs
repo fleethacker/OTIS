@@ -16,10 +16,14 @@ pub async fn list(
     Json(_request): Json<Request>,
 ) -> Result<Json<Value>> {
     app.headers_identity(&headers)?;
-    let catalog = Catalog::load().map_err(|_| Error::config("Synthetic roster configuration is invalid"))?;
+    let mut catalog = Catalog::load().map_err(|_| Error::config("Synthetic roster configuration is invalid"))?;
+    let snapshot = crate::watch_context::read(&app.store()?.db)?;
+    for command in &mut catalog.commands { command.is_own_ship = command.id == snapshot.context.own_ship_id; }
     // Compile-time bounded (<=32 commands). No search request, source body or roster write.
     Ok(Json(json!({
         "commands": catalog.commands,
+        "defaultShips": snapshot.context.default_ships,
+        "contextUpdatedBy": snapshot.updated_by,
         "source": CONFIG_SOURCE,
         "version": catalog.version,
         "provenance": catalog.provenance,

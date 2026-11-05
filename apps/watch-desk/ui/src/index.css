@@ -481,7 +481,7 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .ship-choice label { min-width: 0; overflow-wrap: anywhere; }
 .ship-choice input { flex: none; }
 .ship-swatch { flex: none; width: 9px; height: 9px; border-radius: 2px; }
-.ship-actions { display: flex; gap: 4px; margin: 8px 0; }
+.ship-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
 .roster-provenance, .ships-sidebar small { color: var(--color-bc-muted); font-size: 11px; overflow-wrap: anywhere; }
 .command-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: baseline; }
 .command-chip { color: white; font-size: 10px; font-weight: 600; line-height: 1.4; padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
@@ -565,6 +565,27 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .message-search-summary svg { width: 13px; height: 13px; }
 
 .message-search-actions .popover-trigger { min-width: 32px; padding-inline: 7px; }
+
+/* App-owned Settings; read-only users see the same confirmed context. */
+.watch-settings { max-width: 900px; margin: 0 auto; }
+.watch-settings h1 { font-size: 24px; font-weight: 650; margin: 16px 0; }
+.watch-settings > p, .context-editor p, .context-confirmation { color: var(--color-bc-muted); font-size: 12px; margin: 8px 0; overflow-wrap: anywhere; }
+.context-editor { border-top: 1px solid var(--color-base-300); padding: 14px 0 4px; }
+.context-editor legend { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.context-editor .input, .context-editor .select { width: min(100%, 480px); }
+.context-editor button { display: block; margin-top: 8px; }
+.context-ship-options { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.context-ship-options label, .context-hide-confirm { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.context-hide-confirm { border-left: 3px solid var(--color-warning); padding: 8px; }
+.context-suggestions { margin-top: 24px; }
+.context-suggestions h2 { font-size: 18px; font-weight: 600; }
+.context-suggestions > p { font-size: 12px; margin: 8px 0; }
+.context-suggestion { border: 1px solid var(--color-base-300); padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+.context-suggestion h3 { font-weight: 600; }
+.context-suggestion a, .context-confirmation a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
+.context-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.context-conflict { border-left: 3px solid var(--color-warning); padding-left: 10px; }
+.watch-settings [role="alert"] { color: var(--color-error); font-size: 13px; }
 
 /* Source-set message reader. */
 .message-reader-status, .message-acknowledgement { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

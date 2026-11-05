@@ -16,6 +16,8 @@ export interface CommandRoster {
   version: string;
   provenance: string;
   assignmentEnabled: boolean;
+  defaultShips?: string[];
+  contextUpdatedBy?: string | null;
 }
 export async function readCommands(signal?: AbortSignal): Promise<CommandRoster> {
   const payload = await readJson(await fetch("/api/v1/commands/list", {
@@ -30,6 +32,9 @@ export async function readCommands(signal?: AbortSignal): Promise<CommandRoster>
       typeof payload.source !== "string" || typeof payload.version !== "string" ||
       typeof payload.provenance !== "string" || typeof payload.assignmentEnabled !== "boolean") {
     throw new Error("Ship roster response is invalid");
+  }
+  if (payload.defaultShips !== undefined && (!Array.isArray(payload.defaultShips) || !payload.defaultShips.every((v) => typeof v === "string"))) {
+    throw new Error("Default ship selection is invalid");
   }
   const roster = payload as unknown as CommandRoster;
   if (new Set(roster.commands.map((c) => c.id)).size !== roster.commands.length) {

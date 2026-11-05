@@ -60,6 +60,7 @@ impl Private {
         CREATE TABLE IF NOT EXISTS legacy_orphans(kind TEXT NOT NULL,id INTEGER NOT NULL,document TEXT NOT NULL,PRIMARY KEY(kind,id));
         PRAGMA user_version=1;COMMIT;")?;
         crate::notifications::initialize(&db)?;
+        crate::watch_context::initialize(&db)?;
         let mut this = Self { db };
         if let Some(legacy) = legacy {
             if !legacy.exists() {

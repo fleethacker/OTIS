@@ -107,3 +107,33 @@ fn sent_time_not_receipt_time_places_and_orders_messages() {
     assert_eq!(result["items"][1]["issuedAt"], "2026-11-05T05:00:00.000000000Z");
     assert_eq!(result["items"][1]["recordedAt"], "2026-11-05T09:30:00.000000000Z");
 }
+mod support;
+#[tokio::test]
+#[ignore = "requires isolated OpenSearch test indices"]
+async fn custody_store_reads_published_projections_for_turnover_and_suggestions() {
+    let store = support::store().await;
+    let raw = "MSGID/FICTIONAL//\nEXER/FICTIONAL COPPER//";
+    let id = parse_command_types::message_id(raw);
+    let start = raw.find("FICTIONAL COPPER").unwrap();
+    let field = json!({"position":1,"raw_text":"FICTIONAL COPPER","start_byte":start,"end_byte":start+16});
+    let audits: Vec<Value> = [
+        ("source_preserved", json!({"source":{"raw_text":raw,"sha256":id.trim_start_matches("sha256:")}})),
+        ("parse_completed", json!({"profile":"observed-optask-extensions-v1","records":[{"set_id":"EXER","fields":[field]}]})),
+    ].into_iter().map(|(kind, payload)| json!({"id":parse_command_types::event_id(&[&id, kind]),"kind":kind,"recorded_at":"2026-11-05T05:00:00Z","payload":payload})).collect();
+    for (key, state, order) in [(format!("{id}@r1"), "published", 3), ("sha256:pending@r1".to_owned(), "pending", 4)] {
+        let mut row = Record::new("projection", &key, json!({"core":{"id":id,"revision":"r1","subject":"Fictional copper","command_ids":["demo-tern"],"issued_at":"2026-11-05T05:00:00Z"},"audits":audits,"first_receipt":"receipt-3","selected_received_at":"2026-11-05T05:01:00Z"}));
+        row.state = state.into();
+        row.order = order;
+        store.put(&row, None).await.unwrap();
+    }
+    store.refresh().await.unwrap();
+    let value = parse_command_server::changes::read(&store, &request()).await.unwrap();
+    assert_eq!(value["returnedNewCount"], 1);
+    assert_eq!(value["watermark"], 3); // pending projections are not custody evidence yet
+    assert_eq!(value["items"][0]["messageKey"], format!("{id}@r1"));
+    assert_eq!(value["items"][0]["recordedAt"], "2026-11-05T05:01:00.000000000Z");
+    let metadata = parse_command_server::context_metadata::read(&store).await.unwrap();
+    assert_eq!(metadata.suggestions.len(), 1);
+    assert_eq!(metadata.suggestions[0].sources[0].line_start, 2);
+    support::cleanup(&store).await;
+}

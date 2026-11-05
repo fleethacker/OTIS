@@ -54,7 +54,12 @@ export function Popover({
         }
       }}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
+        // Close only when focus moves to a known element outside. Safari and macOS
+        // browsers do not focus links on click, so mousedown on a menu link blurs
+        // with relatedTarget null; closing then would unmount the link before its
+        // click lands. Outside clicks are handled by the pointerdown listener.
+        const next = event.relatedTarget;
+        if (next instanceof Node && !event.currentTarget.contains(next)) {
           setOpen(false);
         }
       }}

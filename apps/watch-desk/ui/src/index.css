@@ -654,8 +654,6 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .ship-symbol { display: inline-block; width: 20px; height: 20px; flex: none; vertical-align: middle; margin-inline-end: 5px; }
 .ship-name { font-family: var(--font-ship-stack); font-weight: 400; letter-spacing: .035em; }
 .hull-number { font-family: var(--font-hull-stack); font-weight: 400; letter-spacing: .05em; color: #fff; text-shadow: 2px 2px 0 #11171d; }
-.signal-paragraph-heading { display: flex; align-items: center; gap: 10px; }
-.signal-flag { display: inline-block; width: 30px; height: 24px; flex: none; vertical-align: middle; }
 
 /* Vice decoration stays on the shell; source text and military symbols stay legible. */
 [data-theme="app-vice"] .desk-header { isolation: isolate; }

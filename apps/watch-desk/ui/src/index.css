@@ -192,7 +192,7 @@ h2 { font-size: 17px; font-weight: 650; }
 .desk-footer { border-top: 1px solid var(--color-base-300); margin: 0 32px; padding: 16px 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; color: var(--color-bc-muted); font-size: 12px; }
 .desk-footer a { text-decoration: underline; text-underline-offset: 3px; }
 .about-otis { max-width: 1080px; margin: 32px auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
-.about-otis-art { overflow: hidden; border-radius: var(--radius-box); border: 1px solid var(--color-base-300); background: oklch(98% 0.01 85); }
+.about-otis-art { overflow: hidden; border-radius: var(--radius-box); border: 1px solid var(--color-base-300); background: transparent; }
 .about-otis-art img { display: block; width: 100%; height: auto; }
 .about-otis-copy { min-width: 0; }
 .about-otis-copy h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.1; }
@@ -203,12 +203,12 @@ h2 { font-size: 17px; font-weight: 650; }
   .about-otis { grid-template-columns: minmax(0, 1fr); gap: 28px; margin: 12px auto; }
   .about-otis-art { max-width: 440px; width: 100%; margin-inline: auto; }
 }
-.messages-workspace { display: grid; grid-template-columns: minmax(260px, 30%) minmax(0, 1fr); margin-top: 18px; border: 1px solid var(--color-base-300); background: var(--color-base-100); }
-.record-list { border-right: 1px solid var(--color-base-300); min-width: 0; }
+.messages-workspace { display: grid; grid-template-columns: minmax(260px, 30%) minmax(0, 1fr); gap: 16px; margin-top: 18px; }
+.record-list { display: flex; flex-direction: column; align-self: start; gap: 12px; min-width: 0; }
 .record-list > h2, .record-list > p { padding: 16px; }
-.record-entry { display: flex; flex-direction: column; width: 100%; text-align: left; gap: 6px; padding: 18px 16px; border-top: 1px solid var(--color-base-300); overflow-wrap: anywhere; cursor: pointer; font-size: 13px; }
+.record-entry { display: flex; flex-direction: column; width: 100%; text-align: left; gap: 6px; padding: 18px 16px; border: 1px solid var(--color-base-300); border-radius: 12px; background: var(--color-base-100); overflow-wrap: anywhere; cursor: pointer; font-size: 13px; }
 .record-entry:hover { background: var(--color-base-200); }
-.record-entry[aria-pressed="true"] { background: var(--brand-selection); }
+.record-entry[aria-pressed="true"] { border-color: var(--color-primary); background: var(--brand-selection); }
 .record-entry strong { font-size: 15px; }
 .record-id { font-size: 12px; font-weight: 600; color: var(--color-primary); overflow-wrap: anywhere; }
 .message-reader, .reader-empty { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
@@ -218,6 +218,29 @@ h2 { font-size: 17px; font-weight: 650; }
 .message-meta dt { color: var(--color-bc-muted); }
 .reader-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; }
 .reader-content { min-width: 0; }
+.message-map-disclosure { margin-bottom: 12px; border: 1px solid var(--color-base-300); border-radius: 10px; overflow: hidden; background: var(--color-base-100); }
+.message-map-toggle { display: flex; align-items: center; width: 100%; gap: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.message-map-toggle:hover { background: var(--color-base-200); }
+.message-map-toggle > svg { width: 17px; height: 17px; flex: none; }
+.message-map-chevron { margin-left: auto; transition: transform 150ms ease; }
+.message-map-toggle[aria-expanded="true"] .message-map-chevron { transform: rotate(180deg); }
+.message-map-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -3px; border-radius: 9px; }
+.message-map-canvas { position: relative; background: var(--color-base-100); }
+.message-map-canvas > svg { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
+.message-map-canvas > svg:active { cursor: grabbing; }
+.message-map-canvas > svg:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -3px; }
+.message-map-controls { position: absolute; top: 8px; right: 8px; z-index: 1; display: flex; gap: 2px; padding: 2px; border: 1px solid var(--color-base-300); border-radius: 8px; background: var(--color-base-100); }
+.message-map-controls .btn { padding: 4px; min-width: 28px; height: 28px; min-height: 28px; }
+.message-map-controls svg { width: 16px; height: 16px; }
+.message-map-land { fill: var(--color-base-200); stroke: var(--color-bc-muted); stroke-opacity: .5; stroke-width: .7; }
+.message-map-graticule { fill: none; stroke: var(--color-bc-muted); stroke-opacity: .25; stroke-width: .6; }
+.message-map-feature { fill: color-mix(in oklch, var(--color-primary) 18%, transparent); stroke: var(--color-primary); stroke-width: 2; cursor: help; outline: none; }
+.message-map-point { fill: var(--color-primary); stroke: var(--color-base-100); stroke-width: 1.5; }
+.message-map-line { fill: none; stroke: var(--color-secondary); stroke-width: 3; }
+.message-map-feature:hover, .message-map-feature:focus { stroke-width: 4; stroke: var(--color-accent); }
+.message-map-grid-label { fill: var(--color-bc-muted); stroke: var(--color-base-100); stroke-width: 3px; paint-order: stroke; font: 11px var(--font-mono); pointer-events: none; }
+.message-map-tooltip { position: absolute; left: 8px; bottom: 28px; max-width: calc(100% - 16px); padding: 4px 8px; border: 1px solid var(--color-base-300); border-radius: 6px; background: var(--color-base-100); color: var(--color-base-content); font-size: 12px; pointer-events: none; }
+.message-map-controls .btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .message-lifecycle { margin: 20px 0 20px 8px; border-left: 2px solid var(--color-base-300); }
 .message-lifecycle li { position: relative; padding: 0 0 24px 20px; }
 .message-lifecycle li::before { content: ""; position: absolute; left: -6px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-primary); }
@@ -290,7 +313,7 @@ h2 { font-size: 17px; font-weight: 650; }
 .calendar-details ul { margin-top: 12px; }
 .calendar-details a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 1150px) { .reader-layout { grid-template-columns: 1fr; } .message-actions { border-left: 0; border-top: 1px solid var(--color-base-300); padding-left: 0; } }
-@media (max-width: 700px) { .messages-workspace { grid-template-columns: 1fr; } .record-list { border-right: 0; border-bottom: 1px solid var(--color-base-300); } .message-reader, .reader-empty { padding: 16px; } .message-meta { grid-template-columns: 90px minmax(0, 1fr); } }
+@media (max-width: 700px) { .messages-workspace { grid-template-columns: 1fr; } .message-reader, .reader-empty { padding: 16px; } .message-meta { grid-template-columns: 90px minmax(0, 1fr); } }
 @media (max-width: 640px) {
   .desk-header { height: auto; min-height: 64px; padding: 7px 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
   .header-start { gap: 8px; }
@@ -411,21 +434,21 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 
 .calendar-event-card .calendar-event-title { flex: 1 1 auto; }
 
-/* Two-row source headers for message search cards. */
+/* Message type, subject, and source metadata each have their own row. */
 .record-entry { gap: 5px; padding: 12px 16px; }
 .record-card-heading, .record-card-metadata { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; }
 .record-card-heading .optask-icon { flex: none; width: 15px; height: 15px; }
 .record-card-type { flex: none; font-size: 11px; font-weight: 600; color: var(--color-bc-muted); white-space: nowrap; }
-.record-entry .record-card-subject { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-entry .record-card-subject { width: 100%; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-card-metadata { justify-content: space-between; color: var(--color-bc-muted); font-size: 11px; }
 .record-card-originator { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-card-metadata time, .record-card-metadata > span:last-child { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* Browse fills the workspace until a source record is selected. */
+/* Center a readable card column until a source record is selected. */
 .messages-workspace[data-reader-open="false"] { grid-template-columns: minmax(0, 1fr); }
-.messages-workspace[data-reader-open="false"] .record-list { border-right: 0; border-bottom: 0; }
+.messages-workspace[data-reader-open="false"] .record-list { width: min(100%, 48rem); margin-inline: auto; }
 
-.message-viewer { position: relative; min-width: 0; }
+.message-viewer { position: relative; min-width: 0; border: 1px solid var(--color-base-300); background: var(--color-base-100); }
 .message-viewer-close { position: absolute; top: 8px; right: 8px; z-index: 1; width: 28px; height: 28px; padding: 5px; }
 .message-viewer-close svg { width: 16px; height: 16px; }
 .message-viewer .message-reader > header { padding-right: 24px; }
@@ -433,7 +456,7 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 
 /* Search controls and compact count/paging subtitle stay outside the cards. */
 .popover-panel[data-align="end"] { left: auto; right: 0; }
-.message-search-toolbar { flex-wrap: wrap; align-items: center; gap: 12px; }
+.message-search-toolbar { width: min(100%, 72rem); margin-inline: auto; padding-inline: clamp(12px, 3vw, 40px); flex-wrap: wrap; align-items: center; gap: 12px; }
 .message-search-label { min-width: 230px; }
 .message-search-toolbar > .input { flex: 1; min-width: 180px; }
 .message-search-actions { display: flex; align-items: center; gap: 3px; }
@@ -470,7 +493,8 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .usmtf-narrative { font-size: 13px; white-space: pre-wrap; line-height: 1.5; margin: 0; }
 .usmtf-table-scroll { overflow-x: auto; margin-top: 8px; }
 .usmtf-table-scroll td { white-space: pre-wrap; overflow-wrap: anywhere; }
-.usmtf-raw { font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 12px; }
+.usmtf-raw { max-width: 100%; margin-top: 12px; padding: 16px; border: 1px solid var(--color-base-300); border-radius: 10px; background: var(--color-base-200); color: var(--color-base-content); font: 13px/1.6 var(--font-mono); white-space: pre; overflow-wrap: normal; word-break: normal; tab-size: 4; overflow-x: auto; }
+.usmtf-raw code { font: inherit; }
 .app-modal { width: min(580px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow: auto; padding: 20px; border: 1px solid var(--color-base-300); border-radius: 14px; background: var(--color-base-100); color: var(--color-base-content); margin: auto; box-shadow: 0 16px 64px #0005; }
 .app-modal::backdrop { background: #0007; }
 .app-modal > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
@@ -679,7 +703,7 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .navigation-menu a.active { color: var(--color-primary); }
 .popover-panel, .app-modal, .usmtf-set-card { border-color: var(--color-border-strong); border-radius: var(--radius-box); }
 .popover-panel, .app-modal { box-shadow: var(--brand-shadow); }
-.timeline-section, .messages-workspace { border-color: var(--color-border-strong); border-radius: var(--radius-box); box-shadow: var(--brand-shadow); }
+.timeline-section, .message-viewer { border-color: var(--color-border-strong); border-radius: var(--radius-box); box-shadow: var(--brand-shadow); }
 .timeline-toolbar { background: var(--brand-header); color: var(--brand-header-text); }
 .message-reader > header { padding-bottom: 16px; }
 .usmtf-set-card > header { border: 0; padding-bottom: 0; }
@@ -690,7 +714,7 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .acknowledgement-reference dd, .message-vertical-timeline > li { font-size: 16px; }
 .usmtf-set-fields dt, .acknowledgement-reference dt, .settings-content label,
 .acknowledgement-form > label { font-size: 14px; }
-.usmtf-raw, .acknowledgement-preview, .audit-evidence { font: 16px/1.5 var(--font-mono); }
+.acknowledgement-preview, .audit-evidence { font: 16px/1.5 var(--font-mono); }
 .settings-content [role="alert"], .settings-content [role="status"] { font-size: 16px; }
 .status-pill { border-radius: var(--radius-selector); font: 13px/1.5 var(--font-mono); }
 .status-pill-review { background: var(--brand-warning-bg); }

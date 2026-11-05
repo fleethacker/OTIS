@@ -192,6 +192,7 @@ export default function Calendar() {
           commands={roster.isError ? [] : roster.data?.commands}
           shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
           selectedShips={ships}
+          ready={!refreshing && !result.isError}
           messages={result.isError || refreshing ? [] : messages}
           sourceItems={
             dataset === "canonical"

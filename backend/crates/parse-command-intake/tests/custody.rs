@@ -80,6 +80,60 @@ fn explicit_demo_config_assigns_only_whitelisted_bodies_and_records_its_evidence
 }
 
 #[test]
+fn watchdesk_fixtures_have_four_intervals_three_points_two_reviews_and_narrative_inputs() {
+    let mut config = TestConfig::new();
+    config.0.demo_fixture_assignments = true;
+    let c = &config.0;
+    let bodies = [
+        include_str!("../../../config/watchdesk-fixtures/meridian.txt"),
+        include_str!("../../../config/watchdesk-fixtures/corvina.txt"),
+        include_str!("../../../config/watchdesk-fixtures/tern.txt"),
+        include_str!("../../../config/watchdesk-fixtures/halyard.txt"),
+        include_str!("../../../config/watchdesk-fixtures/shared.txt"),
+        include_str!("../../../config/watchdesk-fixtures/unassigned.txt"),
+    ];
+    let mut service = Service::open(c.clone()).unwrap();
+    for (index, body) in bodies.iter().enumerate() {
+        stage(&mut service, c, 30, index as u32 + 1, &email("SUBJ: Fictional Watch Desk demo", body));
+    }
+    while service.process(&AtomicBool::new(false)).unwrap() > 0 {}
+    let mut bytes = Vec::new();
+    service.journal.export(&mut bytes).unwrap();
+    let docs: Vec<serde_json::Value> = std::str::from_utf8(&bytes).unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+    assert_eq!(docs.len(), 6);
+    let (mut intervals, mut points, mut unresolved) = (0, 0, 0);
+    for doc in &docs {
+        for fact in doc["activities"].as_array().unwrap() {
+            if let Some(at) = fact["at"].as_str() {
+                assert!(at.starts_with("2026-11-05T")); points += 1;
+            } else if let (Some(start), Some(end)) = (fact["start_at"].as_str(), fact["end_at"].as_str()) {
+                assert!(start.starts_with("2026-11-05T") && end.starts_with("2026-11-05T") && start < end);
+                intervals += 1;
+            } else { unresolved += 1; }
+        }
+    }
+    assert_eq!((intervals, points, unresolved), (4, 3, 2));
+    let shared = docs.iter().find(|v| v["command_ids"] == serde_json::json!(["demo-tern", "demo-halyard"])).unwrap();
+    assert_eq!(shared["activities"][0]["start_at"], "2026-11-05T14:30:00Z");
+    assert_eq!(shared["activities"][0]["end_at"], "2026-11-05T15:30:00Z");
+    drop(service);
+    let db = rusqlite::Connection::open(&c.journal).unwrap();
+    // This is the publisher's actual narrative eligibility predicate, not a mock passage.
+    let mut q = db.prepare("SELECT document FROM audit_outbox WHERE json_extract(document,'$.kind') IN ('record_interpreted','fact_interpreted') AND json_extract(document,'$.payload.set_id') IN ('GENTEXT','NARR','AMPN')").unwrap();
+    let mut narrative_bodies = std::collections::BTreeSet::new();
+    for row in q.query_map([], |r| r.get::<_, String>(0)).unwrap() {
+        let audit: serde_json::Value = serde_json::from_str(&row.unwrap()).unwrap();
+        let id = audit["message_id"].as_str().unwrap();
+        let raw = bodies.iter().find(|body| parse_command_types::message_id(body) == id).unwrap();
+        let span = &audit["payload"]["span"];
+        let text = raw.get(span["start_byte"].as_u64().unwrap() as usize..span["end_byte"].as_u64().unwrap() as usize).unwrap();
+        assert!(text.contains("GENTEXT/FICTIONAL") && text.len() > 80);
+        narrative_bodies.insert(id.to_owned());
+    }
+    assert_eq!(narrative_bodies.len(), 4);
+}
+
+#[test]
 fn staged_bytes_survive_reopen_and_parsing_commits_with_outbox() {
     let config = TestConfig::new();
     let c = &config.0;

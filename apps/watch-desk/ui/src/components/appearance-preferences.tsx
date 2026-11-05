@@ -10,6 +10,7 @@ export function AppearancePreferences() {
       <label>
         Interface style (this browser)
         <SelectInput
+          className="select-sm"
           value={style}
           aria-describedby={description}
           onChange={(event) => {
@@ -22,7 +23,7 @@ export function AppearancePreferences() {
           <option value="windows">Windows</option>
         </SelectInput>
       </label>
-      <p id={description}>
+      <p id={description} className="sr-only">
         Applies immediately in this browser. Use the header appearance button for light or dark.
       </p>
     </section>

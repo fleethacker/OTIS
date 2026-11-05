@@ -1,4 +1,4 @@
-import { LuMoon, LuSun, LuSunset } from "@defense-unicorns/ark-ui";
+import { TbDeviceTvOld, TbMoon, TbSun } from "react-icons/tb";
 import { isLightTheme, useAppTheme, viceThemeName } from "../theme";
 import { AppButton } from "./ui";
 
@@ -16,7 +16,7 @@ export function ThemeControl() {
         : isLight
           ? "Navy and white"
           : "Maritime Dark";
-  const Icon = isLight ? LuSun : theme === viceThemeName ? LuSunset : LuMoon;
+  const Icon = isLight ? TbSun : theme === viceThemeName ? TbDeviceTvOld : TbMoon;
   const nextLabel = isLight ? "dark" : "light";
 
   return (
@@ -26,10 +26,15 @@ export function ThemeControl() {
         size="sm"
         className="theme-toggle"
         aria-label={`Appearance: ${label}. Switch to ${nextLabel} mode`}
-        title={`Switch to ${nextLabel} mode`}
-        onClick={toggleMode}
-        // Native double-click dispatches two clicks first. Setting Vice here last
-        // makes the gesture deterministic without delaying ordinary activation.
+        title={`Appearance: ${label}. Switch to ${nextLabel} mode`}
+        // Handle the second click itself; some webviews omit the later dblclick.
+        onClick={(event) => {
+          if (event.detail >= 2) {
+            selectTheme(viceThemeName);
+          } else {
+            toggleMode();
+          }
+        }}
         onDoubleClick={() => selectTheme(viceThemeName)}
         onKeyDown={(event) => {
           if (event.key === "Enter" && event.shiftKey) {
@@ -41,7 +46,6 @@ export function ThemeControl() {
         }}
       >
         <Icon aria-hidden="true" />
-        <span>{isLight ? "Light" : theme === viceThemeName ? "Vice" : "Dark"}</span>
       </AppButton>
       <span className="sr-only" role="status" aria-live="polite">
         {label} appearance

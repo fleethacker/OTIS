@@ -105,25 +105,13 @@
   --font-body-stack: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 
-:is([data-theme="app-windows"], [data-theme="app-windows-dark"]) .desk-header {
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-:is([data-theme="app-windows"], [data-theme="app-windows-dark"]) .desk-header::before {
-  display: none;
-}
 :is([data-theme="app-windows"], [data-theme="app-windows-dark"]) .timeline-toolbar {
-  border-top: 0;
   background: var(--color-base-200);
-}
-:is([data-theme="app-windows"], [data-theme="app-windows-dark"]) .message-reader > header {
-  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .appearance-preferences {
   display: grid;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-base-300);
 }
 .appearance-preferences .select { width: 100%; }
-.appearance-preferences p { color: var(--color-bc-muted); font-size: 14px; }

@@ -28,8 +28,10 @@ export function shipOptions(messages: MessageRecord[]) {
   }
   return [...options].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
+/** Explicit "all ships" URL state, distinct from no selection (which uses shared defaults). */
+export const ALL_SHIPS = "all";
 export function readShips(value: string | null): Set<string> | undefined {
-  if (value === null) {
+  if (value === null || value === ALL_SHIPS) {
     return undefined;
   }
   try {
@@ -41,4 +43,24 @@ export function readShips(value: string | null): Set<string> | undefined {
     /* Invalid explicit state must never broaden selection. */
   }
   return new Set(["invalid-selection:"]);
+}
+
+/** Ships in view: an explicit URL selection, else shared default ships, else the
+ * calendar commands from Settings, else all ships. */
+export function effectiveShips(
+  value: string | null,
+  settings?: { defaultShips: string[]; commandIds: string[] }
+): Set<string> | undefined {
+  if (value !== null) return readShips(value);
+  if (settings?.defaultShips.length) return new Set(settings.defaultShips);
+  if (settings?.commandIds.length) return new Set(settings.commandIds.map((id) => `unit:${id}`));
+  return undefined;
+}
+/** Shared by timeline and custody reads; explicit empty/invalid URLs never broaden. */
+export function selectedShipFilters(ships?: Set<string>) {
+  return ships ? {
+    commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
+    unassignedOnly: ships.has(UNASSIGNED),
+    noCommands: ships.size === 0 || [...ships].some((v) => !v.startsWith("unit:") && v !== UNASSIGNED),
+  } : {};
 }

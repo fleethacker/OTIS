@@ -20,7 +20,7 @@ def index_definition(model_id, model_hash):
         'index.default_pipeline': INGEST,
     }
     result['mappings']['_meta'] = {
-        'icd_version': '1.1.0', 'profile': 'local_search_test_no_retention',
+        'icd_version': '1.2.0', 'profile': 'local_search_test_no_retention',
         'model_id': model_id, 'model_sha256': model_hash, 'chunker': CHUNKER,
     }
     result['mappings']['properties']['embedding'] = {

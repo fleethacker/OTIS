@@ -1,0 +1,5 @@
+MSGID/OPTASK LINK/FICTIONAL DEMO ORIGIN/8/NOV/-/-//
+OPER/FICTIONAL SILVER CURRENT//
+PERIOD/050000ZNOV2026/082359ZNOV2026//
+CRYPTDAT/CALLSIGN FICTIONAL/UNIT FICTIONAL/SIMULATOR/TRAINING ONLY/1330Z//
+GENTEXT/FICTIONAL CRYPTO REHEARSAL/This constructed USS Meridian training watch uses placeholder equipment and material labels, not cryptographic keys. The daily shift time and explicit November period exercise recurring source facts; no transmission or operational changeover is authorized.//

@@ -10,6 +10,16 @@ export interface CommandSettings {
   actionAuthority: string;
   defaultTimezone: string;
   ai: { endpoint: string; model: string; secretRef: string } | null;
+  /** UTC watch turnovers, e.g. "0400Z", ascending. */
+  turnoverUtc: string[];
+  /** Ships shown by default ("unit:<id>" or "unassigned:"); empty shows every ship. */
+  defaultShips: string[];
+  operationName: string;
+  groupCommand: string;
+}
+/** Own ship is the first calendar command. */
+export function ownShip(settings?: CommandSettings): string | undefined {
+  return settings?.commandIds[0];
 }
 export interface SettingsReply {
   settings: CommandSettings;

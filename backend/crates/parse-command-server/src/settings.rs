@@ -3,6 +3,7 @@
 use crate::{
     Error, Result,
     api::{App, Identity},
+    context_metadata::{Metadata, Suggestion},
     private::now,
 };
 use axum::{
@@ -31,11 +32,29 @@ pub struct Settings {
     pub action_authority: String,
     pub default_timezone: String,
     pub ai: Option<Ai>,
+    /// Version 2: watch turnover times as UTC HHMMZ, ascending and unique.
+    #[serde(default = "default_turnovers")]
+    pub turnover_utc: Vec<String>,
+    /// Version 2: ships shown by default (`unit:<command id>` or `unassigned:`).
+    /// Empty shows every ship.
+    #[serde(default)]
+    pub default_ships: Vec<String>,
+    #[serde(default)]
+    pub operation_name: String,
+    #[serde(default)]
+    pub group_command: String,
+}
+pub const VERSION: u8 = 2;
+pub const UNASSIGNED: &str = "unassigned:";
+pub fn default_turnovers() -> Vec<String> {
+    ["0000Z", "0400Z", "0800Z", "1200Z", "1600Z", "2000Z"]
+        .map(str::to_owned)
+        .to_vec()
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: VERSION,
             ship_name: String::new(),
             unit_name: String::new(),
             command_ids: vec![],
@@ -43,11 +62,32 @@ impl Default for Settings {
             action_authority: String::new(),
             default_timezone: "UTC".into(),
             ai: None,
+            turnover_utc: default_turnovers(),
+            default_ships: vec![],
+            operation_name: String::new(),
+            group_command: String::new(),
         }
     }
 }
 fn bounded(value: &str, max: usize) -> bool {
     value.len() <= max && !value.chars().any(char::is_control)
+}
+fn turnover(value: &str) -> bool {
+    let b = value.as_bytes();
+    b.len() == 5
+        && b[4] == b'Z'
+        && b[..4].iter().all(u8::is_ascii_digit)
+        && &value[..2] <= "23"
+        && &value[2..4] <= "59"
+}
+fn ship_key(value: &str) -> bool {
+    value == UNASSIGNED
+        || value
+            .strip_prefix("unit:")
+            .is_some_and(|id| !id.is_empty() && bounded(id, 256))
+}
+fn sorted_unique(values: &[String]) -> bool {
+    values.windows(2).all(|w| w[0] < w[1])
 }
 fn authority(value: &str, max: usize) -> bool {
     value.len() <= max
@@ -82,7 +122,7 @@ fn allowed_endpoint(value: &str) -> Result<reqwest::Url> {
 }
 impl Settings {
     pub fn validate(&self) -> Result<()> {
-        if self.version != 1
+        if self.version != VERSION
             || self.default_timezone != "UTC"
             || !bounded(&self.ship_name, 120)
             || !bounded(&self.unit_name, 120)
@@ -96,6 +136,24 @@ impl Settings {
             || self.command_ids.iter().collect::<BTreeSet<_>>().len() != self.command_ids.len()
         {
             return Err(Error::invalid("Invalid command settings"));
+        }
+        if self.turnover_utc.is_empty()
+            || self.turnover_utc.len() > 24
+            || !self.turnover_utc.iter().all(|v| turnover(v))
+            || !sorted_unique(&self.turnover_utc)
+        {
+            return Err(Error::invalid("Use UTC turnover times such as 0400Z"));
+        }
+        if self.default_ships.len() > 33
+            || !self.default_ships.iter().all(|v| ship_key(v))
+            || !sorted_unique(&self.default_ships)
+        {
+            return Err(Error::invalid("Invalid default ships"));
+        }
+        for value in [&self.operation_name, &self.group_command] {
+            if !bounded(value, 128) || value.trim() != value {
+                return Err(Error::invalid("Invalid watch context"));
+            }
         }
         if let Some(ai) = &self.ai {
             if ai.endpoint.len() > 512
@@ -135,6 +193,42 @@ fn secret(reference: &str) -> Result<Option<String>> {
     }
     Ok(Some(value))
 }
+impl Settings {
+    /// Own ship is the first configured command; there is no second copy.
+    pub fn own_ship(&self) -> Option<&str> {
+        self.command_ids.first().map(String::as_str)
+    }
+    /// Stored version-1 documents load with version-2 defaults.
+    pub fn load(value: Value) -> Result<Self> {
+        let mut settings: Self =
+            serde_json::from_value(value).map_err(|_| Error::config("Invalid stored settings"))?;
+        if settings.version == 1 {
+            settings.version = VERSION;
+        }
+        if settings.version != VERSION {
+            return Err(Error::config("Invalid stored settings"));
+        }
+        Ok(settings)
+    }
+    /// Fictional demo defaults from the checked-in demo roster. Never used unless
+    /// the Watch Desk demo flag is on.
+    pub fn demo(catalog: &parse_command_intake::demo::Catalog) -> Self {
+        let own = catalog.commands.iter().find(|c| c.is_own_ship);
+        let mut ships: Vec<String> = catalog
+            .commands
+            .iter()
+            .map(|c| format!("unit:{}", c.id))
+            .chain([UNASSIGNED.to_owned()])
+            .collect();
+        ships.sort();
+        Self {
+            ship_name: own.map(|c| c.name.clone()).unwrap_or_default(),
+            command_ids: own.map(|c| vec![c.id.clone()]).unwrap_or_default(),
+            default_ships: ships,
+            ..Self::default()
+        }
+    }
+}
 pub fn admin(identity: &Identity) -> Result<()> {
     if identity.role != "admin" {
         return Err(Error::new(
@@ -145,11 +239,16 @@ pub fn admin(identity: &Identity) -> Result<()> {
     Ok(())
 }
 pub async fn bootstrap(store: &Store) -> Result<()> {
+    bootstrap_with(store, Settings::default()).await
+}
+/// Seed shared settings only when no stored document exists.
+pub async fn bootstrap_with(store: &Store, initial: Settings) -> Result<()> {
+    initial.validate()?;
     if store.get("settings", "shared").await?.is_none() {
         let row = Record::new(
             "settings",
             "shared",
-            json!({"settings":Settings::default(),"audit":[]}),
+            json!({"settings":initial,"audit":[],"dismissed":[]}),
         );
         match store.put(&row, None).await {
             Ok(_) | Err(parse_command_state::Error("state_conflict")) => {}
@@ -163,8 +262,7 @@ pub async fn shared(store: &Store) -> Result<(Settings, parse_command_state::Doc
         .get("settings", "shared")
         .await?
         .ok_or_else(|| Error::config("Settings unavailable"))?;
-    let settings = serde_json::from_value(doc.record.payload["settings"].clone())
-        .map_err(|_| Error::config("Invalid stored settings"))?;
+    let settings = Settings::load(doc.record.payload["settings"].clone())?;
     Ok((settings, doc))
 }
 pub async fn ensure_demo_user(store: &Store, identity: &Identity) -> Result<()> {
@@ -198,8 +296,9 @@ pub struct Request {
     pub user: Option<String>,
     pub action: Option<String>,
     pub after: Option<String>,
+    pub suggestion: Option<String>,
 }
-fn revision(doc: &parse_command_state::Document) -> String {
+pub fn revision(doc: &parse_command_state::Document) -> String {
     format!("{}:{}", doc.seq, doc.term)
 }
 async fn command_options(app: &App) -> Result<Vec<String>> {
@@ -257,38 +356,64 @@ pub async fn execute(
             let settings = request
                 .settings
                 .ok_or_else(|| Error::invalid("Settings are required"))?;
-            settings.validate()?;
+            save(app, identity, settings, request.revision.as_deref(), None).await
+        }
+        "suggestions" => {
             let (_, doc) = shared(store).await?;
-            if request.revision.as_deref() != Some(&revision(&doc)) {
-                return Err(Error::new(
-                    "aborted",
-                    "Settings changed; reload before saving",
-                ));
-            }
-            let options = command_options(app).await?;
-            if settings.command_ids.iter().any(|v| !options.contains(v)) {
-                return Err(Error::invalid("Select an indexed command"));
-            }
-            let mut row = doc.record.clone();
-            let old = row.payload["settings"].clone();
-            let new = serde_json::to_value(&settings).map_err(|_| Error::unavailable())?;
-            let changed = new
-                .as_object()
-                .ok_or_else(Error::unavailable)?
+            let (metadata, available) = suggestions(app).await;
+            let dismissed = dismissed(&doc.record.payload);
+            let list: Vec<_> = metadata
+                .suggestions
                 .iter()
-                .filter(|(key, v)| old[*key] != **v)
-                .map(|(key, _)| key.clone())
-                .collect::<Vec<_>>();
-            let audit = row.payload["audit"]
-                .as_array_mut()
-                .ok_or_else(Error::unavailable)?;
-            if audit.len() >= 10000 {
-                return Err(Error::config("Settings audit capacity reached"));
+                .filter(|s| !dismissed.contains(&s.id))
+                .collect();
+            Ok(json!({
+                "suggestions": list,
+                "state": if available { "available" } else { "unavailable" },
+                "limited": metadata.limited,
+                "revision": revision(&doc),
+            }))
+        }
+        "use-suggestion" | "dismiss-suggestion" => {
+            admin(identity)?;
+            let id = request
+                .suggestion
+                .filter(|v| !v.is_empty() && v.len() <= 128)
+                .ok_or_else(|| Error::invalid("Select a suggestion"))?;
+            let (metadata, _) = suggestions(app).await;
+            let suggestion = metadata
+                .suggestions
+                .into_iter()
+                .find(|s| s.id == id)
+                .ok_or_else(|| {
+                    Error::config("Suggestion source is unavailable; refresh Settings")
+                })?;
+            let (current, doc) = shared(store).await?;
+            if dismissed(&doc.record.payload).contains(&id) {
+                return Err(Error::config("Suggestion was dismissed"));
             }
-            audit.push(json!({"actor":identity.owner,"at":now(),"prior_revision":revision(&doc),"fields":changed}));
-            row.payload["settings"] = new;
-            let saved = store.put(&row, Some(&doc)).await?;
-            Ok(json!({"settings":settings,"revision":revision(&saved)}))
+            if operation == "dismiss-suggestion" {
+                if request.revision.as_deref() != Some(&revision(&doc)) {
+                    return Err(Error::new(
+                        "aborted",
+                        "Settings changed; reload before saving",
+                    ));
+                }
+                let mut row = doc.record.clone();
+                dismiss(&mut row.payload, &id)?;
+                let saved = store.put(&row, Some(&doc)).await?;
+                return Ok(json!({"settings":current,"revision":revision(&saved)}));
+            }
+            let settings = suggested(current, &suggestion)?;
+            let evidence = json!({"suggestion":suggestion.id,"sources":suggestion.sources});
+            save(
+                app,
+                identity,
+                settings,
+                request.revision.as_deref(),
+                Some(evidence),
+            )
+            .await
         }
         "preferences" => {
             let user = store
@@ -428,6 +553,136 @@ pub async fn execute(
             Ok(json!({"connected":true}))
         }
         _ => Err(Error::new("not_found", "Unknown settings operation")),
+    }
+}
+fn dismissed(payload: &Value) -> Vec<String> {
+    payload["dismissed"]
+        .as_array()
+        .map(|v| {
+            v.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+/// Record a dismissed suggestion in the shared settings document.
+pub fn dismiss(payload: &mut Value, id: &str) -> Result<()> {
+    if payload["dismissed"].is_null() {
+        payload["dismissed"] = json!([]);
+    }
+    let list = payload["dismissed"]
+        .as_array_mut()
+        .ok_or_else(Error::unavailable)?;
+    if list.len() >= 200 {
+        return Err(Error::config("Dismissed suggestion limit reached"));
+    }
+    if !list.iter().any(|v| v == id) {
+        list.push(json!(id));
+    }
+    Ok(())
+}
+/// Settings after accepting a cited operation-name suggestion.
+pub fn suggested(mut settings: Settings, suggestion: &Suggestion) -> Result<Settings> {
+    if suggestion.field != "operationName"
+        || suggestion.sources.is_empty()
+        || suggestion.values.len() != 1
+    {
+        return Err(Error::config("Suggestion lacks supported source evidence"));
+    }
+    settings.operation_name = suggestion.values[0].clone();
+    Ok(settings)
+}
+/// Apply validated settings to the stored document payload and append the audit entry.
+/// `evidence` carries suggestion citations when a write came from a cited suggestion.
+pub fn apply(
+    payload: &mut Value,
+    settings: &Settings,
+    actor: &str,
+    prior_revision: &str,
+    evidence: Option<Value>,
+) -> Result<()> {
+    let old = payload["settings"].clone();
+    let new = serde_json::to_value(settings).map_err(|_| Error::unavailable())?;
+    let changed = new
+        .as_object()
+        .ok_or_else(Error::unavailable)?
+        .iter()
+        .filter(|(key, v)| old[*key] != **v)
+        .map(|(key, _)| key.clone())
+        .collect::<Vec<_>>();
+    let audit = payload["audit"]
+        .as_array_mut()
+        .ok_or_else(Error::unavailable)?;
+    if audit.len() >= 10000 {
+        return Err(Error::config("Settings audit capacity reached"));
+    }
+    let mut entry =
+        json!({"actor":actor,"at":now(),"prior_revision":prior_revision,"fields":changed});
+    if let Some(evidence) = evidence {
+        entry["evidence"] = evidence;
+    }
+    audit.push(entry);
+    payload["settings"] = new;
+    Ok(())
+}
+/// The single settings write path: admin, validation, revision CAS, indexed-command
+/// check and audit entry.
+async fn save(
+    app: &App,
+    identity: &Identity,
+    settings: Settings,
+    expected: Option<&str>,
+    evidence: Option<Value>,
+) -> Result<Value> {
+    admin(identity)?;
+    let store = &app.private.state;
+    settings.validate()?;
+    let (_, doc) = shared(store).await?;
+    if expected != Some(&revision(&doc)) {
+        return Err(Error::new(
+            "aborted",
+            "Settings changed; reload before saving",
+        ));
+    }
+    let options = command_options(app).await?;
+    if settings.command_ids.iter().any(|v| !options.contains(v)) {
+        return Err(Error::invalid("Select an indexed command"));
+    }
+    // Default ships may also name the configured demo roster before its fixtures index.
+    let roster = crate::commands::catalog(app.config.intake.demo_fixture_assignments)?;
+    if settings
+        .default_ships
+        .iter()
+        .filter_map(|v| v.strip_prefix("unit:"))
+        .any(|v| !options.iter().any(|o| o == v) && !roster.commands.iter().any(|c| c.id == v))
+    {
+        return Err(Error::invalid("Select indexed ships for the defaults"));
+    }
+    let mut row = doc.record.clone();
+    apply(
+        &mut row.payload,
+        &settings,
+        &identity.owner,
+        &revision(&doc),
+        evidence,
+    )?;
+    let saved = store.put(&row, Some(&doc)).await?;
+    Ok(json!({"settings":settings,"revision":revision(&saved)}))
+}
+static SUGGESTION_READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+/// Read-only citation scan; bounded so it never blocks settings reads or writes.
+async fn suggestions(app: &App) -> (Metadata, bool) {
+    let Ok(_permit) = SUGGESTION_READS.try_acquire() else {
+        return (Metadata::default(), false);
+    };
+    match tokio::time::timeout(
+        Duration::from_secs(5),
+        crate::context_metadata::read(&app.custody),
+    )
+    .await
+    {
+        Ok(Ok(metadata)) => (metadata, true),
+        _ => (Metadata::default(), false),
     }
 }
 pub async fn handle(

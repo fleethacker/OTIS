@@ -1,0 +1,149 @@
+/* Watch Desk port only. Parker's base stylesheet remains unchanged apart from this import. */
+.calendar-result-limit { padding: 8px 16px; font-size: 12px; color: var(--color-base-content); }
+.calendar-search-status { flex: none; font-size: 12px; margin: 0 0 8px; overflow-wrap: anywhere; }
+.calendar-search-status a { color: var(--color-primary); text-decoration: underline; }
+/* Never inherit RBC's white gutter in the dark theme. */
+.calendar-with-ships .ship-calendar .rbc-time-gutter, .calendar-with-ships .ship-calendar .rbc-time-header-gutter { background: var(--color-base-100); color: var(--color-base-content); }
+
+/* The roster is independent of filtered/limited source pages. */
+.calendar-page.calendar-with-ships { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 12px; }
+.calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: 32px minmax(0, 1fr); }
+.calendar-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.ships-sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; font-size: 13px; }
+.ships-header { display: flex; flex: none; align-items: center; gap: 2px; margin-bottom: 6px; }
+.ships-header h2 { display: flex; flex: 1; align-items: baseline; gap: 6px; min-width: 0; font-size: 13px; font-weight: 600; }
+.ships-header small { color: var(--color-bc-muted); font-size: 11px; font-weight: 400; }
+.ships-header .popover-trigger, .ships-header .ships-toggle { width: 32px; height: 32px; min-height: 32px; padding: 6px; flex: none; }
+.ships-header svg { width: 16px; height: 16px; }
+.ships-header .popover-panel { min-width: 140px; }
+.ships-sidebar[data-expanded="false"] .ships-header { justify-content: center; }
+.ships-content { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.ships-content[hidden] { display: none; }
+.ships-sidebar .ship-search { flex: none; width: 100%; min-height: 32px; height: 32px; padding: 4px 8px; font-size: 13px; }
+.ship-list { overflow-y: auto; min-height: 0; padding: 4px; }
+.ships-sidebar fieldset { margin: 0 0 12px; min-width: 0; }
+.ships-sidebar legend label, .ship-choice label { display: flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.ships-sidebar legend { font-size: 11px; font-weight: 600; color: var(--color-bc-muted); }
+.ships-sidebar input[type="checkbox"] { flex: none; width: 14px; height: 14px; accent-color: var(--color-primary); }
+.ship-choice { display: flex; align-items: center; justify-content: space-between; gap: 2px; border-radius: var(--radius-field); }
+.ship-choice:hover, .ship-choice:focus-within { background: var(--brand-selection); }
+.ship-choice label { flex: 1; min-width: 0; padding: 3px 0; line-height: 1.35; overflow-wrap: anywhere; }
+.ship-choice .ship-only { opacity: 0; flex: none; height: 24px; min-height: 24px; padding: 2px 4px; font-size: 11px; font-weight: 500; }
+.ship-choice:hover .ship-only, .ship-choice:focus-within .ship-only { opacity: 1; }
+.ship-swatch { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.ship-calendar-options { display: grid; gap: 2px; }
+.ship-calendar-options .btn { justify-content: flex-start; min-height: 30px; padding: 4px 8px; font-size: 13px; font-weight: 400; }
+.ships-warning, .ships-error { font-size: 12px; overflow-wrap: anywhere; }
+.ships-warning { color: var(--color-warning); }
+.ships-sidebar :is(button, input):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.command-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: baseline; }
+.command-chip { color: white; font-size: 10px; font-weight: 600; line-height: 1.4; padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .calendar-page.calendar-with-ships,
+  .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
+  .ships-content { max-height: 30vh; }
+  .ships-sidebar[data-expanded="false"] .ships-header { justify-content: flex-start; margin-bottom: 0; }
+}
+@media (hover: none) { .ship-choice .ship-only { opacity: 1; } }
+@media (pointer: coarse) {
+  .ships-header .popover-trigger, .ships-header .ships-toggle { width: 44px; height: 44px; min-height: 44px; }
+  .ship-choice .ship-only, .ship-calendar-options .btn, .ships-sidebar .ship-search,
+  .ships-sidebar legend label, .ship-choice label { min-height: 44px; }
+}
+@media (pointer: coarse) and (min-width: 901px) {
+  .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: 44px minmax(0, 1fr); }
+}
+
+/* Narrow view scrolls the page rather than crushing the calendar below wrapped chrome. */
+@media (max-width: 900px) {
+  #root:has(.calendar-page.calendar-with-ships) { height: auto; min-height: 100dvh; }
+  main:has(.calendar-page.calendar-with-ships) { flex: none; }
+  .calendar-page.calendar-with-ships { height: auto; grid-template-rows: auto auto; }
+  .calendar-with-ships .calendar-main .timeline-section { flex: none; }
+  .calendar-page.calendar-with-ships .calendar-scroll { flex: none; height: 460px; min-height: 420px; }
+  .calendar-page.calendar-with-ships .calendar-scroll .ship-calendar { min-height: 420px; }
+}
+
+/* Day resources and Week Fit only; Expanded keeps Parker's lane-proportional width. */
+.calendar-with-ships .ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
+.calendar-with-ships .ship-calendar-resources .rbc-time-header-content { min-width: 0; }
+.resource-ship-chip { display: inline-block; margin: 3px; padding: 2px 8px; border-radius: 3px; color: white; font-size: 12px; font-weight: 650; }
+.calendar-with-ships .ship-calendar-resources .rbc-event { background: color-mix(in srgb, var(--ship-color) 14%, var(--color-base-100)); color: var(--color-base-content); }
+.calendar-with-ships .ship-calendar-resources .rbc-event.calendar-revised { border-color: var(--color-warning); }
+/* Applicability amber is only the explicitly Unassigned review resource; named ships never use it. */
+/* Match zoom specificity so Parker's later data-time-zoom rule still wins. */
+.calendar-with-ships .week-fit .ship-calendar-week .rbc-timeslot-group { min-height: 44px; flex: 1 0 44px; }
+.calendar-with-ships .week-fit .rbc-time-content { overflow-y: auto; }
+.calendar-with-ships .week-fit .rbc-time-gutter .rbc-label { display: block; }
+.calendar-with-ships .ship-calendar:is(.ship-calendar-week, .ship-calendar-resources) .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-overflow { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 12px; font-size: 12px; border-top: 1px solid var(--color-base-300); }
+.calendar-with-ships .ship-calendar .rbc-time-content > * + * > * { border-left-color: var(--color-base-300); }
+.calendar-with-ships .ship-calendar-week .command-chips { flex-wrap: nowrap; overflow: hidden; max-width: 100%; }
+.calendar-with-ships .ship-calendar-week .command-chip { white-space: nowrap; flex: none; }
+@media (min-width: 1280px) { .calendar-with-ships .week-fit .ship-calendar-week { min-width: 0; } }
+
+/* RBC measures Month capacity with a dummy .rbc-event (no custom content).
+   Real events and +more must occupy that same single line, including ship badges. */
+.calendar-page.calendar-with-ships .calendar-scroll .ship-calendar:has(.rbc-month-view) { min-height: 620px; }
+.calendar-with-ships .ship-calendar .rbc-month-row { min-height: 96px; }
+.calendar-with-ships .ship-calendar .rbc-month-view :is(.rbc-event, .rbc-show-more) { height: 24px; min-height: 24px; max-height: 24px; box-sizing: border-box; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-copy { flex-direction: row; align-items: center; height: 20px; overflow: hidden; position: static; }
+.calendar-with-ships .ship-calendar .rbc-month-view .command-chips { flex: 0 1 auto; flex-wrap: nowrap; max-width: 45%; overflow: hidden; }
+.calendar-with-ships .ship-calendar .rbc-month-view .command-chip { white-space: nowrap; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-card { flex: 1; min-width: 0; }
+.calendar-with-ships .ship-calendar .rbc-month-view .calendar-event-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calendar-with-ships .ship-calendar .rbc-month-view .rbc-show-more { display: block; line-height: 24px; position: relative; z-index: 2; }
+
+/* Intrinsic copy height includes sibling badges without changing link/button text. */
+.calendar-event-copy { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; height: auto; }
+.calendar-with-ships .ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }
+
+/* Watch fields and message suggestions inside the shared Settings form. */
+/* Disabled fields stay legible on both theme surfaces, including Safari text fill. */
+.settings-content fieldset:disabled :is(.input, .select),
+.settings-content :is(.input, .select):disabled {
+  background-color: var(--color-base-100);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-base-content);
+  -webkit-text-fill-color: var(--color-base-content);
+  opacity: 1;
+}
+.settings-content .input::placeholder {
+  color: var(--color-bc-muted);
+  -webkit-text-fill-color: var(--color-bc-muted);
+  opacity: 1;
+}
+.settings-content label small, .settings-default-ships small, .settings-view-only { color: var(--color-bc-muted); font-size: 12px; }
+.settings-default-ships { grid-column: 1 / -1; display: grid; gap: 5px; font-size: 12px; }
+.settings-content .context-ship-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.settings-content .context-ship-options label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.settings-content .context-ship-options input[type="checkbox"] { flex: none; width: auto; }
+.context-suggestions { border-top: 1px solid var(--color-base-300); padding-top: 12px; font-size: 13px; }
+.context-suggestions > p { color: var(--color-bc-muted); margin: 4px 0; overflow-wrap: anywhere; }
+.context-suggestions-heading { justify-content: space-between; }
+.context-suggestions h2 { font-size: 14px; font-weight: 650; }
+.context-suggestion { border: 1px solid var(--color-base-300); padding: 10px; margin: 8px 0; overflow-wrap: anywhere; }
+.context-suggestion h3 { font-size: 13px; font-weight: 600; }
+.context-suggestion small { font-size: 12px; font-weight: 400; }
+.context-suggestion a { color: var(--color-primary); text-decoration: underline; font-size: 12px; }
+.context-suggestion .settings-actions { justify-content: flex-start; margin-top: 6px; }
+.context-conflict { padding-left: 10px; }
+@media (max-width: 600px) {
+  .settings-content .context-ship-options { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* P5: source-owned turnover, independent of scheduled date/search and existing inbox. */
+.watch-turnover { flex: none; margin-bottom: 10px; background: var(--color-base-100); border: 1px solid var(--color-base-300); font-size: 12px; }
+.watch-turnover summary { cursor: pointer; padding: 8px 12px; font-weight: 600; }
+.turnover-content { max-height: 32vh; overflow: auto; padding: 0 12px 12px; overflow-wrap: anywhere; }
+.turnover-content p { margin: 8px 0; }
+.turnover-boundary { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.turnover-boundary label { display: grid; gap: 4px; }
+.turnover-boundary input { font-variant-numeric: tabular-nums; width: min(290px, 100%); }
+.turnover-content ul { list-style: none; padding: 0; }
+.turnover-content li { border-top: 1px solid var(--color-base-300); padding: 8px 0; }
+.turnover-content a { color: var(--color-primary); text-decoration: underline; }
+.turnover-content small { color: var(--color-bc-muted); }
+.turnover-content h3 { font-weight: 600; margin-top: 12px; }
+.turnover-hidden { padding-left: 8px; }
+.turnover-content [role="alert"] { color: var(--color-error); }

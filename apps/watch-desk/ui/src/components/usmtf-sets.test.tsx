@@ -75,3 +75,56 @@ test("handbook field names include table definitions and one-letter descriptors"
   );
   expect(setFieldLabel("POC", 7, true, "UNVERIFIED:SOURCE")).toBeUndefined();
 });
+
+test("MOVEREP cards show source set names and edition-specific field labels", () => {
+  const set = (set_id: string, values: string[]) => ({
+    set_id, fields: values.map((value, index) => ({ position: index + 1, value })), rows: [],
+  });
+  const view = renderWithProviders(<StructuredMessage message={create(MessageRecordSchema, {
+    structuredPayloadJson: JSON.stringify({ source_profile: "observed-moverep-b10112-v1", sets: [
+      set("MSGID", ["MOVEREP", "MIL-STD-6040(SERIES)", "B.1.01.12", "CTF42", "013", "20090714T132530Z", "-", "-", "USA", "UNCLASSIFIED"]),
+      set("REF", ["A", "OPGEN", "-", "CTF40", "061230ZJAN1991", "001", "PASEP", "BPA", "IAA"]),
+      set("AMPN", ["REF A IS THE AUTHORIZING DOCUMENT"]),
+      set("MARACT", ["INTEND", "ANCHOR", "230925ZJUL", "NAME:NORFOLK"]),
+      set("TASKORG", ["TF40", "-", "GALATEA", "DANAE", "DEWEY"]),
+      set("FYPOS", ["TUD:CTG12.02", "3510N07901W", "141325Z", "270T12KTS", "USA"]),
+      set("ROUTE", ["071435Z", "5534N01230E", "RH", "071441Z", "NAME:POINT ALFA"]),
+      set("SOA", ["12", "15"]),
+      set("EPREQ", ["OTSR", "230925ZJUL", "251000ZJUL"]),
+      set("LIMITS", ["15FT", "22FT", "4M", "40"]),
+      set("POST", ["LIVERPOOL", "02JUN", "08JUN"]),
+      set("BDCT", ["121200Z", "BCS:A2MX", "171800Z", "BCS:S4CZ", "180001Z", "123"]),
+      set("BDCTNUM", ["H11A-001", "H15AA-999"]),
+      set("COMMS", ["UD:TU12.02.02", "QUICK SEARCH", "2468KHZ", "P", "SSB", "275.6MHZ", "S", "NESTOR"]),
+      set("LQDSTAT", ["AJAX", "230925ZJUL", "F54", "80", "10"]),
+      set("SHORNAV", ["122330Z", "OBSTRUCTION LIGHTS", "130600Z"]),
+      set("METEO", ["230", "5KTS", "3", "1"]),
+    ] }),
+  })} />);
+  expect(view.getByRole("heading", { name: "MARACT - MARITIME ACTIVITY" })).toBeTruthy();
+  expect(view.getByRole("heading", { name: "TASKORG - TASK ORGANIZATION" })).toBeTruthy();
+  expect(view.getByRole("heading", { name: "ROUTE" })).toBeTruthy();
+  expect(view.getByText("MOVEREP activity action")).toBeTruthy();
+  expect(view.getAllByText("Unit name")).toHaveLength(2);
+  expect(view.getByText("Friendly force position")).toBeTruthy();
+  expect(view.getAllByText("Route point")).toHaveLength(2);
+  expect(view.getByText("Issue date-time")).toBeTruthy();
+  expect(view.getByText("Classification")).toBeTruthy();
+  expect(view.getByText("Reference originator")).toBeTruthy();
+  expect(view.getByText("Reference date-time")).toBeTruthy();
+  expect(view.getByText("Special notation")).toBeTruthy();
+  expect(view.getAllByText("SIC code")).toHaveLength(2);
+  expect(view.getByText("Free text")).toBeTruthy();
+  expect(view.getByRole("heading", { name: "SOA - SPEED OF ADVANCE" })).toBeTruthy();
+  expect(view.getByText("Surface speed in knots")).toBeTruthy();
+  expect(view.getByRole("heading", { name: "EPREQ - ENVIRONMENTAL PRODUCT REQUEST" })).toBeTruthy();
+  expect(view.getByText("Environmental prediction system product")).toBeTruthy();
+  expect(view.getByText("True windspeed in knots")).toBeTruthy();
+  expect(view.getByText("Last broadcast number received")).toBeTruthy();
+  expect(view.getAllByText("Specific radio frequency or channel")).toHaveLength(2);
+  expect(view.getByText("Percentage of total capacity held")).toBeTruthy();
+  expect(view.getByText("Name of navigation light")).toBeTruthy();
+  expect(view.getByText("Cloud cover in eighths")).toBeTruthy();
+  expect(view.getByText("Flag")).toBeTruthy();
+  expect(view.container.textContent).not.toMatch(/Field \d+/);
+});

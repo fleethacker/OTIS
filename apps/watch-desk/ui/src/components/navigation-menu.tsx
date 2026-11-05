@@ -27,9 +27,6 @@ export function NavigationMenu() {
           <NavLink to={`/watch-settings?${new URLSearchParams({ returnTo })}`} onClick={close}>
             Watch settings
           </NavLink>
-          <NavLink to="/account" onClick={close}>
-            Account & settings
-          </NavLink>
           {manageUsers && (
             <NavLink to="/users" onClick={close}>
               User management

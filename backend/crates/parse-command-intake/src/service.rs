@@ -26,7 +26,11 @@ impl Service {
             Box::new(parse_command_optask::OptaskParser)
         };
         let registry = Registry::new(
-            vec![parser, Box::new(parse_command_casrep::CasrepParser)],
+            vec![
+                parser,
+                Box::new(parse_command_casrep::CasrepParser),
+                Box::new(parse_command_moverep::MoverepParser),
+            ],
             config.enabled_types.iter().cloned().collect(),
         )
         .map_err(|_| IntakeError("parser_registry"))?;

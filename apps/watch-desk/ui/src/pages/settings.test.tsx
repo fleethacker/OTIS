@@ -5,7 +5,9 @@ import { TransportProvider } from "@connectrpc/connect-query";
 import { AppService } from "../gen/app/v1/app_pb";
 import { renderWithProviders } from "../test-utils/render";
 import { SettingsContext, type SettingsReply } from "../components/settings-data";
-import Settings from "./settings";
+import { SettingsContent as Settings } from "../components/settings-content";
+import SettingsPage from "./settings";
+import { useLocation } from "react-router-dom";
 import {
   initializeTheme,
   STYLE_STORAGE_KEY,
@@ -34,6 +36,14 @@ const shared: SettingsReply = {
   },
 };
 const emptyRoster = { commands: [], source: "none", version: "test", provenance: "test", assignmentEnabled: false };
+test("legacy settings URL redirects to Account & settings", () => {
+  function CurrentRoute() {
+    return <output>{useLocation().pathname}</output>;
+  }
+  const view = renderWithProviders(<><SettingsPage /><CurrentRoute /></>, { route: "/settings" });
+  expect(view.getByText("/account")).toBeTruthy();
+  view.unmount();
+});
 function mount(role: string) {
   const transport = createRouterTransport((router) =>
     router.service(AppService, { getIdentity: () => ({ username: "watch", role }) })

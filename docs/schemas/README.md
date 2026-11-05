@@ -1,19 +1,23 @@
-# Parsed-message schemas — ICD 1.3.0
+# Parsed-message schemas — ICD 1.4.0
 
 The [ICD](../ICD.md) defines semantics and contributor obligations. These Draft 2020-12 JSON Schemas define the approved wire shape:
 
 | Entry schema | Resource ID | Document |
 | --- | --- | --- |
-| [message.schema.json](message.schema.json) | `urn:parse-command:icd:1.3.0:message` | Compact user-facing message |
-| [passage.schema.json](passage.schema.json) | `urn:parse-command:icd:1.3.0:passage` | Lexical/vector search passage |
-| [audit-event.schema.json](audit-event.schema.json) | `urn:parse-command:icd:1.3.0:audit-event` | Audit envelope with opaque evidence payload |
-| [types.schema.json](types.schema.json) | `urn:parse-command:icd:1.3.0:types` | Shared type definitions |
+| [message.schema.json](message.schema.json) | `urn:parse-command:icd:1.4.0:message` | Compact user-facing message |
+| [passage.schema.json](passage.schema.json) | `urn:parse-command:icd:1.4.0:passage` | Lexical/vector search passage |
+| [audit-event.schema.json](audit-event.schema.json) | `urn:parse-command:icd:1.4.0:audit-event` | Audit envelope with opaque evidence payload |
+| [types.schema.json](types.schema.json) | `urn:parse-command:icd:1.4.0:types` | Shared type definitions |
 
 Version 1.2 adds optional `recurrences` with `rN` fact IDs; existing activity fields
 are unchanged. Source spans and parser-rule provenance remain in linked audit.
 Unsupported rules/missing anchors must remain visible review, never acquire an
 issue/receipt-time anchor. See the ICD recurrence section for the bounded Zulu
 convention and the distinction from a full iCalendar component.
+
+Version 1.4 adds optional MOVEREP `movements` to messages and compact movement
+search projections to passages. `mN` facts keep action, affected TASKORG names,
+source time and unresolved references separate from authorization command IDs.
 
 Register all resources locally; references are URNs, not URLs to fetch. Enable `date-time` format checking in addition to structural validation. JSON parsing must reject NaN/Infinity, and the host must enforce finite vectors and the selected model dimension.
 

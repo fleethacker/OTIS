@@ -1,7 +1,7 @@
 use crate::{ErrorKind, ParseFailure};
 use parse_command_types::{
-    Activity, Casualty, Contact, Frequency, Location, Period, Recurrence, Security, UtcTimestamp,
-    Validate,
+    Activity, Casualty, Contact, Frequency, Location, Movement, Period, Recurrence, Security,
+    UtcTimestamp, Validate,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Map, Value};
@@ -63,6 +63,12 @@ pub trait ParseSink {
             "casualty_sink",
         ))
     }
+    fn movement(&mut self, _value: Movement) -> Result<(), ParseFailure> {
+        Err(ParseFailure::new(
+            ErrorKind::UnsupportedProfile,
+            "movement_sink",
+        ))
+    }
     fn recurrence(&mut self, _value: Recurrence) -> Result<(), ParseFailure> {
         Err(ParseFailure::new(
             ErrorKind::UnsupportedProfile,
@@ -110,6 +116,7 @@ pub struct ParsedFacts {
     pub contacts: Vec<Contact>,
     pub locations: Vec<Location>,
     pub casualty: Option<Casualty>,
+    pub movements: Vec<Movement>,
     pub recurrences: Vec<Recurrence>,
     pub review_flags: Vec<String>,
     pub audit: Vec<AuditEntry>,
@@ -125,6 +132,7 @@ pub struct BoundedOutput {
     contacts: Vec<Contact>,
     locations: Vec<Location>,
     casualty: Option<Casualty>,
+    movements: Vec<Movement>,
     recurrences: Vec<Recurrence>,
     flags: Vec<String>,
     audit: Vec<AuditEntry>,
@@ -146,6 +154,7 @@ impl BoundedOutput {
             contacts: Vec::new(),
             locations: Vec::new(),
             casualty: None,
+            movements: Vec::new(),
             recurrences: Vec::new(),
             flags: Vec::new(),
             audit: Vec::new(),
@@ -209,6 +218,7 @@ impl BoundedOutput {
             contacts: self.contacts,
             locations: self.locations,
             casualty: self.casualty,
+            movements: self.movements,
             recurrences: self.recurrences,
             review_flags: self.flags,
             audit: self.audit,
@@ -261,6 +271,11 @@ impl ParseSink for BoundedOutput {
         }
         self.core(&value, Some(&value.id))?;
         self.casualty = Some(value);
+        Ok(())
+    }
+    fn movement(&mut self, value: Movement) -> Result<(), ParseFailure> {
+        self.core(&value, Some(&value.id))?;
+        self.movements.push(value);
         Ok(())
     }
     fn recurrence(&mut self, value: Recurrence) -> Result<(), ParseFailure> {

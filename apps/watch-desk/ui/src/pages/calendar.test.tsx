@@ -1,6 +1,6 @@
 import "../route-registry";
 import { expect, spyOn, test } from "bun:test";
-import { act, waitFor } from "@testing-library/react";
+import { act, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
@@ -138,7 +138,7 @@ async function withCalendar(route: string, assertions: (view: ReturnType<typeof 
     expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 }
-test("calendar omits review disclosure while retaining timed events and failure handling", async () => {
+test("calendar links unresolved review candidates alongside timed events and failure handling", async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const key = `sha256:${"a".repeat(64)}@fictional-r1`;
   const review: TimelineItem = {
@@ -164,13 +164,13 @@ test("calendar omits review disclosure while retaining timed events and failure 
     route: "/calendar?date=2026-11-05",
   });
   try {
-    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
-    expect(view.queryByText(review.title)).toBeNull();
+    expect(view.getByText("Source candidates needing review (1)")).toBeTruthy();
+    expect(view.getByRole("link", { name: review.title })).toBeTruthy();
     expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
     expect(view.getByText(/Partial source results/)).toBeTruthy();
     await act(async () => { await client.invalidateQueries({ queryKey: ["parse-command-source"] }); });
     await waitFor(() => expect(view.getByText(/Showing saved schedule/).textContent).toContain("Fictional source unavailable"));
-    expect(view.queryByRole("region", { name: "Needs review" })).toBeNull();
+    expect(view.getByRole("link", { name: review.title })).toBeTruthy();
     expect(view.getByRole("link", { name: "Fictional point, source record" })).toBeTruthy();
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });
@@ -235,7 +235,14 @@ test("weekly daily windows include the last day and exclude unresolved events", 
     />
   );
   expect(view.getByRole("button", { name: "Last-day watch, event details" })).toBeTruthy();
-  expect(view.getByRole("button", { name: "Events in window (1) · Browse details" })).toBeTruthy();
+  const browse = view.getByRole("button", { name: "Browse 1 event in window" });
+  expect(browse.textContent).toBe("Events in window 1");
+  fireEvent.click(browse);
+  const close = view.getByRole("button", { name: "Close window" });
+  expect(close.textContent).toBe("");
+  fireEvent.click(view.container.querySelector(".week-details-row")!);
+  expect(view.getByRole("link", { name: "View source message" }).getAttribute("href")).toContain("SOURCE-1");
+  expect(view.container.querySelector(".week-details")?.textContent).not.toContain("SOURCE-1");
   expect(view.container.querySelector(".week-fit")).toBeTruthy();
   expect(view.queryByRole("button", { name: "Unresolved, event details" })).toBeNull();
 });

@@ -1,0 +1,18 @@
+[package]
+name = "parse-command-moverep"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+parse-command-parser-api.workspace = true
+parse-command-types.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+parse-command-core = { path = "../parse-command-core" }
+
+[lints]
+workspace = true

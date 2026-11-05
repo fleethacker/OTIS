@@ -1903,6 +1903,7 @@ dependencies = [
  "nom",
  "parse-command-casrep",
  "parse-command-core",
+ "parse-command-moverep",
  "parse-command-optask",
  "parse-command-parser-api",
  "parse-command-state",
@@ -1913,6 +1914,17 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "webpki-roots",
+]
+
+[[package]]
+name = "parse-command-moverep"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "parse-command-core",
+ "parse-command-parser-api",
+ "parse-command-types",
+ "serde_json",
 ]
 
 [[package]]

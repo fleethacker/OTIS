@@ -629,6 +629,8 @@ pub struct Message {
     pub casualty: Option<Casualty>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recurrences: Vec<Recurrence>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub movements: Vec<Movement>,
 }
 impl Validate for Message {
     fn validate(&self) -> Result<(), ValidationError> {
@@ -664,6 +666,9 @@ impl Validate for Message {
             value.validate()?;
         }
         for item in &self.recurrences {
+            item.validate()?;
+        }
+        for item in &self.movements {
             item.validate()?;
         }
         self.validate_semantics()
@@ -703,6 +708,8 @@ pub struct Passage {
         skip_serializing_if = "Option::is_none"
     )]
     pub casualty: Option<CasualtySearch>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub movements: Vec<MovementSearch>,
 }
 impl Validate for Passage {
     fn validate(&self) -> Result<(), ValidationError> {
@@ -728,6 +735,9 @@ impl Validate for Passage {
         }
         if let Some(value) = &self.casualty {
             value.validate()?;
+        }
+        for item in &self.movements {
+            item.validate()?;
         }
         self.validate_semantics()
     }
@@ -1309,6 +1319,272 @@ impl Validate for Recurrence {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Movement {
+    pub id: String,
+    pub kind: MovementKind,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub action: Option<MovementAction>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub activity: Option<MovementActivity>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub effective_at: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub effective_label: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub effective_status: Option<MovementEffectiveStatus>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub location: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub task_org: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unit_names: Vec<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub operational_control_authority: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub operational_command: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tactical_control_authority: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mission_designator: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_arrival_at: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_arrival_label: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_arrival_status: Option<MovementSailArrivalStatus>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_location: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_departure_at: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_departure_label: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_departure_status: Option<MovementSailDepartureStatus>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cancellation: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cancelled_type: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cancelled_originator: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cancelled_date_label: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cancelled_serial: Option<String>,
+}
+impl Validate for Movement {
+    fn validate(&self) -> Result<(), ValidationError> {
+        validate_subject_id(&self.id, Some(b'm'), "movement.id")?;
+        if let Some(value) = &self.effective_label {
+            nonempty(value, "movement.effective_label")?;
+        }
+        if let Some(value) = &self.location {
+            nonempty(value, "movement.location")?;
+        }
+        if let Some(value) = &self.task_org {
+            nonempty(value, "movement.task_org")?;
+        }
+        validate_strings(&self.unit_names, true, "movement.unit_names")?;
+        if let Some(value) = &self.operational_control_authority {
+            nonempty(value, "movement.operational_control_authority")?;
+        }
+        if let Some(value) = &self.operational_command {
+            nonempty(value, "movement.operational_command")?;
+        }
+        if let Some(value) = &self.tactical_control_authority {
+            nonempty(value, "movement.tactical_control_authority")?;
+        }
+        if let Some(value) = &self.mission_designator {
+            nonempty(value, "movement.mission_designator")?;
+        }
+        if let Some(value) = &self.sail_arrival_label {
+            nonempty(value, "movement.sail_arrival_label")?;
+        }
+        if let Some(value) = &self.sail_location {
+            nonempty(value, "movement.sail_location")?;
+        }
+        if let Some(value) = &self.sail_departure_label {
+            nonempty(value, "movement.sail_departure_label")?;
+        }
+        validate_strings(&self.references, true, "movement.references")?;
+        if let Some(value) = &self.cancellation {
+            nonempty(value, "movement.cancellation")?;
+        }
+        if let Some(value) = &self.cancelled_type {
+            nonempty(value, "movement.cancelled_type")?;
+        }
+        if let Some(value) = &self.cancelled_originator {
+            nonempty(value, "movement.cancelled_originator")?;
+        }
+        if let Some(value) = &self.cancelled_date_label {
+            nonempty(value, "movement.cancelled_date_label")?;
+        }
+        if let Some(value) = &self.cancelled_serial {
+            nonempty(value, "movement.cancelled_serial")?;
+        }
+        self.validate_semantics()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MovementSearch {
+    pub id: String,
+    pub kind: MovementSearchKind,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub action: Option<MovementSearchAction>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub activity: Option<MovementSearchActivity>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unit_names: Vec<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub location: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub effective_at: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_arrival_at: Option<UtcTimestamp>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_location: Option<String>,
+    #[serde(
+        default,
+        deserialize_with = "crate::optional_present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub sail_departure_at: Option<UtcTimestamp>,
+}
+impl Validate for MovementSearch {
+    fn validate(&self) -> Result<(), ValidationError> {
+        validate_subject_id(&self.id, Some(b'm'), "movementSearch.id")?;
+        validate_strings(&self.unit_names, true, "movementSearch.unit_names")?;
+        if let Some(value) = &self.location {
+            nonempty(value, "movementSearch.location")?;
+        }
+        if let Some(value) = &self.sail_location {
+            nonempty(value, "movementSearch.sail_location")?;
+        }
+        self.validate_semantics()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SecurityClassification {
     #[serde(rename = "UNCLASSIFIED")]
@@ -1453,4 +1729,146 @@ pub enum RecurrenceStatus {
     Validated,
     #[serde(rename = "unresolved")]
     Unresolved,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementKind {
+    #[serde(rename = "activity")]
+    Activity,
+    #[serde(rename = "cancellation")]
+    Cancellation,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementAction {
+    #[serde(rename = "REQUEST")]
+    Request,
+    #[serde(rename = "INTEND")]
+    Intend,
+    #[serde(rename = "ORDER")]
+    Order,
+    #[serde(rename = "APPROVE")]
+    Approve,
+    #[serde(rename = "REPORT")]
+    Report,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementActivity {
+    #[serde(rename = "ANCHOR")]
+    Anchor,
+    #[serde(rename = "ARRIVE")]
+    Arrive,
+    #[serde(rename = "CHOP")]
+    Chop,
+    #[serde(rename = "DETACH")]
+    Detach,
+    #[serde(rename = "JOIN")]
+    Join,
+    #[serde(rename = "MODIN")]
+    Modin,
+    #[serde(rename = "MODOUT")]
+    Modout,
+    #[serde(rename = "DEPART")]
+    Depart,
+    #[serde(rename = "MOOR")]
+    Moor,
+    #[serde(rename = "OPCMD")]
+    Opcmd,
+    #[serde(rename = "OTR")]
+    Otr,
+    #[serde(rename = "TRANSIT")]
+    Transit,
+    #[serde(rename = "MODLOC")]
+    Modloc,
+    #[serde(rename = "RNDZV")]
+    Rndzv,
+    #[serde(rename = "NAVPIM")]
+    Navpim,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementEffectiveStatus {
+    #[serde(rename = "missing_year")]
+    MissingYear,
+    #[serde(rename = "missing_month_and_year")]
+    MissingMonthAndYear,
+    #[serde(rename = "unresolved")]
+    Unresolved,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementSailArrivalStatus {
+    #[serde(rename = "missing_year")]
+    MissingYear,
+    #[serde(rename = "missing_month_and_year")]
+    MissingMonthAndYear,
+    #[serde(rename = "unresolved")]
+    Unresolved,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementSailDepartureStatus {
+    #[serde(rename = "missing_year")]
+    MissingYear,
+    #[serde(rename = "missing_month_and_year")]
+    MissingMonthAndYear,
+    #[serde(rename = "unresolved")]
+    Unresolved,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementSearchKind {
+    #[serde(rename = "activity")]
+    Activity,
+    #[serde(rename = "cancellation")]
+    Cancellation,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementSearchAction {
+    #[serde(rename = "REQUEST")]
+    Request,
+    #[serde(rename = "INTEND")]
+    Intend,
+    #[serde(rename = "ORDER")]
+    Order,
+    #[serde(rename = "APPROVE")]
+    Approve,
+    #[serde(rename = "REPORT")]
+    Report,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovementSearchActivity {
+    #[serde(rename = "ANCHOR")]
+    Anchor,
+    #[serde(rename = "ARRIVE")]
+    Arrive,
+    #[serde(rename = "CHOP")]
+    Chop,
+    #[serde(rename = "DETACH")]
+    Detach,
+    #[serde(rename = "JOIN")]
+    Join,
+    #[serde(rename = "MODIN")]
+    Modin,
+    #[serde(rename = "MODOUT")]
+    Modout,
+    #[serde(rename = "DEPART")]
+    Depart,
+    #[serde(rename = "MOOR")]
+    Moor,
+    #[serde(rename = "OPCMD")]
+    Opcmd,
+    #[serde(rename = "OTR")]
+    Otr,
+    #[serde(rename = "TRANSIT")]
+    Transit,
+    #[serde(rename = "MODLOC")]
+    Modloc,
+    #[serde(rename = "RNDZV")]
+    Rndzv,
+    #[serde(rename = "NAVPIM")]
+    Navpim,
 }

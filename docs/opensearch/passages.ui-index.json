@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "icd_version": "1.3.0",
+      "icd_version": "1.4.0",
       "profile": "ui_fixture_lexical_no_retention",
       "embedding": "not_configured_model_and_dimension_unselected"
     },
@@ -93,6 +93,45 @@
           },
           "identifiers": {
             "type": "keyword"
+          }
+        }
+      },
+      "movements": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "kind": {
+            "type": "keyword"
+          },
+          "action": {
+            "type": "keyword"
+          },
+          "activity": {
+            "type": "keyword"
+          },
+          "unit_names": {
+            "type": "keyword"
+          },
+          "location": {
+            "type": "keyword"
+          },
+          "effective_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "sail_arrival_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "sail_location": {
+            "type": "keyword"
+          },
+          "sail_departure_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
           }
         }
       }

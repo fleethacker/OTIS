@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "icd_version": "1.3.0",
+      "icd_version": "1.4.0",
       "profile": "ui_fixture_lexical_no_retention"
     },
     "properties": {
@@ -330,16 +330,40 @@
         "type": "nested",
         "dynamic": "strict",
         "properties": {
-          "id": {"type": "keyword"},
-          "type": {"type": "keyword"},
-          "activity_id": {"type": "keyword"},
-          "rule": {"type": "keyword", "index": false},
-          "dtstart": {"type": "date", "format": "strict_date_optional_time_nanos"},
-          "until": {"type": "date", "format": "strict_date_optional_time_nanos"},
-          "count": {"type": "long"},
-          "exdates": {"type": "date", "format": "strict_date_optional_time_nanos"},
-          "scope": {"type": "keyword"},
-          "status": {"type": "keyword"}
+          "id": {
+            "type": "keyword"
+          },
+          "type": {
+            "type": "keyword"
+          },
+          "activity_id": {
+            "type": "keyword"
+          },
+          "rule": {
+            "type": "keyword",
+            "index": false
+          },
+          "dtstart": {
+            "type": "date",
+            "format": "strict_date_optional_time_nanos"
+          },
+          "until": {
+            "type": "date",
+            "format": "strict_date_optional_time_nanos"
+          },
+          "count": {
+            "type": "long"
+          },
+          "exdates": {
+            "type": "date",
+            "format": "strict_date_optional_time_nanos"
+          },
+          "scope": {
+            "type": "keyword"
+          },
+          "status": {
+            "type": "keyword"
+          }
         }
       },
       "locations": {
@@ -610,6 +634,96 @@
             "type": "keyword"
           },
           "identifiers": {
+            "type": "keyword"
+          }
+        }
+      },
+      "movements": {
+        "type": "nested",
+        "dynamic": "strict",
+        "properties": {
+          "id": {
+            "type": "keyword"
+          },
+          "kind": {
+            "type": "keyword"
+          },
+          "action": {
+            "type": "keyword"
+          },
+          "activity": {
+            "type": "keyword"
+          },
+          "effective_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "effective_label": {
+            "type": "keyword"
+          },
+          "effective_status": {
+            "type": "keyword"
+          },
+          "location": {
+            "type": "keyword"
+          },
+          "task_org": {
+            "type": "keyword"
+          },
+          "unit_names": {
+            "type": "keyword"
+          },
+          "operational_control_authority": {
+            "type": "keyword"
+          },
+          "operational_command": {
+            "type": "keyword"
+          },
+          "tactical_control_authority": {
+            "type": "keyword"
+          },
+          "mission_designator": {
+            "type": "keyword"
+          },
+          "sail_arrival_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "sail_arrival_label": {
+            "type": "keyword"
+          },
+          "sail_arrival_status": {
+            "type": "keyword"
+          },
+          "sail_location": {
+            "type": "keyword"
+          },
+          "sail_departure_at": {
+            "type": "date",
+            "format": "strict_date_optional_time"
+          },
+          "sail_departure_label": {
+            "type": "keyword"
+          },
+          "sail_departure_status": {
+            "type": "keyword"
+          },
+          "references": {
+            "type": "keyword"
+          },
+          "cancellation": {
+            "type": "keyword"
+          },
+          "cancelled_type": {
+            "type": "keyword"
+          },
+          "cancelled_originator": {
+            "type": "keyword"
+          },
+          "cancelled_date_label": {
+            "type": "keyword"
+          },
+          "cancelled_serial": {
             "type": "keyword"
           }
         }

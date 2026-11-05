@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { TbLogout, TbAdjustmentsHorizontal } from "react-icons/tb";
-import { Link } from "react-router-dom";
+import { TbLogout } from "react-icons/tb";
 import { useIdentity } from "../hooks/useIdentity";
 import { AppButton, Notice } from "./ui";
 
@@ -152,19 +151,6 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
             </Notice>
           )}
           <ul className="menu menu-sm gap-0 px-1 py-1">
-            <li>
-              <Link to="/account" role="menuitem" onClick={() => setOpen(false)}>
-                Account & settings
-              </Link>
-            </li>
-            {role !== "admin" && (
-              <li>
-                <Link to="/settings" role="menuitem" onClick={() => setOpen(false)}>
-                  <TbAdjustmentsHorizontal />
-                  Preferences
-                </Link>
-              </li>
-            )}
             <li>
               <AppButton
                 variant="ghost"

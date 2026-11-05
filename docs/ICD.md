@@ -1,6 +1,6 @@
 # Parse Command Interface Control Document
 
-**Contract:** PC-ICD-001 · **Version:** 1.3.0 · **Date:** 2026-11-05
+**Contract:** PC-ICD-001 · **Version:** 1.4.0 · **Date:** 2026-11-05
 
 **Status:** compact data contract and compiled contributor interface. The Rust host
 implements parsing, durable IMAP custody in OpenSearch, continuous publication and
@@ -11,7 +11,7 @@ remain separate acceptance gates; an extracted report does not establish readine
 
 This ICD defines the parsed-message wire format, message-parser contribution boundary, interpretation rules, audit linkage and OpenSearch storage expectations. It does not define the UI's HTTP routes, select an embedding model, or promise a hardware capacity. Contributions are Rust modules/crates compiled into the host; runtime plugin loading is outside v1.
 
-Enabled message families are OPTASK and CASREP. GENADMIN is a separate message family and is not a CASREP profile. The common interface also permits other teams to implement additional USMTF message types without modifying IMAP intake, persistence or search. Adding a parser does not automatically enable that message type in deployment.
+Enabled message families are OPTASK, CASREP and MOVEREP. GENADMIN is a separate message family and is not a CASREP profile. The common interface also permits other teams to implement additional USMTF message types without modifying IMAP intake, persistence or search. Adding a parser does not automatically enable that message type in deployment.
 
 Normative terms **MUST**, **MUST NOT** and **SHOULD** describe conformance requirements. JSON Schema is authoritative for JSON field names, types and structural constraints; the semantic rules here remain mandatory even when JSON Schema cannot express a cross-field or cross-document condition. Changes to the approved shape require a versioned contract update.
 
@@ -56,7 +56,7 @@ The supplied fixtures are bare USMTF text, not full emails. Their `subject` valu
 | --- | --- |
 | Message `id` | `sha256:` plus 64 lowercase hexadecimal digits of the exact UTF-8 decoded USMTF source bytes preserved in audit. Whitespace is not silently rewritten before hashing. Email receipt identity is separate. |
 | `revision` | Nonempty opaque revision token, 1-64 ASCII letters/digits/dot/underscore/hyphen, starting with a letter/digit. Stable for one immutable interpretation. |
-| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN`, `gN`, `rN` or `qN` for activities, frequencies, contacts, periods, locations, recurrences and casualty reports; N starts at 1. No duplicates within the revision. |
+| Fact `id` | Message/revision-scoped `aN`, `fN`, `cN`, `vN`, `gN`, `rN`, `qN` or `mN` for activities, frequencies, contacts, periods, locations, recurrences, casualty reports and movements; N starts at 1. No duplicates within the revision. |
 | Passage `id` | Content-derived `sha256:` identifier assigned by the host, stable for the same source revision and chunking inputs. |
 | Audit `id` | Host-assigned deterministic 64-digit lowercase hexadecimal event identifier for one immutable event. Persist its identity/timestamp/content before retries. |
 
@@ -86,6 +86,7 @@ Required fields are exactly the message schema's `required` list; unknown core p
 | `contacts` | Source contact/coordination information |
 | `locations` | Optional geographic points/shapes with datum and interpretation state |
 | `recurrences` | Optional source-anchored recurring schedule companions; existing activities remain unchanged |
+| `movements` | Optional source-linked MOVEREP candidates and cancellations; placement is not command assignment |
 | `review_flags` | Optional unique short warning codes needed by the user; full explanations live in audit |
 
 ### 4.1 Security
@@ -311,7 +312,7 @@ An array of ordinary objects can produce cross-fact matches, so use `nested` onl
 
 ## 10. Compatibility and validation
 
-The current schemas and new index definitions identify ICD 1.3.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
+The current schemas and new index definitions identify ICD 1.4.0. Consumers MUST reject unsupported major versions at the negotiated contract boundary. Unknown core fields fail structural validation; add fields/types through an explicit minor or major contract update and corresponding schema/mapping changes. Do not rely on dynamic OpenSearch mapping for compatibility. Audit payload internals can extend within their documented envelope without creating indexed fields.
 
 Use [the validation tool](tools/validate_samples.py) with an external fixture directory. It validates local JSON Schema resources, all three document sets, data linkage, source hashes, source spans, frequency/time invariants, Bulk framing and audit evidence preservation. `jsonschema` is a build/test dependency, not a Rust runtime dependency; local/offline installations may supply it from prepared tooling.
 
@@ -349,3 +350,36 @@ as `casualtySearch`; it does not duplicate narratives or logistics arrays.
 The derived casualty-history index is rebuildable and does not replace immutable
 messages or imply operational validation. Consumers of the strict 1.1 schema must
 upgrade before receiving CASREP fields; existing OPTASK documents remain valid.
+
+
+## 13. MOVEREP addition (1.4.0)
+
+Only exact `MOVEREP` messages MAY carry `movements`. Each `mN` fact retains the
+MARACT action (`REQUEST`, `INTEND`, `ORDER`, `APPROVE` or `REPORT`), activity,
+effective source time, location and any control authority. Structured TASKORG
+field 4 and later fields supply `unit_names`; other names in a message do not
+automatically become affected units. SAIL arrival, location and optional
+departure remain separate source fields. A departure is a point candidate and
+does not create a voyage interval without source bounds.
+
+A cancellation has `kind: cancellation`, a source CANX label and at least one
+REF. It does not erase, revise or choose another report. Cross-message lineage
+and ambiguous unit/time matches remain review items linked to raw source and
+audit spans. An activity's source action must appear on each calendar candidate;
+none of these actions implies operational confirmation. Source issue year can
+resolve an otherwise complete month/day/Zulu label; missing month or year stays
+unresolved. The parser records the applied time rule in audit.
+
+The passage's optional `movements` is a compact `movementSearch` projection for
+nested action, activity, unit, location and time filters. It does not carry
+TASKORG or CANX detail. Calendar placement IDs resolved from a configured ship
+roster are presentation data and MUST NOT alter canonical `command_ids`, station
+scope or read authorization. Unmatched and ambiguous names require review.
+
+MOVEREP also emits source-linked `locations` for coordinate-shaped MARACT,
+SAIL, FYPOS, ROUTE and AREA fields. Strict coordinate parsing applies the same
+WGS84 default and unresolved-geometry rules as section 11. ROUTE and AREA
+coordinates are separate labeled positions; no route segment or area boundary
+is inferred. Named places are not geocoded. Invalid coordinate-shaped fields
+retain an unresolved location and a geospatial review flag. Their source sets
+are indexed as passages alongside MARACT, TASKORG, SAIL, REF and CANX.

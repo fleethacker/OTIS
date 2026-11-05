@@ -1,4 +1,4 @@
-//! Compact ICD 1.3.0 documents. Validate before publication; core never carries parser evidence.
+//! Compact ICD 1.4.0 documents. Validate before publication; core never carries parser evidence.
 use chrono::{DateTime, Duration, FixedOffset, SecondsFormat};
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, fmt};
 mod casualty;
 mod generated;
 pub use generated::*;
-pub const ICD_VERSION: &str = "1.3.0";
+pub const ICD_VERSION: &str = "1.4.0";
 pub const ICD_MAJOR: u16 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,7 +160,7 @@ pub fn validate_subject_id(
 ) -> Result<(), ValidationError> {
     let b = v.as_bytes();
     if b.len() < 2
-        || !b"afcvgrq".contains(&b[0])
+        || !b"afcvgrqm".contains(&b[0])
         || prefix.is_some_and(|p| p != b[0])
         || b[1] == b'0'
         || !b[1..].iter().all(u8::is_ascii_digit)
@@ -335,6 +335,69 @@ impl Activity {
         Ok(())
     }
 }
+impl Movement {
+    fn validate_semantics(&self) -> Result<(), ValidationError> {
+        let effective = self.effective_at.is_some() || self.effective_label.is_some();
+        let arrival = self.sail_arrival_at.is_some() || self.sail_arrival_label.is_some();
+        let departure = self.sail_departure_at.is_some() || self.sail_departure_label.is_some();
+        if (self.effective_at.is_some()
+            && (self.effective_label.is_some() || self.effective_status.is_some()))
+            || (self.sail_arrival_at.is_some()
+                && (self.sail_arrival_label.is_some() || self.sail_arrival_status.is_some()))
+            || (self.sail_departure_at.is_some()
+                && (self.sail_departure_label.is_some() || self.sail_departure_status.is_some()))
+            || (self.effective_status.is_some() && self.effective_label.is_none())
+            || (self.sail_arrival_status.is_some() && self.sail_arrival_label.is_none())
+            || (self.sail_departure_status.is_some() && self.sail_departure_label.is_none())
+        {
+            return Err(invalid("movement.time", "conflicting_representations"));
+        }
+        match self.kind {
+            MovementKind::Activity => {
+                if self.action.is_none() || self.activity.is_none() || !effective {
+                    return Err(invalid("movement", "maract_fields_required"));
+                }
+                if self.cancellation.is_some() {
+                    return Err(invalid("movement", "activity_cancellation_conflict"));
+                }
+                if self.cancelled_type.is_some()
+                    || self.cancelled_originator.is_some()
+                    || self.cancelled_date_label.is_some()
+                    || self.cancelled_serial.is_some()
+                {
+                    return Err(invalid("movement", "activity_cancellation_fields"));
+                }
+                if self.sail_location.is_some() != arrival {
+                    return Err(invalid("movement.sail", "arrival_and_location_required"));
+                }
+                if departure && self.sail_location.is_none() {
+                    return Err(invalid("movement.sail", "departure_requires_arrival"));
+                }
+            }
+            MovementKind::Cancellation => {
+                if self.cancellation.is_none()
+                    || self.references.is_empty()
+                    || self.cancelled_type.is_none()
+                    || self.cancelled_originator.is_none()
+                    || self.cancelled_date_label.is_none()
+                    || self.action.is_some()
+                    || self.activity.is_some()
+                    || effective
+                    || arrival
+                    || departure
+                {
+                    return Err(invalid("movement", "cancellation_shape"));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+impl MovementSearch {
+    fn validate_semantics(&self) -> Result<(), ValidationError> {
+        Ok(())
+    }
+}
 impl Recurrence {
     fn validate_semantics(&self) -> Result<(), ValidationError> {
         // Interpretation support is checked by the timeline, not by dropping an
@@ -362,6 +425,9 @@ impl Message {
         if self.casualty.is_some() && self.kind != "CASREP" {
             return Err(invalid("message.casualty", "casrep_only"));
         }
+        if !self.movements.is_empty() && self.kind != "MOVEREP" {
+            return Err(invalid("message.movements", "moverep_only"));
+        }
         let ids = self
             .periods
             .iter()
@@ -371,6 +437,7 @@ impl Message {
             .chain(self.contacts.iter().map(|x| &x.id))
             .chain(self.locations.iter().map(|x| &x.id))
             .chain(self.casualty.iter().map(|x| &x.id))
+            .chain(self.movements.iter().map(|x| &x.id))
             .chain(self.recurrences.iter().map(|x| &x.id));
         let mut seen = BTreeSet::new();
         for id in ids {

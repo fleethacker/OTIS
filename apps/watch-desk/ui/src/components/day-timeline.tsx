@@ -5,6 +5,7 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
 import type { TimelineItem } from "./source-data";
 import { Link, useNavigate } from "react-router-dom";
+import { TbArrowLeft, TbX } from "react-icons/tb";
 import {
   cloneElement,
   isValidElement,
@@ -51,6 +52,9 @@ interface ScheduleEntry {
   reviewRequired?: boolean;
   sourceType?: string;
   commandIds?: string[];
+  placementIds?: string[];
+  movementAction?: TimelineItem["movementAction"];
+  unitMatchReview?: boolean;
   recurrence?: TimelineItem["recurrence"];
   commands: Command[];
   resourceId?: string;
@@ -88,11 +92,14 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const information = [
     row.title,
     row.sourceType,
+    row.movementAction ? `MOVEREP action: ${row.movementAction}` : undefined,
     row.recurrence ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}` : undefined,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
     `Applicability: ${commandKeys(row.commandIds).map((key) => commandName(key, row.commands)).join(", ")}`,
+    row.placementIds ? `Calendar placement: ${commandKeys(row.placementIds).map((key) => commandName(key, row.commands)).join(", ")}` : undefined,
+    row.unitMatchReview ? "Ship name needs matching review" : undefined,
     (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
     row.reviewRequired === true ? "Requires review" : undefined,
     row.event.isRevised ? "Revised" : undefined,
@@ -105,6 +112,8 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     <>
       {row.recurrence && <span aria-hidden="true" title="Recurring source fact">↻</span>}
       <OptaskIcon type={row.sourceType} />
+      {row.movementAction && <span className="movement-action-badge">{row.movementAction}</span>}
+      {row.sourceType === "MOVEREP" && row.reviewRequired && <span className="movement-review-badge">Review</span>}
       <span className="calendar-event-title">{row.title}</span>
     </>
   );
@@ -132,7 +141,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   );
   return (
     <div className="calendar-event-copy">
-      {row.resourceId === undefined && <CommandChips ids={row.commandIds} commands={row.commands} />}
+      {row.resourceId === undefined && !(row.sourceType === "MOVEREP" && row.reviewRequired && !row.commandIds?.length) && <CommandChips ids={row.commandIds} commands={row.commands} />}
       {target}
     </div>
   );
@@ -224,7 +233,7 @@ export function DayTimeline({
     )
     .sort((a, b) => +a.start - +b.start);
   const parents = new Map(messages.map((message) => [message.sourceMessageId, message]));
-  const rows: ScheduleEntry[] =
+  const rows: ScheduleEntry[] = (
     sourceItems === undefined
       ? legacyRows
       : sourceItems
@@ -264,12 +273,16 @@ export function DayTimeline({
                 reviewRequired: item.reviewRequired,
                 sourceType: item.sourceType,
                 commandIds: item.commandIds ?? [],
+                placementIds: item.placementIds,
+                movementAction: item.movementAction,
+                unitMatchReview: item.unitMatchReview,
                 recurrence: item.recurrence,
                 commands,
               },
             ];
           })
-          .sort((a, b) => +a.start - +b.start);
+          .sort((a, b) => +a.start - +b.start)
+  ).filter((row) => selectedShips === undefined || commandKeys(row.placementIds ?? row.commandIds).some((key) => selectedShips.has(key)));
   const side = view === "day" && shipLayout === "side";
   const resources = shipResources(commands, rows, selectedShips);
   const displayed = side ? inShipColumns(rows, resources) : rows;
@@ -404,8 +417,8 @@ export function DayTimeline({
                   .filter(Boolean)
                   .join(" "),
                 style: {
-                  "--ship-color": commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands),
-                  borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}`,
+                  "--ship-color": commandColor(row.resourceId ?? commandKeys(row.placementIds ?? row.commandIds)[0], commands),
+                  borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.placementIds ?? row.commandIds)[0], commands)}`,
                 } as CSSProperties,
               })}
               formats={{
@@ -452,46 +465,75 @@ export function DayTimeline({
       {view === "week" && rows.length > 0 && (
         <>
           <AppButton
-            size="sm"
+            variant="ghost"
+            size="xs"
             className="week-index"
+            aria-label={`Browse ${rows.length} ${rows.length === 1 ? "event" : "events"} in window`}
             onClick={() => {
               setShowIndex(true);
               setSelected(null);
               dialog.current?.showModal();
             }}
           >
-            Events in window ({rows.length}) · Browse details
+            Events in window <span className="week-index-count">{rows.length}</span>
           </AppButton>
           <dialog ref={dialog} className="modal" aria-labelledby="week-detail-heading">
             <div className="modal-box week-details">
-              <form method="dialog">
-                <AppButton type="submit" size="sm" className="float-right">
-                  Close details
-                </AppButton>
-              </form>
-              <h2 id="week-detail-heading">
-                {showIndex ? "Events in selected windows" : selected?.title}
-              </h2>
+              <header className="week-details-header">
+                <div className="week-details-heading">
+                  {!showIndex && (
+                    <AppButton
+                      variant="ghost"
+                      size="xs"
+                      className="week-details-icon"
+                      aria-label="Back to events"
+                      onClick={() => setShowIndex(true)}
+                    >
+                      <TbArrowLeft aria-hidden="true" />
+                    </AppButton>
+                  )}
+                  <h2 id="week-detail-heading">
+                    {showIndex ? `Events in window (${rows.length})` : selected?.title}
+                  </h2>
+                </div>
+                <form method="dialog">
+                  <AppButton
+                    type="submit"
+                    variant="ghost"
+                    size="xs"
+                    className="week-details-icon"
+                    aria-label="Close window"
+                    title="Close window"
+                  >
+                    <TbX aria-hidden="true" />
+                  </AppButton>
+                </form>
+              </header>
               {showIndex ? (
-                <ul>
+                <ul className="week-details-list">
                   {rows.map((row) => (
                     <li key={eventKey(row)}>
                       <AppButton
                         variant="ghost"
+                        size="xs"
+                        className="week-details-row"
                         onClick={() => {
                           setSelected(row);
                           setShowIndex(false);
                         }}
                       >
-                        {row.title} · <CommandChips ids={row.commandIds} commands={commands} />
-                        {row.event.isRevised ? " · Revised" : ""}
+                        <span className="week-details-row-title">{row.title}</span>
+                        <span className="week-details-row-meta">
+                          <CommandChips ids={row.commandIds} commands={commands} />
+                          {row.event.isRevised && <span>Revised</span>}
+                        </span>
                       </AppButton>
                     </li>
                   ))}
                 </ul>
               ) : (
                 selected && (
-                  <>
+                  <div className="week-details-body">
                     <p>
                       <CommandChips ids={selected.commandIds} commands={commands} /> ·{" "}
                       {(selected.event.location ?? "").trim() !== ""
@@ -504,10 +546,7 @@ export function DayTimeline({
                         : `${format(selected.event.startAt)} → ${format(selected.event.endAt)}`}
                       {selected.reviewRequired === true && " · Requires review"}
                     </p>
-                    {selected.recurrence && <>
-                      <p>↻ {selected.recurrence.description}</p>
-                      <p>Rule: <code>{selected.recurrence.rule}</code><br />Audited fact: {selected.recurrence.ruleFactId}<br />Occurrence: {selected.recurrence.occurrenceId}</p>
-                    </>}
+                    {selected.recurrence && <p>↻ {selected.recurrence.description}</p>}
                     {selected.before && <p>Continues from earlier than a selected window.</p>}
                     {selected.after && <p>Continues later than a selected window.</p>}
                     {selected.event.isRevised && (
@@ -524,10 +563,10 @@ export function DayTimeline({
                         {format(revision.priorEndAt)}
                       </p>
                     ))}
-                    <Link className="btn btn-primary" to={selected.href}>
-                      Source record · {selected.message.sourceMessageId}
+                    <Link className="btn btn-outline btn-xs week-details-source" to={selected.href}>
+                      View source message
                     </Link>
-                  </>
+                  </div>
                 )
               )}
             </div>

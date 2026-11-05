@@ -5,7 +5,7 @@ Current authentication, roles and persistence are defined in [Settings, OIDC and
 The React app calls the same-origin Rust server through `web`. OpenSearch DSL,
 index names, model IDs, passage grouping and search templates stay in Rust.
 The browser does not receive vectors, credentials or arbitrary query access.
-The parsed-message ICD 1.3.0 remains the contributor/storage contract.
+The parsed-message ICD 1.4.0 remains the contributor/storage contract.
 
 ## Reads
 

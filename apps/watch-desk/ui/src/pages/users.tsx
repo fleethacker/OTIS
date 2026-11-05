@@ -57,7 +57,7 @@ export default function Users() {
         Viewers can read schedules and messages and prepare private, unsent drafts. Administrators
         also manage shared settings and station assignments. Permission levels come from the sign-in
         provider. Use{" "}
-        <Link className="link" to="/settings">
+        <Link className="link" to="/account?settings=users">
           Settings · Users
         </Link>{" "}
         to enable, disable, or revoke an account.

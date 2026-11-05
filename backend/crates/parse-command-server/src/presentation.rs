@@ -135,6 +135,15 @@ pub fn timeline_with_limit(
     to: &str,
     limit: usize,
 ) -> Result<(Vec<Value>, Vec<Value>)> {
+    timeline_with_roster(core, from, to, limit, &[])
+}
+pub fn timeline_with_roster(
+    core: &Value,
+    from: &str,
+    to: &str,
+    limit: usize,
+    roster: &[parse_command_intake::demo::Command],
+) -> Result<(Vec<Value>, Vec<Value>)> {
     let mut items = Vec::new();
     let mut review = Vec::new();
     let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
@@ -173,6 +182,7 @@ pub fn timeline_with_limit(
             }
         }
     }
+    movement_items(core, from, to, limit, roster, &mut items, &mut review)?;
     let Some(facts) = core["activities"].as_array() else {
         return Ok((items, review));
     };
@@ -253,6 +263,123 @@ pub fn timeline_with_limit(
         timeline_add(&mut review, items.len(), item, limit)?;
     }
     Ok((items, review))
+}
+fn normalized_ship(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase()
+}
+fn placement_ids(
+    fact: &Value,
+    roster: &[parse_command_intake::demo::Command],
+) -> (Vec<String>, bool) {
+    let mut ids = std::collections::BTreeSet::new();
+    let mut unresolved = false;
+    for unit in fact["unit_names"].as_array().into_iter().flatten() {
+        let Some(unit) = unit.as_str() else {
+            unresolved = true;
+            continue;
+        };
+        let name = normalized_ship(unit);
+        let short = name
+            .strip_prefix("USS ")
+            .or_else(|| name.strip_prefix("USNS "))
+            .unwrap_or(&name);
+        let matches = roster
+            .iter()
+            .filter(|c| {
+                normalized_ship(&c.name) == name || normalized_ship(&c.short_label) == short
+            })
+            .collect::<Vec<_>>();
+        if matches.len() == 1 {
+            ids.insert(matches[0].id.clone());
+        } else {
+            unresolved = true;
+        }
+    }
+    if ids.is_empty() {
+        unresolved = true;
+    }
+    (ids.into_iter().collect(), unresolved)
+}
+fn movement_items(
+    core: &Value,
+    from: &str,
+    to: &str,
+    limit: usize,
+    roster: &[parse_command_intake::demo::Command],
+    items: &mut Vec<Value>,
+    review: &mut Vec<Value>,
+) -> Result<()> {
+    let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
+    for fact in core["movements"].as_array().into_iter().flatten() {
+        let id = text(fact, "id");
+        let (placement, unit_review) = placement_ids(fact, roster);
+        let action = fact["action"].as_str();
+        let activity = fact["activity"].as_str();
+        let title = if fact["kind"] == "cancellation" {
+            "MOVEREP cancellation".to_owned()
+        } else {
+            format!(
+                "{} {}{}",
+                action.unwrap_or("MOVEREP"),
+                activity.unwrap_or("movement"),
+                fact["location"]
+                    .as_str()
+                    .map(|v| format!(" · {v}"))
+                    .unwrap_or_default()
+            )
+        };
+        let base = json!({"key":format!("{key}#{id}"),"messageKey":key,"factId":id,"sourceFactId":id,
+            "title":title,"commandIds":core["command_ids"],"placementIds":placement,"unitMatchReview":unit_review,
+            "unitNames":fact["unit_names"],"movementAction":action,"movementActivity":activity,"location":fact["location"],
+            "reviewRequired":true,"confirmation":"unvalidated","sourceType":"MOVEREP"});
+        let mut candidates = vec![("effective", id.to_owned(), title)];
+        if fact["sail_location"].is_string() {
+            let place = text(fact, "sail_location");
+            candidates.push((
+                "sail_arrival",
+                format!("{id}.arrival"),
+                format!("SAIL arrival · {place}"),
+            ));
+            if fact["sail_departure_at"].is_string() || fact["sail_departure_label"].is_string() {
+                candidates.push((
+                    "sail_departure",
+                    format!("{id}.departure"),
+                    format!("SAIL departure · {place}"),
+                ));
+            }
+        }
+        for (endpoint, occurrence, candidate_title) in candidates {
+            let mut item = base.clone();
+            item["key"] = json!(format!("{key}#{occurrence}"));
+            item["factId"] = json!(occurrence);
+            item["title"] = json!(candidate_title);
+            let at_field = format!("{endpoint}_at");
+            if let Some(at) = fact[at_field.as_str()].as_str() {
+                let at = timestamp(at)?;
+                if at.as_str() >= from && at.as_str() < to {
+                    item["kind"] = json!("point");
+                    item["at"] = json!(at);
+                    timeline_add(items, review.len(), item, limit)?;
+                }
+            } else {
+                item["kind"] = json!("unresolved");
+                item["reasonCode"] = json!("unresolved_time");
+                item["reason"] = json!(if fact["kind"] == "cancellation" {
+                    "Referenced cancellation requires review; no arrival is silently removed"
+                } else {
+                    "Source movement time cannot be placed without a supported date"
+                });
+                let label_field = format!("{endpoint}_label");
+                let status_field = format!("{endpoint}_status");
+                item["timeDetails"] = json!([{"endpoint":endpoint,"label":fact[label_field.as_str()],"status":fact[status_field.as_str()]}]);
+                timeline_add(review, items.len(), item, limit)?;
+            }
+        }
+    }
+    Ok(())
 }
 pub async fn legacy(row: &Value, private: &Private, detail: bool) -> Result<Value> {
     let key = text(row, "source_key");
@@ -341,4 +468,42 @@ pub async fn legacy(row: &Value, private: &Private, detail: bool) -> Result<Valu
     }
     result["events"] = json!(events);
     Ok(result)
+}
+
+#[cfg(test)]
+mod movement_tests {
+    use super::*;
+    use parse_command_intake::demo::Command;
+
+    #[test]
+    fn movement_calendar_placement_does_not_change_message_command_scope() {
+        let roster = vec![Command {
+            id: "demo-meridian".into(),
+            name: "USS Meridian".into(),
+            short_label: "MERIDIAN".into(),
+            group: "Fictional".into(),
+            color_index: 0,
+            is_own_ship: true,
+        }];
+        let core = json!({"id":"sha256:abc","revision":"r1","type":"MOVEREP","command_ids":[],"movements":[
+            {"id":"m1","kind":"activity","action":"REQUEST","activity":"DEPART","effective_at":"2026-11-05T08:00:00Z","location":"NORFOLK","unit_names":["USS MERIDIAN"]},
+            {"id":"m2","kind":"cancellation","references":["A/MOVEREP"],"cancellation":"MOVEREP/CTF40/051200ZNOV"}
+        ]});
+        let (items, review) = timeline_with_roster(
+            &core,
+            "2026-11-05T00:00:00Z",
+            "2026-11-06T00:00:00Z",
+            32,
+            &roster,
+        )
+        .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["movementAction"], "REQUEST");
+        assert_eq!(items[0]["placementIds"], json!(["demo-meridian"]));
+        assert_eq!(items[0]["commandIds"], json!([]));
+        assert_eq!(items[0]["reviewRequired"], true);
+        assert_eq!(review.len(), 1);
+        assert_eq!(review[0]["kind"], "unresolved");
+        assert_eq!(review[0]["sourceFactId"], "m2");
+    }
 }

@@ -24,7 +24,7 @@ export default function Calendar() {
   const { shared } = useSettings();
   const { zone } = useDisplayTime();
   const roster = useCommands();
-  const [params, setParams] = useSearchParams();
+  const [params, changeParams] = useCalendarParams();
   const today = civilDate(new Date(), zone);
   const [landingDate] = useState(today);
   const date = utcDate(params.get("date"), landingDate);
@@ -70,10 +70,17 @@ export default function Calendar() {
   canonical.set("interval", String(interval));
   canonical.delete("hours");
   const returnTo = `/calendar?${canonical.toString()}`;
+  function setParams(change: (next: URLSearchParams) => void, replace = false) {
+    changeParams((next) => {
+      if (!next.has("date")) next.set("date", date);
+      if (!next.has("view")) next.set("view", view);
+      if (!next.has("interval")) next.set("interval", String(interval));
+      next.delete("hours");
+      change(next);
+    }, replace);
+  }
   function update(key: string, value: string) {
-    const next = new URLSearchParams(canonical);
-    next.set(key, value);
-    setParams(next, { replace: key === "q" });
+    setParams((next) => next.set(key, value), key === "q");
   }
   function move(direction: number) {
     update(
@@ -94,12 +101,10 @@ export default function Calendar() {
         pending={roster.isPending}
         error={roster.isError ? roster.error.message : undefined}
         retry={() => { void roster.refetch(); }}
-        onChange={(selected) => {
-          const next = new URLSearchParams(canonical);
+        onChange={(selected) => setParams((next) => {
           if (selected === undefined) next.delete("ships");
           else next.set("ships", JSON.stringify([...selected].sort()));
-          setParams(next);
-        }}
+        })}
       />
       <div className="calendar-main">
       <section className="calendar-controls" aria-label="Calendar controls">
@@ -215,12 +220,10 @@ export default function Calendar() {
           expanded={params.get("layout") === "expanded"}
           startHour={0}
           endHour={24}
-          onDay={(chosen) => {
-            const next = new URLSearchParams(canonical);
+          onDay={(chosen) => setParams((next) => {
             next.set("date", chosen);
             next.set("view", "day");
-            setParams(next);
-          }}
+          })}
         />
       </section>
       {dataset === "canonical" && result.data && !refreshing && !result.isError && (
@@ -230,12 +233,10 @@ export default function Calendar() {
           limited={result.data.meta.windowLimited === true}
           filtered={ships !== undefined || query.trim() !== ""}
           returnTo={returnTo}
-          onShowAll={() => {
-            const next = new URLSearchParams(canonical);
+          onShowAll={() => setParams((next) => {
             next.delete("ships");
             next.delete("q");
-            setParams(next);
-          }}
+          })}
         />
       )}
       </div>

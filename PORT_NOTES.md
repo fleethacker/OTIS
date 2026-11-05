@@ -310,6 +310,17 @@ Parker must run the external OPTASK regression against his unavailable samples.
   canonical demo at 05 NOV in both themes and narrow/short viewports as well.
 - Static diff check only; no build/browser run. Attach Month + open popup screenshots.
 
+## Polish 3 — Fast Calendar input
+
+- `git show 60ac735:apps/watch-desk/ui/src/pages/calendar.tsx` confirms the same
+  URL-controlled input and stale `new URLSearchParams(canonical)` update in base.
+  This is a source-level finding; base was not run here.
+- `calendar-params.ts` keeps input state synchronous while Router transitions the
+  URL. All Calendar edits compose against the latest params; Back/Forward restores
+  routed state. Added burst/paste/clear/same-turn view/back regression coverage.
+- No API change. Static diff check only. Container UI tests and a zero-delay typing
+  browser check remain required; attach the final query/URL screenshot.
+
 ## P6 queue from live review (remaining items)
 
 - Neal confirmed `e4c7ddc` column fitting and source-first opening scroll on the live

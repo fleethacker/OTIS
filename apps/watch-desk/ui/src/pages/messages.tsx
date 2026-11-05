@@ -112,12 +112,6 @@ export default function Messages() {
           placeholder="Message ID, subject, event or raw text"
           onChange={(e) => update("q", e.target.value)}
         />
-        <label>Search mode
-          <select className="select select-sm" value={search.request.mode} onChange={(e) => update("mode", e.target.value)}>
-            <option value="keyword">Keyword passages</option>
-            <option value="hybrid">Related messages (hybrid)</option>
-          </select>
-        </label>
         <div className="message-search-actions">
           <AppButton variant="ghost" size="sm" onClick={() => update("q", "")}>
             Clear search

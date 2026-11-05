@@ -177,9 +177,9 @@ export default function Calendar() {
       </section>
       {!noShips && query.trim() && <div className="calendar-search-status">
         <p>Calendar filtered by “{query}” · local lexical title/header matches are always included within returned records.</p>
-        {searching && (keywords.isPending || keywords.isFetching || query !== debounced ? <p role="status">Loading keyword passage matches…</p> : keywords.isError ? <p role="alert">Keyword search unavailable; showing local title/header matches only. <button className="btn btn-xs" onClick={() => { void keywords.refetch(); }}>Retry search</button></p> : <p>Executed passage search: {keywords.data?.meta.executedMode ?? "not reported by server"}. Passage matching may match any query word; all query words must match a local title/header.</p>)}
+        {searching && (keywords.isPending || keywords.isFetching || query !== debounced ? <p>Loading keyword passage matches…</p> : keywords.isError ? <p role="alert">Keyword search unavailable; showing local title/header matches only. <button className="btn btn-xs" onClick={() => { void keywords.refetch(); }}>Retry search</button></p> : <p>Executed passage search: {keywords.data?.meta.executedMode ?? "not reported by server"}. Passage matching may match any query word; all query words must match a local title/header.</p>)}
         {searchLimited && <p>Only the returned keyword page is included; additional matches may exist.</p>}
-        <Link to={`/messages?${new URLSearchParams({ q: query, mode: "hybrid", returnTo })}`}>Find related messages (hybrid)</Link>
+        <Link to={`/messages?${new URLSearchParams({ q: query, returnTo })}`}>Find related messages</Link>
         <span> · Related results are not automatically plotted.</span>
       </div>}
       {refreshing && <p role="status">Loading schedule…</p>}

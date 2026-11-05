@@ -14,7 +14,7 @@ export function ThemeControl() {
           ? "Windows Light"
           : "Windows Dark"
         : isLight
-          ? "Haze Gray"
+          ? "Navy and white"
           : "Maritime Dark";
   const Icon = isLight ? LuSun : theme === viceThemeName ? LuSunset : LuMoon;
   const nextLabel = isLight ? "dark" : "light";

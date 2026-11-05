@@ -632,7 +632,7 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .notice-success { border-color: var(--color-success); background: var(--brand-success-bg); }
 .app-notice a { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Painted steel in Haze Gray; brass trim in Maritime; neon in Vice. */
+/* Blue trim in Navy and white; brass in Maritime Dark; neon in Vice. */
 .desk-header { position: relative; border-bottom: 3px solid var(--brand-trim); }
 .desk-header::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--brand-trim-fill); pointer-events: none; }
 .account-trigger, .notification-bell, .theme-toggle { color: var(--brand-header-text); }

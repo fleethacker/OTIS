@@ -44,7 +44,7 @@ afterEach(() => {
 
 test("appearance follows system changes until the user selects a persistent mode", () => {
   const view = render(<ThemeControl />);
-  expect(view.getByRole("button", { name: /Appearance: Haze Gray/ })).toBeInTheDocument();
+  expect(view.getByRole("button", { name: /Appearance: Navy and white/ })).toBeInTheDocument();
   expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
 
   act(() => {
@@ -57,7 +57,7 @@ test("appearance follows system changes until the user selects a persistent mode
   expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe(themeName);
 
   act(() => media.dispatchEvent(new Event("change")));
-  expect(view.getByRole("status")).toHaveTextContent("Haze Gray appearance");
+  expect(view.getByRole("status")).toHaveTextContent("Navy and white appearance");
 });
 
 test("saved appearance initializes before mount and survives remount", () => {
@@ -134,7 +134,7 @@ test("unrelated session-storage events cannot change the selected appearance", (
       })
     );
   });
-  expect(view.getByRole("status")).toHaveTextContent("Haze Gray appearance");
+  expect(view.getByRole("status")).toHaveTextContent("Navy and white appearance");
 });
 
 test("blocked storage does not prevent switching appearance", () => {
@@ -162,7 +162,7 @@ test("unavailable system preference APIs fall back to a usable light control", (
   });
   try {
     const view = render(<ThemeControl />);
-    expect(view.getByRole("status")).toHaveTextContent("Haze Gray appearance");
+    expect(view.getByRole("status")).toHaveTextContent("Navy and white appearance");
     fireEvent.click(view.getByRole("button"));
     expect(document.documentElement.getAttribute("data-theme")).toBe(darkThemeName);
   } finally {
@@ -202,7 +202,7 @@ test("style selection synchronizes the mounted header and preserves dark mode", 
   fireEvent.click(view.getByRole("button"));
   expect(document.documentElement.getAttribute("data-theme")).toBe(windowsThemeName);
   fireEvent.change(style, { target: { value: "maritime" } });
-  expect(view.getByRole("status")).toHaveTextContent("Haze Gray appearance");
+  expect(view.getByRole("status")).toHaveTextContent("Navy and white appearance");
 });
 
 test("changing only style retains live system appearance until a mode is explicitly chosen", () => {

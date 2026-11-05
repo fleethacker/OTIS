@@ -1,4 +1,4 @@
-/* Optional Windows-style web appearance. Existing maritime palettes are unchanged. */
+/* Optional Windows-style web appearance, scoped independently from maritime palettes. */
 @plugin "daisyui/theme" {
   name: "app-windows";
   color-scheme: light;

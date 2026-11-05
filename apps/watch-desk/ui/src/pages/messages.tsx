@@ -5,13 +5,11 @@ import { calendarReturn } from "../components/calendar-links";
 import { useSource, useDebounced } from "../components/source-data";
 import { MessageReader } from "../components/message-reader";
 import { recordStatus } from "../components/message-format";
-import { useDisplayTime } from "../components/display-time";
 import { messageTitle, structuredIdentifiers } from "../components/structured-message-format";
 
 export const route: RouteMeta = { path: "/messages", label: "Message records", order: 1 };
 
 export default function Messages() {
-  const { format: utc } = useDisplayTime();
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
   const [query, setQuery] = useState(params.get("q") ?? "");
@@ -52,12 +50,6 @@ export default function Messages() {
   }
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h1>Message records</h1>
-          <p>Source evidence, separate from the schedule.</p>
-        </div>
-      </div>
       <Link className="back-link" to={calendarReturn(params.get("returnTo"))}>
         <span aria-hidden="true">← </span>Return to Calendar
       </Link>
@@ -86,9 +78,6 @@ export default function Messages() {
         </div>
       ) : (
         <>
-          <p className="feature-note">
-            {result.data.notice} · {result.data.source} · Read at {utc(result.data.retrievedAt)}
-          </p>
           {messages.length === 0 && (
             <div className="unfinished">
               <h2>No Message records available</h2>

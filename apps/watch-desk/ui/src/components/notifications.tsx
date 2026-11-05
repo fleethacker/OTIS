@@ -14,6 +14,7 @@ import {
 } from "react-icons/tb";
 import { useIdentity } from "../hooks/useIdentity";
 import { calendarReturn, messageHref } from "./calendar-links";
+import { watchPanelHref } from "./watch-calendar-link";
 import {
   notificationTime,
   notificationItems,
@@ -193,6 +194,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
               </AppButton>
             </div>
           </div>
+          <Link className="notification-catchup-link" to={watchPanelHref(returnTo)} onClick={() => setOpen(false)}>Since last watch</Link>
           {mark.isError && (
             <Notice role="alert" className="notification-error" tone="error">
               Couldn't mark as read.{" "}

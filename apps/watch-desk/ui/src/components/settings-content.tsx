@@ -243,7 +243,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                   <label key={id}>
                     <input type="checkbox" checked={form.commandIds.includes(id)} onChange={(e) =>
                       update("commandIds", e.target.checked ? [...form.commandIds, id] : form.commandIds.filter((v) => v !== id))} />
-                    <span>{roster.data?.commands.find((command) => command.id === id)?.name ?? "Name unavailable"}<small>{id}</small></span>
+                    <span>{roster.data?.commands.find((command) => command.id === id)?.name ?? "Name unavailable"}{" "}<small>{id}</small></span>
                   </label>
                 ))}
                 {!options.data?.commands.length && form.commandIds.length === 0 && <small>No commands available.</small>}

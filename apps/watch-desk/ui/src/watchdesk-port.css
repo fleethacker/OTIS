@@ -155,3 +155,26 @@
 .turnover-content h3 { font-weight: 600; margin-top: 12px; }
 .turnover-hidden { padding-left: 8px; }
 .turnover-content [role="alert"] { color: var(--color-error); }
+/* Per-person catch-up uses existing theme tokens; review is not notification read state. */
+.watch-turnover .turnover-since { font-size: 14px; font-weight: 600; }
+.watch-turnover .turnover-note { color: var(--color-bc-muted); }
+.turnover-row-heading, .turnover-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.turnover-source { flex: 1 1 180px; min-width: 0; }
+.turnover-reviewed-control { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.turnover-reviewed .turnover-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-turnover .btn { border: 1px solid var(--color-border-strong); background: var(--color-base-100); color: var(--color-base-content); min-height: 32px; height: auto; white-space: normal; }
+.watch-turnover .btn-primary { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-primary-content); }
+.watch-turnover .btn:hover:not(:disabled) { box-shadow: inset 0 0 0 1px currentColor; }
+.watch-turnover .btn:disabled { color: var(--color-bc-muted); background: var(--color-base-200); border-color: var(--color-base-300); cursor: not-allowed; }
+.watch-turnover .turnover-calendar-link { text-decoration: none; font-size: 12px; }
+.watch-turnover input.input { background: var(--color-base-100); border-color: var(--color-border-strong); color: var(--color-base-content); max-width: 100%; }
+.turnover-addition { font-weight: 500; }
+.notification-panel .notification-catchup-link { display: block; padding: 8px 12px; border-bottom: 1px solid var(--color-base-300); color: var(--color-primary); text-decoration: underline; }
+.calendar-new-marker { align-self: flex-start; flex: none; display: inline-block; font-size: 10px; line-height: 14px; padding: 0 3px; border-radius: 2px; background: var(--color-base-100); color: var(--color-primary); font-weight: 650; }
+.calendar-with-ships .ship-calendar .rbc-event.calendar-catchup-focus { outline: 3px solid var(--color-info); outline-offset: -3px; box-shadow: 0 0 0 2px var(--color-base-100); }
+@media (max-width: 600px) {
+  .watch-turnover .turnover-content { max-height: 55vh; }
+  .turnover-boundary label { width: 100%; min-width: 0; }
+  .turnover-boundary input { width: 100%; }
+  .turnover-reviewed .turnover-source { flex-basis: 100%; }
+}

@@ -85,7 +85,7 @@ test("turnover uses exact custody sources, keeps unknowns outside counts and val
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     if (!String(url).endsWith("/changes/list")) throw new Error("Unexpected request");
     const request: ChangeRequest = JSON.parse(String(init?.body)); requests.push(request);
-    const inWindow = dated.filter((r) => Date.parse(r.issuedAt!) >= Date.parse(request.since) && Date.parse(r.issuedAt!) < Date.parse(request.until));
+    const inWindow = dated.filter((r) => Date.parse(r.issuedAt!) >= Date.parse(request.since!) && Date.parse(r.issuedAt!) < Date.parse(request.until));
     const visible = (ids: string[]) => !request.filters.noCommands &&
       ((!request.filters.commandIds?.length && !request.filters.unassignedOnly) || ids.some((id) => request.filters.commandIds?.includes(id)) || (!ids.length && request.filters.unassignedOnly));
     return Response.json({ items: inWindow.filter((r) => visible(r.commandIds)), unknownTime: visible(unknown.commandIds) ? [unknown] : [], unknownHiddenCount: visible(unknown.commandIds) ? 0 : 1, unknownLimited: false,
@@ -97,7 +97,10 @@ test("turnover uses exact custody sources, keeps unknowns outside counts and val
   const view = renderWithProviders(<QueryClientProvider client={client}><WatchTurnoverPanel turnovers={times} now={now} returnTo={route} /><Location /></QueryClientProvider>, { route });
   try {
     await waitFor(() => expect(view.getByRole("link", { name: base.title })).toBeTruthy());
-    expect(view.getByText(/Amended: not available/)).toBeTruthy();
+    expect(view.queryByText(/Amended: not available/)).toBeNull();
+    expect(view.getByText("Changes and cancellations are not tracked yet.")).toBeTruthy();
+    expect(view.queryByRole("checkbox", { name: /Reviewed:/ })).toBeNull();
+    expect(view.queryByRole("button", { name: "Mark all reviewed" })).toBeNull();
     expect(view.getByText(/2 messages sent/)).toBeTruthy();
     expect(view.getByText(/Fictional undated receipt · source unavailable/)).toBeTruthy();
     const source = new URL(view.getByRole("link", { name: base.title }).getAttribute("href")!, "http://localhost");

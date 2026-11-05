@@ -17,6 +17,7 @@ import {
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
 import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "../components/ship-calendars";
 import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
+import { useWatchCatchup } from "../components/watch-catchup";
 import { useCommands } from "../components/command-roster";
 import { ShipsSidebar } from "../components/ships-sidebar";
 
@@ -56,6 +57,7 @@ function CalendarPage() {
     dataset, query: debounced, mode: "hybrid",
     from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
   }, !noShips);
+  const catchup = useWatchCatchup({ rawSince: params.get("since"), turnovers: shared?.settings.turnoverUtc, filters, enabled: dataset === "canonical" });
   const messages = result.data?.messages ?? [];
   const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
   const canonical = new URLSearchParams(params);
@@ -70,6 +72,7 @@ function CalendarPage() {
       if (!next.has("view")) next.set("view", view);
       if (!next.has("interval")) next.set("interval", String(interval));
       next.delete("hours");
+      next.delete("focusMessage"); next.delete("focusAt"); next.delete("focusFact");
       change(next);
     }, replace);
   }
@@ -103,6 +106,7 @@ function CalendarPage() {
       />
       <div className="calendar-main">
       {dataset === "canonical" && <WatchTurnoverPanel
+        catchup={catchup}
         turnovers={shared?.settings.turnoverUtc}
         commands={roster.isError ? [] : roster.data?.commands}
         returnTo={returnTo}
@@ -224,6 +228,7 @@ function CalendarPage() {
           </h2>
         </div>
         {noShips ? <p className="calendar-result-limit">No ships selected. Choose a ship or Unassigned.</p> : <DayTimeline
+          newMessageKeys={dataset === "canonical" ? catchup.newMessageKeys : undefined}
           commands={roster.isError ? [] : roster.data?.commands}
           shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
           selectedShips={ships}

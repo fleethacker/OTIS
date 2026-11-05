@@ -4,7 +4,8 @@ import { SessionVisibility } from "./session-visibility";
 import otisIcon from "../assets/otis/otis-logo.png";
 import { AppButton } from "./ui";
 import { BrowserPreferenceScope } from "./calendar-preferences";
-interface Session {
+import { WatchSessionContext, type WatchSession } from "./watch-session";
+interface Session extends WatchSession {
   scope: string;
   expiresAt: number | null;
   sessionExpiresAt: number | null;
@@ -153,7 +154,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <SessionVisibility.Provider value={state === "ready"}>
           <div style={{ display: state === "ready" ? "contents" : "none" }}>
             <BrowserPreferenceScope.Provider value={session.scope}>
-              <Fragment key={session.scope}>{children}</Fragment>
+              <WatchSessionContext.Provider value={session}>
+                <Fragment key={session.scope}>{children}</Fragment>
+              </WatchSessionContext.Provider>
             </BrowserPreferenceScope.Provider>
           </div>
         </SessionVisibility.Provider>

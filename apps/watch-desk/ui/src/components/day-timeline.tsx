@@ -36,6 +36,7 @@ import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
 import { inShipColumns, shipResources, type ShipResource } from "./calendar-resources";
 import { calendarGridWidth, openingScrollTime, useOpeningScroll, useCalendarOverflow } from "./calendar-viewport";
+import { useCalendarFocus } from "./calendar-focus";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -53,6 +54,8 @@ interface ScheduleEntry {
   recurrence?: TimelineItem["recurrence"];
   commands: Command[];
   resourceId?: string;
+  sourceFactId?: string;
+  isNew?: boolean;
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -87,6 +90,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const information = [
     row.title,
     row.sourceType,
+    row.isNew ? "New since last watch · not reviewed" : undefined,
     row.recurrence ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}` : undefined,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
@@ -131,6 +135,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   );
   return (
     <div className="calendar-event-copy">
+      {row.isNew && <span className="calendar-new-marker" title="Unreviewed message since last watch">new</span>}
       {row.resourceId === undefined && <CommandChips ids={row.commandIds} commands={row.commands} />}
       {target}
     </div>
@@ -153,6 +158,7 @@ export function DayTimeline({
   shipLayout = "combined",
   selectedShips,
   ready = true,
+  newMessageKeys,
 }: {
   messages: MessageRecord[];
   sourceItems?: TimelineItem[];
@@ -169,6 +175,7 @@ export function DayTimeline({
   shipLayout?: "combined" | "side";
   selectedShips?: Set<string>;
   ready?: boolean;
+  newMessageKeys?: ReadonlySet<string>;
 }) {
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
@@ -264,6 +271,8 @@ export function DayTimeline({
                 sourceType: item.sourceType,
                 commandIds: item.commandIds ?? [],
                 recurrence: item.recurrence,
+                sourceFactId: item.sourceFactId,
+                isNew: newMessageKeys?.has(item.messageKey) === true,
                 commands,
               },
             ];
@@ -318,6 +327,10 @@ export function DayTimeline({
   const opening = openingScrollTime(from, to, displayed.map((row) => +row.start), Date.now(), view, zone);
   const focusParams = new URLSearchParams(returnTo.split("?")[1] ?? "");
   const focusKey = `${view}:${from}:${to}:${interval}:${shipLayout}:${focusParams.get("q")}:${focusParams.get("dataset")}:${JSON.stringify(selectedShips ? [...selectedShips].sort() : null)}`;
+  const focused = displayed.find((row) => row.message.sourceMessageId === focusParams.get("focusMessage") &&
+    +row.start === Date.parse(focusParams.get("focusAt") ?? "") &&
+    (!focusParams.get("focusFact") || row.event.sourceEventId === focusParams.get("focusFact") || row.sourceFactId === focusParams.get("focusFact")));
+  const highlighted = useCalendarFocus(calendarRoot, focused ? eventKey(focused) : undefined, ready);
   // Turnover disclosure/UTC edits are not schedule navigation and must not reset scrolling.
   useOpeningScroll(calendarRoot, focusKey, ready && view !== "month", (opening - axisStart) / (axisEnd - axisStart));
   if (side && resources.length === 0) {
@@ -399,6 +412,7 @@ export function DayTimeline({
                 className: [
                   row.event.isRevised ? "calendar-revised" : "",
                   row.point === true ? "calendar-point" : "",
+                  highlighted === eventKey(row) ? "calendar-catchup-focus" : "",
                 ]
                   .filter(Boolean)
                   .join(" "),

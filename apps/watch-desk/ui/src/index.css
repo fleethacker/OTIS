@@ -366,6 +366,21 @@ main:has(.calendar-page-week) { padding-top: 12px; }
   .calendar-page-week .timeline-hint::after { content: " Narrow view: scroll calendar horizontally, browse event details, or choose Expanded for more space."; }
 }
 
+/* Bounded review disclosure stays reachable without displacing the time grid. */
+.calendar-review { flex: none; margin-top: 8px; border-left: 3px solid var(--color-warning); background: var(--color-base-100); color: var(--color-base-content); }
+.calendar-review summary { cursor: pointer; padding: 8px 12px; font-size: 13px; font-weight: 650; }
+.calendar-review-content { max-height: 26vh; overflow: auto; padding: 0 12px 10px; font-size: 12px; overflow-wrap: anywhere; }
+.calendar-review-content p { margin: 6px 0; }
+.calendar-review-content ul { list-style: none; padding: 0; }
+.calendar-review-content li { padding: 8px 0; border-top: 1px solid var(--color-base-300); }
+.calendar-review-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
+.calendar-review-content small { color: var(--color-bc-muted); }
+.calendar-result-limit { padding: 8px 16px; font-size: 12px; color: var(--color-base-content); }
+.calendar-review-limit { font-weight: 600; }
+.calendar-review :is(summary, a, button):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+/* Never inherit RBC's white gutter in the dark theme. */
+.ship-calendar .rbc-time-gutter, .ship-calendar .rbc-time-header-gutter { background: var(--color-base-100); color: var(--color-base-content); }
+
 .extracted-axis { display: flex; justify-content: space-between; gap: 1rem; font-size: .75rem; overflow-wrap: anywhere; }
 .extracted-timeline { list-style: none; padding: 0; }
 .extracted-timeline li { padding-block: .75rem; border-bottom: 1px solid var(--color-base-300); }

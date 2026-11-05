@@ -4,16 +4,27 @@ import { fromJson, type JsonValue } from "@bufbuild/protobuf";
 import { ReadSchedulesResponseSchema } from "../gen/app/v1/source_data_pb";
 
 export type Dataset = "canonical" | "legacy";
+export type MessageSort = "relevance" | "issued_desc" | "issued_asc";
 export type SearchMode = "keyword" | "semantic" | "hybrid";
 export interface SourceRequest {
   dataset?: Dataset;
   query?: string;
   mode?: SearchMode;
+  sort?: MessageSort;
   key?: string;
   pageToken?: string;
   from?: string;
   to?: string;
-  filters?: { commandIds?: string[]; unassignedOnly?: boolean; noCommands?: boolean };
+  filters?: {
+    commandIds?: string[];
+    messageTypes?: string[];
+    originators?: string[];
+    classifications?: string[];
+    issuedFrom?: string;
+    issuedTo?: string;
+    unassignedOnly?: boolean;
+    noCommands?: boolean;
+  };
 }
 export interface TimelineItem {
   key: string;
@@ -36,7 +47,16 @@ export interface MessageHeader {
 export interface SourceMeta {
   messageHeaders?: Record<string, MessageHeader>;
   dataset?: Dataset;
-  nextPageToken?: string;
+  currentPageToken?: string;
+  previousPageToken?: string | null;
+  nextPageToken?: string | null;
+  page?: number;
+  pageSize?: number;
+  totalRecords?: number;
+  totalPages?: number | null;
+  totalRelation?: "eq" | "gte";
+  countScope?: "records" | "ranked_matches";
+  filterOptions?: { messageTypes: string[]; originators: string[] };
   executedMode?: string;
   windowLimited?: boolean;
   timelineItems?: TimelineItem[];

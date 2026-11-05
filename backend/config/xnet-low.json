@@ -1,7 +1,7 @@
 {
   "account_id": "demo-low-fictional",
   "arrival_network": "LOW",
-  "demo_command_ids": ["USS Meridian"],
+  "demo_command_ids": ["demo-meridian"],
   "host": "mailserver",
   "port": 143,
   "username": "low@parse-command.test",

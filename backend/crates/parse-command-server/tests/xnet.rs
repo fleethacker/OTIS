@@ -24,30 +24,30 @@ async fn published_high_aggregates_per_ship_and_clears_only_after_high_or_all_op
     let mut high = role_identity("viewer").unwrap(); high.owner = "high-user".into();
     preference(&store, &low.owner, DeskNetwork::Low).await;
     preference(&store, &high.owner, DeskNetwork::High).await;
-    projection(&custody, "one@r1", "HIGH", &["USS Meridian", "USS Example (fictional)"], json!("IMMEDIATE")).await;
-    projection(&custody, "two@r1", "HIGH", &["USS Meridian"], Value::Null).await;
-    projection(&custody, "low@r1", "LOW", &["USS Meridian"], json!("FLASH")).await;
+    projection(&custody, "one@r1", "HIGH", &["demo-meridian", "USS Example (fictional)"], json!("IMMEDIATE")).await;
+    projection(&custody, "two@r1", "HIGH", &["demo-meridian"], Value::Null).await;
+    projection(&custody, "low@r1", "LOW", &["demo-meridian"], json!("FLASH")).await;
     projection(&custody, "unassigned@r1", "HIGH", &[], json!("FLASH")).await;
     for key in ["one@r1", "two@r1", "low@r1", "unassigned@r1", "one@r1"] { xnet::register(&store, &custody, key).await.unwrap(); }
     store.refresh().await.unwrap(); custody.refresh().await.unwrap();
     let list = xnet::list(&store, &low.owner).await.unwrap();
     assert_eq!(list["items"].as_array().unwrap().len(), 2);
     assert!(!list.to_string().contains("Must never")); assert!(!list.to_string().contains("one@r1"));
-    let item = list["items"].as_array().unwrap().iter().find(|i| i["payload"]["shipId"] == "USS Meridian").unwrap();
+    let item = list["items"].as_array().unwrap().iter().find(|i| i["payload"]["shipId"] == "demo-meridian").unwrap();
     assert_eq!(item["payload"]["count"], 2);
     assert_eq!(item["payload"]["highestPrecedence"], "IMMEDIATE");
     assert_eq!(xnet::list(&store, &high.owner).await.unwrap()["items"], json!([]));
-    let request: Request = serde_json::from_value(json!({"shipId":"USS Meridian","id":item["id"],"version":item["version"]})).unwrap();
+    let request: Request = serde_json::from_value(json!({"shipId":"demo-meridian","id":item["id"],"version":item["version"]})).unwrap();
     xnet::acknowledge(&store, &low, &request).await.unwrap();
     let mut other = low.clone(); other.owner = "another-viewer".into();
     xnet::acknowledge(&store, &other, &request).await.unwrap();
     let details = xnet::message(&store, &custody, &high.owner, "one@r1").await.unwrap();
-    let meridian = details["items"].as_array().unwrap().iter().find(|i| i["shipId"] == "USS Meridian").unwrap();
+    let meridian = details["items"].as_array().unwrap().iter().find(|i| i["shipId"] == "demo-meridian").unwrap();
     assert_eq!(meridian["acknowledgements"].as_array().unwrap().len(), 2);
     assert_eq!(xnet::opened(&store, &custody, &low, "one@r1").await.unwrap()["copied"], false);
     xnet::opened(&store, &custody, &high, "one@r1").await.unwrap();
     let after = xnet::list(&store, &low.owner).await.unwrap();
-    let meridian = after["items"].as_array().unwrap().iter().find(|i| i["payload"]["shipId"] == "USS Meridian").unwrap();
+    let meridian = after["items"].as_array().unwrap().iter().find(|i| i["payload"]["shipId"] == "demo-meridian").unwrap();
     assert!(meridian["clearedAt"].is_null()); assert_eq!(meridian["payload"]["count"], 1);
     assert_eq!(meridian["payload"]["highestPrecedence"], "not stated");
     preference(&store, &high.owner, DeskNetwork::All).await;
@@ -56,7 +56,7 @@ async fn published_high_aggregates_per_ship_and_clears_only_after_high_or_all_op
     store.refresh().await.unwrap();
     let cleared = xnet::list(&store, &low.owner).await.unwrap();
     assert!(cleared["items"].as_array().unwrap().iter().all(|i| i["clearedAt"].is_string()));
-    projection(&custody, "three@r1", "HIGH", &["USS Meridian"], json!("ROUTINE")).await;
+    projection(&custody, "three@r1", "HIGH", &["demo-meridian"], json!("ROUTINE")).await;
     xnet::register(&store, &custody, "three@r1").await.unwrap(); store.refresh().await.unwrap();
     let history = xnet::list(&store, &low.owner).await.unwrap();
     assert_eq!(history["items"].as_array().unwrap().len(), 3);
@@ -75,8 +75,8 @@ async fn desk_filters_both_message_and_passage_queries_and_the_ordinary_bell() {
     use parse_command_server::notifications;
     let store = support::store().await;
     let custody = support::store().await;
-    projection(&custody, "high@r1", "HIGH", &["USS Meridian"], json!("IMMEDIATE")).await;
-    projection(&custody, "low@r1", "LOW", &["USS Meridian"], json!("ROUTINE")).await;
+    projection(&custody, "high@r1", "HIGH", &["demo-meridian"], json!("IMMEDIATE")).await;
+    projection(&custody, "low@r1", "LOW", &["demo-meridian"], json!("ROUTINE")).await;
     for (n, key) in [(1, "high@r1"), (2, "low@r1")] {
         let mut event = Record::new("publication_event", &n.to_string(), json!({"at":"2026-11-05T14:12:00Z"}));
         event.source = key.into(); event.category = "message".into(); event.owner = key.into(); event.state = "publication_succeeded".into(); event.order = n;
@@ -128,7 +128,7 @@ async fn publication_cursor_replay_and_viewer_ownership_are_enforced_at_http_bou
     let store = &app.private.state;
     let viewer = role_identity("viewer").unwrap();
     settings::ensure_demo_user(store, &viewer).await.unwrap();
-    projection(&app.custody, "source@r1", "HIGH", &["USS Meridian"], json!("PRIORITY")).await;
+    projection(&app.custody, "source@r1", "HIGH", &["demo-meridian"], json!("PRIORITY")).await;
     let mut event = Record::new("publication_event", "one", json!({"at":"2026-11-05T14:12:00Z"}));
     event.source = "source@r1".into(); event.category = "message".into(); event.state = "publication_succeeded".into(); event.order = 1;
     app.custody.put(&event, None).await.unwrap(); app.custody.refresh().await.unwrap();
@@ -139,7 +139,7 @@ async fn publication_cursor_replay_and_viewer_ownership_are_enforced_at_http_bou
     assert_eq!(initial, xnet::list(store, &viewer.owner).await.unwrap());
     let item = &initial["items"][0];
     let routes = parse_command_server::http::router(app.clone());
-    let body = json!({"shipId":"USS Meridian","id":item["id"],"version":item["version"]});
+    let body = json!({"shipId":"demo-meridian","id":item["id"],"version":item["version"]});
     for field in ["owner", "user", "username", "acknowledgedAt", "deskNetwork"] {
         let mut malicious = body.clone(); malicious[field] = json!("someone-else");
         let response = routes.clone().oneshot(HttpRequest::post("/api/v1/xnet/acknowledge").header("origin", "http://127.0.0.1:8080").header("content-type", "application/json").body(Body::from(malicious.to_string())).unwrap()).await.unwrap();
@@ -147,7 +147,7 @@ async fn publication_cursor_replay_and_viewer_ownership_are_enforced_at_http_bou
     }
     let response = routes.oneshot(HttpRequest::post("/api/v1/xnet/acknowledge").header("origin", "http://127.0.0.1:8080").header("content-type", "application/json").body(Body::from(body.to_string())).unwrap()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let row = store.get("xnet_ship", "USS Meridian").await.unwrap().unwrap();
+    let row = store.get("xnet_ship", "demo-meridian").await.unwrap().unwrap();
     let acks = row.record.payload["episodes"][0]["acknowledgements"].as_object().unwrap();
     assert_eq!(acks.len(), 1); assert!(acks.contains_key(&viewer.owner));
     support::cleanup(store).await;

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSettings } from "./settings-data";
 import { readJson } from "./source-data";
 import { sessionFetch } from "./session-access";
+import { commandName, useCommands } from "./command-roster";
 
 export type DeskNetwork = "LOW" | "HIGH" | "ALL";
 export interface XnetNotice {
@@ -66,7 +67,13 @@ export function xnetTime(value: string): string {
   if (!Number.isFinite(date.getTime())) return "time unavailable";
   return date.toISOString().slice(11, 16).replace(":", "") + "Z";
 }
-export function xnetTitle(notice: XnetNotice): string {
-  const { shipId, count, highestPrecedence, firstWaitingAt } = notice.payload;
-  return `Traffic waiting on HIGH (fictional) for ${shipId} · ${count} ${count === 1 ? "message" : "messages"} · ${highestPrecedence} · since ${xnetTime(firstWaitingAt)}`;
+/** Roster display name for a ship ID when the app's command list knows it, else the raw ID. */
+export function useShipName(): (shipId: string) => string {
+  const roster = useCommands();
+  const commands = roster.isError ? [] : roster.data?.commands ?? [];
+  return (shipId) => commandName(`unit:${shipId}`, commands);
+}
+export function xnetTitle(notice: XnetNotice, shipName: string = notice.payload.shipId): string {
+  const { count, highestPrecedence, firstWaitingAt } = notice.payload;
+  return `Traffic waiting on HIGH (fictional) for ${shipName} · ${count} ${count === 1 ? "message" : "messages"} · ${highestPrecedence} · since ${xnetTime(firstWaitingAt)}`;
 }

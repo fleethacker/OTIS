@@ -29,7 +29,7 @@ def messages(items):
         message = BytesParser(policy=policy.SMTP).parsebytes((FIXTURES / filename).read_bytes())
         if message["To"] != RECIPIENTS[network] or message["From"] != "fictional-desk@parse-command.test":
             raise ValueError("fictional_fixture_destination_mismatch")
-        if message["X-Demo-Command-IDs"] != "USS Meridian" or "UNCLASSIFIED" not in message.get_content():
+        if message["X-Demo-Command-IDs"] != "demo-meridian" or "UNCLASSIFIED" not in message.get_content():
             raise ValueError("fictional_fixture_metadata_mismatch")
         result.append((network, message))
     return result

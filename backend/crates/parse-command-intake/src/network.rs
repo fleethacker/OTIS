@@ -85,9 +85,9 @@ mod tests {
     #[test]
     fn subject_body_and_unapproved_commands_cannot_supply_metadata() {
         let limits = MimeLimits { max_depth: 8, max_parts: 64, max_header_bytes: 4096, max_headers: 64, max_decoded_bytes: 4096 };
-        let raw = b"Subject: FLASH\r\nX-Demo-Command-IDs: USS Meridian, Not approved\r\n\r\nMSGID/FLASH//\nMMHS-Primary-Precedence: FLASH";
-        let result = envelope(raw, limits, &["USS Meridian".into()]).unwrap();
+        let raw = b"Subject: FLASH\r\nX-Demo-Command-IDs: demo-meridian, Not approved\r\n\r\nMSGID/FLASH//\nMMHS-Primary-Precedence: FLASH";
+        let result = envelope(raw, limits, &["demo-meridian".into()]).unwrap();
         assert_eq!(result.precedence, None);
-        assert_eq!(result.command_ids, ["USS Meridian"]);
+        assert_eq!(result.command_ids, ["demo-meridian"]);
     }
 }

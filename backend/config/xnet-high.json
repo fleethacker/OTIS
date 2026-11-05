@@ -1,7 +1,7 @@
 {
   "account_id": "demo-high-fictional",
   "arrival_network": "HIGH",
-  "demo_command_ids": ["USS Meridian"],
+  "demo_command_ids": ["demo-meridian"],
   "host": "mailserver",
   "port": 143,
   "username": "high@parse-command.test",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAcknowledgeXnet, useDeskNetwork, useXnetNotices, xnetRequest, xnetTime, xnetTitle, type XnetMessageNotice, type XnetNotice } from "./xnet-data";
+import { useAcknowledgeXnet, useDeskNetwork, useShipName, useXnetNotices, xnetRequest, xnetTime, xnetTitle, type XnetMessageNotice, type XnetNotice } from "./xnet-data";
 import { AppButton, Notice } from "./ui";
 import "./xnet.css";
 
@@ -9,24 +9,28 @@ export function DeskNetworkLabel() {
   return <p className="xnet-view-note">Desk: {desk === "ALL" ? "ALL networks (fictional)" : `${desk} (fictional)`}. Demo view filter only — not access control.</p>;
 }
 export function XnetNoticeList({ items }: { items: XnetNotice[] }) {
+  return items.length === 0 ? null : <XnetNoticeItems items={items} />;
+}
+function XnetNoticeItems({ items }: { items: XnetNotice[] }) {
   const acknowledge = useAcknowledgeXnet();
-  if (items.length === 0) return null;
+  const shipName = useShipName();
   return (
     <div className="xnet-notices">
       {acknowledge.isError && <Notice tone="error" role="alert">Could not acknowledge notice. Try Acknowledge again.</Notice>}
       <ul aria-label="Cross-network traffic notices">
         {items.map((notice) => {
+          const ship = shipName(notice.payload.shipId);
           const prominent = ["FLASH", "IMMEDIATE"].includes(notice.payload.highestPrecedence);
           return (
             <li key={notice.id} className={`xnet-notice ${prominent && !notice.clearedAt ? "xnet-prominent" : "xnet-quiet"}`}>
-              <strong>{notice.clearedAt ? `HIGH (fictional) traffic notice for ${notice.payload.shipId} · ${notice.payload.count} messages · ${notice.payload.highestPrecedence}` : xnetTitle(notice)}</strong>
+              <strong>{notice.clearedAt ? `HIGH (fictional) traffic notice for ${ship} · ${notice.payload.count} messages · ${notice.payload.highestPrecedence}` : xnetTitle(notice, ship)}</strong>
               <span title={notice.payload.latestWaitingAt}>Latest waiting {xnetTime(notice.payload.latestWaitingAt)}</span>
               {notice.clearedAt ? (
                 <span>cleared <time dateTime={notice.clearedAt} title={notice.clearedAt}>{xnetTime(notice.clearedAt)}</time></span>
               ) : (
                 <>
                   {notice.acknowledgedAt && <span>Acknowledged by you at {xnetTime(notice.acknowledgedAt)}{notice.unread ? " · new traffic since acknowledgement" : ""}</span>}
-                  {notice.unread && <AppButton size="sm" disabled={acknowledge.isPending} aria-label={`Acknowledge traffic notice for ${notice.payload.shipId}`} onClick={() => acknowledge.mutate(notice)}>Acknowledge</AppButton>}
+                  {notice.unread && <AppButton size="sm" disabled={acknowledge.isPending} aria-label={`Acknowledge traffic notice for ${ship}`} onClick={() => acknowledge.mutate(notice)}>Acknowledge</AppButton>}
                 </>
               )}
             </li>
@@ -87,10 +91,16 @@ export function XnetMessageStatus({ messageKey, networks = [] }: { messageKey: s
       <p>Arrival: {networks.length ? networks.map((n) => `${n} (fictional)`).join(" · ") : "network not recorded"}</p>
       {failure && <Notice tone="error" role="alert">Could not record this message as copied. <AppButton size="sm" onClick={() => setRetry((v) => v + 1)}>Retry copy record</AppButton></Notice>}
       {eligible && notices.isError && <Notice tone="error" role="alert">Traffic notice status unavailable. <AppButton size="sm" onClick={() => void notices.refetch()}>Retry notice status</AppButton></Notice>}
-      {eligible && notices.data?.items.map((notice) => <p key={notice.shipId}>
-        Notice sent to LOW desk at {xnetTime(notice.sentAt)} for {notice.shipId} · {notice.acknowledgements.length ? notice.acknowledgements.map((ack) => `acknowledged by ${ack.username} at ${xnetTime(ack.at)}${ack.version < notice.version ? " (before latest traffic)" : ""}`).join(" · ") : "not yet acknowledged"}
-        {notice.clearedAt && ` · cleared ${xnetTime(notice.clearedAt)}`}
-      </p>)}
+      {eligible && notices.data?.items.map((notice) => <XnetMessageNoticeLine key={notice.shipId} notice={notice} />)}
     </div>
+  );
+}
+function XnetMessageNoticeLine({ notice }: { notice: XnetMessageNotice }) {
+  const shipName = useShipName();
+  return (
+    <p>
+      Notice sent to LOW desk at {xnetTime(notice.sentAt)} for {shipName(notice.shipId)} · {notice.acknowledgements.length ? notice.acknowledgements.map((ack) => `acknowledged by ${ack.username} at ${xnetTime(ack.at)}${ack.version < notice.version ? " (before latest traffic)" : ""}`).join(" · ") : "not yet acknowledged"}
+      {notice.clearedAt && ` · cleared ${xnetTime(notice.clearedAt)}`}
+    </p>
   );
 }

@@ -24,7 +24,9 @@ in force. Direct source/evidence reads are not a network security boundary.
 - A published HIGH message with explicit approved command IDs adds one waiting
   member to each applicable ship's open notice. Subsequent messages aggregate;
   retries/republication do not increment the count. No IDs means no notice, not
-  “all ships”. The supplied example uses USS Meridian.
+  “all ships”. The supplied example uses the application's fictional roster ID
+  `demo-meridian` (display name “USS Meridian”); the UI shows the roster display
+  name when the ID is in the command list and falls back to the raw ID otherwise.
 - The strict [payload schema](../schemas/xnet-notice.schema.json) allows **only**
   `shipId`, `count`, `highestPrecedence`, `firstWaitingAt`, `latestWaitingAt`.
   It contains no source message key, subject, sender/originator, body, source sets,
@@ -68,8 +70,8 @@ among currently waiting members is shown; unknown members do not invent a rank.
 This is not a complete MMHS implementation.
 
 At this branch's starting revision, intake passed an empty command list to the
-parser, and `backend/config/watchdesk-fixtures/` did not exist. The new examples
-reuse the USS Meridian styling from the application's fictional seed. The explicit
+parser. The new examples use the command ID `demo-meridian` from
+`backend/config/watchdesk-demo.json` (display name USS Meridian). The explicit
 **demo-only** `X-Demo-Command-IDs` email header supplies host command context,
 restricted by each mailbox's `demo_command_ids` allowlist. It does not infer
 applicability from participants or narrative, and is not an operational roster

@@ -128,8 +128,8 @@ mod tests {
     #[test]
     fn payload_has_exactly_the_schema_allowlist_and_rejects_any_other_field() {
         let mut state = ShipState::default();
-        state.add("USS Meridian", "hidden-message-key", waiting(None), "2026-11-05T14:13:00Z").unwrap();
-        let payload = serde_json::to_value(state.episodes[0].payload("USS Meridian")).unwrap();
+        state.add("demo-meridian", "hidden-message-key", waiting(None), "2026-11-05T14:13:00Z").unwrap();
+        let payload = serde_json::to_value(state.episodes[0].payload("demo-meridian")).unwrap();
         let schema: Value = serde_json::from_str(include_str!("../../../../../docs/schemas/xnet-notice.schema.json")).unwrap();
         let fields = payload.as_object().unwrap();
         assert_eq!(fields.len(), schema["properties"].as_object().unwrap().len());
@@ -144,25 +144,25 @@ mod tests {
     #[test]
     fn aggregation_replay_precedence_acknowledgements_and_clearing() {
         let mut state = ShipState::default();
-        state.add("USS Meridian", "one", waiting(None), "sent").unwrap();
-        state.add("USS Meridian", "two", waiting(Some(Precedence::Immediate)), "later").unwrap();
-        state.add("USS Meridian", "one", waiting(Some(Precedence::Flash)), "replay").unwrap();
+        state.add("demo-meridian", "one", waiting(None), "sent").unwrap();
+        state.add("demo-meridian", "two", waiting(Some(Precedence::Immediate)), "later").unwrap();
+        state.add("demo-meridian", "one", waiting(Some(Precedence::Flash)), "replay").unwrap();
         assert_eq!(state.episodes.len(), 1);
         let episode = &mut state.episodes[0];
-        assert_eq!(episode.payload("USS Meridian").count, 2);
-        assert_eq!(episode.payload("USS Meridian").highest_precedence, HighestPrecedence::Stated(Precedence::Immediate));
+        assert_eq!(episode.payload("demo-meridian").count, 2);
+        assert_eq!(episode.payload("demo-meridian").highest_precedence, HighestPrecedence::Stated(Precedence::Immediate));
         episode.acknowledge("viewer-one", "One", "1415", 2).unwrap();
         episode.acknowledge("viewer-two", "Two", "1416", 1).unwrap();
         assert_eq!(episode.acknowledgements["viewer-one"].at, "1415");
         assert_eq!(episode.acknowledgements["viewer-two"].version, 1);
         state.copied("one", "1420");
         assert_eq!(state.episodes[0].cleared_at, None);
-        assert_eq!(state.episodes[0].payload("USS Meridian").count, 1);
+        assert_eq!(state.episodes[0].payload("demo-meridian").count, 1);
         state.copied("two", "1430");
         assert_eq!(state.episodes[0].cleared_at.as_deref(), Some("1430"));
-        state.add("USS Meridian", "two", waiting(None), "replay").unwrap();
+        state.add("demo-meridian", "two", waiting(None), "replay").unwrap();
         assert_eq!(state.episodes.len(), 1);
-        state.add("USS Meridian", "three", waiting(None), "1440").unwrap();
+        state.add("demo-meridian", "three", waiting(None), "1440").unwrap();
         assert_eq!(state.episodes.len(), 2);
         assert!(state.episodes[1].acknowledgements.is_empty());
     }

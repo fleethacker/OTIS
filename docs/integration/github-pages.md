@@ -1,11 +1,13 @@
-# Judge briefing on GitHub Pages
+# OTIS judge briefing on GitHub Pages
 
-The animated, single-page briefing lives in `site/index.html`. It presents the
-mission problem and solution, a synthetic message-to-timeline illustration,
+The animated, single-page OTIS briefing lives in `site/index.html`. OTIS is the
+**Operational Tasking Integration System**, with the motto **Keeping the Watch**.
+The page presents the mission problem and solution, a synthetic message-to-timeline illustration,
 the five weighted judging criteria, and supporting requirements and evidence.
-CSS and JavaScript are inline: no build, API, CDN, or dependency install is needed.
-It is separate from Watch Desk and contains no source traffic, manual-derived
-corpus, credentials, databases, model assets, or application backend.
+CSS and JavaScript are inline; the logo and favicon are local files in
+`site/assets/`. No build, API, CDN, or dependency install is needed.
+The briefing is separate from the OTIS application and contains no source traffic,
+manual-derived corpus, credentials, databases, model assets, or application backend.
 
 ## Preview locally
 
@@ -21,8 +23,8 @@ reduced motion, and printing all five criteria.
 
 ## Publish after review
 
-This branch prepares the files without enabling Pages. The workflow deploys only
-from `main`; pushing a feature branch or opening a PR does not publish the site.
+The workflow deploys only from `main`; pushing a feature branch or opening a PR
+does not publish the site. For initial setup or configuration changes:
 
 1. Decide the audience and verify Pages availability. A private organization
    repository requires GitHub Team or Enterprise Cloud. Its Pages site is public
@@ -36,7 +38,7 @@ from `main`; pushing a feature branch or opening a PR does not publish the site.
    **Deploy judge briefing to Pages** manually on `main` in Actions.
 5. Confirm the deployment URL in the workflow's `github-pages` environment.
    Without a custom domain, the expected project URL is
-   `https://fleethacker.github.io/Parse-Command/`.
+   `https://fleethacker.github.io/OTIS/`.
 
 The workflow uploads **only `site/`**, pins actions to immutable revisions, and
 grants the deployment job `contents: read`, `pages: write`, and `id-token: write`.
@@ -50,9 +52,21 @@ and distinguish documented implementation from unmeasured operational benefit.
 Keep the source references and coverage statements current. Repository paths in
 the evidence dialog identify records; those documents are not published copies.
 
+The page uses the approved owner-revised emblem, full product name, motto, and
+navy/brass identity. Parse Command remains the team credit. Keep
+`site/assets/otis-logo.png` byte-for-byte in sync with
+`apps/watch-desk/docs/branding/otis/otis-patch-master.png`, and
+`site/assets/otis-favicon.png` with
+`apps/watch-desk/ui/src/assets/otis/otis-favicon.png`. These copies are necessary
+because Pages publishes only `site/`. See the
+[artwork guide](../../apps/watch-desk/docs/branding/otis/README.md) for the source
+of truth. Keep the page title, description, social preview, and canonical URL
+consistent with the OTIS name and deployed URL.
+
 Before merging, check motion and pause controls, source/evidence dialogs, the
 judging cycle, guided scrolling, narrow-screen layout, and print output. Confirm
-assets and fragment navigation work under the `/Parse-Command/` project subpath.
+assets and fragment navigation work under the `/OTIS/` project subpath, including
+the logo and browser favicon. Verify reduced motion and all five printed criteria.
 
 ## GitHub references
 

@@ -12,7 +12,7 @@ back to the source.
 Built by the **Parse Command** team at **FleetHacker2026**, a **Task Force Hopper
 Hackathon Event**.
 
-[View the briefing](https://fleethacker.github.io/Parse-Command/) ·
+[View the briefing](https://fleethacker.github.io/OTIS/) ·
 [Documentation](docs/README.md) · [Architecture and operations](docs/integration/combined-stack.md)
 
 ## Capabilities

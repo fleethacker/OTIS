@@ -215,7 +215,7 @@ export function NotificationPanel({ identity }: { identity: string }) {
           )}
           <div className="notification-scroll">
             {!detail && <XnetNoticeList items={xnetItems} />}
-            {network !== "HIGH" && xnet.isError && <p role="alert">Cross-network notices unavailable. <button className="btn btn-sm" onClick={() => void xnet.refetch()}>Retry notices</button></p>}
+            {network !== "HIGH" && xnet.isError && <Notice tone="error" role="alert">Cross-network notices unavailable. <AppButton size="sm" onClick={() => void xnet.refetch()}>Retry notices</AppButton></Notice>}
             {feed.isError ? (
               <Notice role="alert" className="notification-empty" tone="error">
                 Unable to load notifications{" "}

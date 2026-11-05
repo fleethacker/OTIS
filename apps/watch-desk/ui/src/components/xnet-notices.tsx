@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAcknowledgeXnet, useDeskNetwork, useXnetNotices, xnetRequest, xnetTime, xnetTitle, type XnetMessageNotice, type XnetNotice } from "./xnet-data";
+import { AppButton, Notice } from "./ui";
 import "./xnet.css";
 
 export function DeskNetworkLabel() {
@@ -12,7 +13,7 @@ export function XnetNoticeList({ items }: { items: XnetNotice[] }) {
   if (items.length === 0) return null;
   return (
     <div className="xnet-notices">
-      {acknowledge.isError && <p role="alert">Could not acknowledge notice. Try Acknowledge again.</p>}
+      {acknowledge.isError && <Notice tone="error" role="alert">Could not acknowledge notice. Try Acknowledge again.</Notice>}
       <ul aria-label="Cross-network traffic notices">
         {items.map((notice) => {
           const prominent = ["FLASH", "IMMEDIATE"].includes(notice.payload.highestPrecedence);
@@ -25,7 +26,7 @@ export function XnetNoticeList({ items }: { items: XnetNotice[] }) {
               ) : (
                 <>
                   {notice.acknowledgedAt && <span>Acknowledged by you at {xnetTime(notice.acknowledgedAt)}{notice.unread ? " · new traffic since acknowledgement" : ""}</span>}
-                  {notice.unread && <button type="button" className="btn btn-sm" disabled={acknowledge.isPending} aria-label={`Acknowledge traffic notice for ${notice.payload.shipId}`} onClick={() => acknowledge.mutate(notice)}>Acknowledge</button>}
+                  {notice.unread && <AppButton size="sm" disabled={acknowledge.isPending} aria-label={`Acknowledge traffic notice for ${notice.payload.shipId}`} onClick={() => acknowledge.mutate(notice)}>Acknowledge</AppButton>}
                 </>
               )}
             </li>
@@ -43,8 +44,8 @@ export function XnetBanner() {
     <section className="xnet-banner" aria-label="Fictional desk network">
       <DeskNetworkLabel />
       {desk !== "HIGH" && (feed.isError ? (
-        <p role="alert">Cross-network notices unavailable. <button type="button" className="btn btn-sm" onClick={() => void feed.refetch()}>Retry notices</button></p>
-      ) : feed.isPending ? <p role="status">Loading cross-network notices…</p> : (
+        <Notice tone="error" role="alert">Cross-network notices unavailable. <AppButton size="sm" onClick={() => void feed.refetch()}>Retry notices</AppButton></Notice>
+      ) : feed.isPending ? <Notice role="status">Loading cross-network notices…</Notice> : (
         <>
           <XnetNoticeList items={items.filter((n) => !n.clearedAt)} />
           {items.some((n) => n.clearedAt) && <details><summary>Cleared traffic notice history</summary><XnetNoticeList items={items.filter((n) => n.clearedAt !== null)} /></details>}
@@ -84,8 +85,8 @@ export function XnetMessageStatus({ messageKey, networks = [] }: { messageKey: s
   return (
     <div className="xnet-message-status">
       <p>Arrival: {networks.length ? networks.map((n) => `${n} (fictional)`).join(" · ") : "network not recorded"}</p>
-      {failure && <p role="alert">Could not record this message as copied. <button type="button" className="btn btn-sm" onClick={() => setRetry((v) => v + 1)}>Retry copy record</button></p>}
-      {eligible && notices.isError && <p role="alert">Traffic notice status unavailable. <button type="button" className="btn btn-sm" onClick={() => void notices.refetch()}>Retry notice status</button></p>}
+      {failure && <Notice tone="error" role="alert">Could not record this message as copied. <AppButton size="sm" onClick={() => setRetry((v) => v + 1)}>Retry copy record</AppButton></Notice>}
+      {eligible && notices.isError && <Notice tone="error" role="alert">Traffic notice status unavailable. <AppButton size="sm" onClick={() => void notices.refetch()}>Retry notice status</AppButton></Notice>}
       {eligible && notices.data?.items.map((notice) => <p key={notice.shipId}>
         Notice sent to LOW desk at {xnetTime(notice.sentAt)} for {notice.shipId} · {notice.acknowledgements.length ? notice.acknowledgements.map((ack) => `acknowledged by ${ack.username} at ${xnetTime(ack.at)}${ack.version < notice.version ? " (before latest traffic)" : ""}`).join(" · ") : "not yet acknowledged"}
         {notice.clearedAt && ` · cleared ${xnetTime(notice.clearedAt)}`}

@@ -37,9 +37,18 @@ pub struct Snapshot {
     pub updated_at: Option<String>,
     pub dismissed: Vec<String>,
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ManualChange {
+    pub field: Field,
+    pub values: Vec<String>,
+    #[serde(default)]
+    pub confirm_hide_unassigned: bool,
+}
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct Request {
+    pub changes: Option<Vec<ManualChange>>,
     pub include_suggestions: bool,
     pub field: Option<Field>,
     pub values: Option<Vec<String>>,
@@ -123,7 +132,18 @@ pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Met
     if actor.is_empty() { return Err(Error::new("unauthenticated", "Missing actor")); }
     let tx = db.transaction()?;
     let mut snapshot = load(&tx, demo)?;
-    let (field, mut selected, sources) = if let Some(id) = &request.suggestion_id {
+    let mut edits = Vec::new();
+    if let Some(changes) = request.changes {
+        if request.field.is_some() || request.values.is_some() || request.suggestion_id.is_some() || request.dismiss || request.confirm_hide_unassigned {
+            return Err(Error::invalid("Batch changes cannot be combined with another update action"));
+        }
+        if changes.is_empty() || changes.len() > 6 { return Err(Error::invalid("Supply one to six changed fields")); }
+        let mut seen = std::collections::BTreeSet::new();
+        for change in changes {
+            if !seen.insert(change.field) { return Err(Error::invalid("Duplicate context field")); }
+            edits.push((change.field, change.values, Vec::new(), change.confirm_hide_unassigned));
+        }
+    } else if let Some(id) = &request.suggestion_id {
         if request.field.is_some() || request.values.is_some() || request.confirm_hide_unassigned || id.len() > 128 {
             return Err(Error::invalid("Suggestions accept only suggestionId and optional dismiss"));
         }
@@ -137,13 +157,17 @@ pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Met
             if snapshot.dismissed.len() >= 200 { return Err(Error::config("Dismissed-group limit reached")); }
             snapshot.dismissed.push(id.clone());
         }
-        (Field::OperationName, suggestion.values.clone(), suggestion.sources.clone())
+        if !request.dismiss {
+            edits.push((Field::OperationName, suggestion.values.clone(), suggestion.sources.clone(), false));
+        }
     } else {
         if request.dismiss { return Err(Error::invalid("Dismiss requires a suggestion ID")); }
-        (request.field.ok_or_else(|| Error::invalid("Missing field"))?, request.values.clone().ok_or_else(|| Error::invalid("Missing values"))?, Vec::new())
-    };
-    if !request.dismiss {
-        values(field, &selected, request.confirm_hide_unassigned, demo)?;
+        edits.push((request.field.ok_or_else(|| Error::invalid("Missing field"))?, request.values.ok_or_else(|| Error::invalid("Missing values"))?, Vec::new(), request.confirm_hide_unassigned));
+    }
+    // All validation and writes share this transaction. A rejected field saves nothing.
+    let recorded_at = now();
+    for (field, mut selected, sources, confirm) in edits {
+        values(field, &selected, confirm, demo)?;
         if matches!(field, Field::DefaultShips | Field::TurnoverUtc) { selected.sort(); selected.dedup(); }
         match field {
             Field::OwnShipId => snapshot.context.own_ship_id = selected[0].clone(),
@@ -154,12 +178,12 @@ pub fn update(db: &mut Connection, request: Request, actor: &str, metadata: &Met
             Field::TurnoverUtc => snapshot.context.turnover_utc = selected,
         }
         snapshot.confirmations.insert(field, Confirmation {
-            actor: actor.into(), recorded_at: now(), sources,
-            confirmed_hide_unassigned: request.confirm_hide_unassigned,
+            actor: actor.into(), recorded_at: recorded_at.clone(), sources,
+            confirmed_hide_unassigned: confirm,
         });
     }
     snapshot.updated_by = Some(actor.into());
-    snapshot.updated_at = Some(now());
+    snapshot.updated_at = Some(recorded_at);
     let document = serde_json::to_string(&snapshot).map_err(|_| Error::unavailable())?;
     if document.len() > 65536 { return Err(Error::config("Context storage bound reached")); }
     let response = visible(snapshot, demo)?;
@@ -182,7 +206,7 @@ where F: FnOnce() -> Result<Metadata> + Send + 'static {
 pub async fn handle(State(app): State<Arc<App>>, Path(operation): Path<String>, headers: HeaderMap, Json(request): Json<Request>) -> Result<Json<Value>> {
     let identity = if operation == "update" { require_admin(&app, &headers)? } else { app.headers_identity(&headers)? };
     if operation != "get" && operation != "update" { return Err(Error::new("not_found", "Unknown watch-context operation")); }
-    if operation == "get" && (request.field.is_some() || request.values.is_some() || request.suggestion_id.is_some() || request.dismiss || request.confirm_hide_unassigned) {
+    if operation == "get" && (request.changes.is_some() || request.field.is_some() || request.values.is_some() || request.suggestion_id.is_some() || request.dismiss || request.confirm_hide_unassigned) {
         return Err(Error::invalid("Context get accepts only includeSuggestions"));
     }
     let needs_metadata = request.include_suggestions || request.suggestion_id.is_some();
@@ -269,6 +293,28 @@ mod tests {
         assert!(update(&mut db, manual(Field::OperationName, &["FICTIONAL"], true), "server-admin", &metadata).is_err());
         assert!(update(&mut db, manual(Field::TurnoverUtc, &["2400Z"], false), "server-admin", &metadata).is_err());
         assert!(serde_json::from_str::<Request>(r#"{"field":"operationName","values":["FICTIONAL"],"actor":"spoof"}"#).is_err());
+    }
+    #[test]
+    fn batch_is_atomic_bounded_and_preserves_untouched_confirmations() {
+        let mut db = Connection::open_in_memory().unwrap(); initialize(&db).unwrap();
+        let metadata = Metadata::default();
+        update(&mut db, manual(Field::OperationName, &["EXISTING"], false), "first-admin", &metadata).unwrap();
+        let batch = |text: &str| serde_json::from_str::<Request>(text).unwrap();
+        let saved = update(&mut db, batch(r#"{"changes":[{"field":"shipName","values":["DISPLAY"]},{"field":"groupCommand","values":["GROUP"]}]}"#), "second-admin", &metadata).unwrap();
+        assert_eq!(saved.context.ship_name, "DISPLAY");
+        assert_eq!(saved.context.group_command, "GROUP");
+        assert_eq!(saved.confirmations[&Field::OperationName].actor, "first-admin");
+        assert_eq!(saved.confirmations[&Field::ShipName].recorded_at, saved.confirmations[&Field::GroupCommand].recorded_at);
+        for invalid in [
+            r#"{"changes":[]}"#,
+            r#"{"changes":[{"field":"shipName","values":["NO"]},{"field":"shipName","values":["DUPLICATE"]}]}"#,
+            r#"{"changes":[{"field":"shipName","values":["NO"]},{"field":"turnoverUtc","values":["2400Z"]}]}"#,
+            r#"{"changes":[{"field":"shipName","values":["NO"]},{"field":"defaultShips","values":[]}]}"#,
+            r#"{"changes":[{"field":"shipName","values":["NO"]}],"suggestionId":"forged"}"#,
+        ] { assert!(update(&mut db, batch(invalid), "server-admin", &metadata).is_err()); }
+        assert_eq!(read(&db).unwrap().context.ship_name, "DISPLAY");
+        assert_eq!(read(&db).unwrap().updated_by.as_deref(), Some("second-admin"));
+        assert!(serde_json::from_str::<Request>(r#"{"changes":[{"field":"shipName","values":["NO"],"actor":"forged"}]}"#).is_err());
     }
     #[test]
     fn suggestion_ids_recompute_values_and_citations_and_dismiss_the_group() {

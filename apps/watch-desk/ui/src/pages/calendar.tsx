@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useCalendarParams } from "../components/calendar-params";
 import { useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
@@ -22,7 +22,7 @@ export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0
 export default function Calendar() {
   const { zone } = useDisplayTime();
   const roster = useCommands();
-  const [params, setParams] = useSearchParams();
+  const [params, changeParams] = useCalendarParams();
   const today = civilDate(new Date(), zone);
   const [landingDate] = useState(today);
   const date = utcDate(params.get("date"), landingDate);
@@ -40,26 +40,32 @@ export default function Calendar() {
   const debounced = useDebounced(query);
   const ships = readShips(params.get("ships"));
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
+  const filters = selectedShipFilters(ships);
+  const noShips = ships !== undefined && (filters.noCommands === true ||
+    (!!roster.data && !roster.isError && ![...ships].some((key) => key === "unassigned:" || roster.data.commands.some((c) => key === `unit:${c.id}`))));
   const result = useSource("timeline", {
-    dataset,
-    query: debounced,
-    mode: "hybrid",
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
-    filters: selectedShipFilters(ships),
-  });
+    dataset, query: debounced, mode: "hybrid",
+    from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
+  }, !noShips);
   const messages = result.data?.messages ?? [];
-  const refreshing = result.isPending || result.isFetching || query !== debounced;
+  const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
   canonical.set("view", view);
   canonical.set("interval", String(interval));
   canonical.delete("hours");
   const returnTo = `/calendar?${canonical.toString()}`;
+  function setParams(change: (next: URLSearchParams) => void, replace = false) {
+    changeParams((next) => {
+      if (!next.has("date")) next.set("date", date);
+      if (!next.has("view")) next.set("view", view);
+      if (!next.has("interval")) next.set("interval", String(interval));
+      next.delete("hours");
+      change(next);
+    }, replace);
+  }
   function update(key: string, value: string) {
-    const next = new URLSearchParams(canonical);
-    next.set(key, value);
-    setParams(next, { replace: key === "q" });
+    setParams((next) => next.set(key, value), key === "q");
   }
   function move(direction: number) {
     update(
@@ -80,12 +86,10 @@ export default function Calendar() {
         pending={roster.isPending}
         error={roster.isError ? roster.error.message : undefined}
         retry={() => { void roster.refetch(); }}
-        onChange={(selected) => {
-          const next = new URLSearchParams(canonical);
+        onChange={(selected) => setParams((next) => {
           if (selected === undefined) next.delete("ships");
           else next.set("ships", JSON.stringify([...selected].sort()));
-          setParams(next);
-        }}
+        })}
       />
       <div className="calendar-main">
       {dataset === "canonical" && <WatchTurnoverPanel
@@ -154,8 +158,12 @@ export default function Calendar() {
           />
         </label>
       </section>
+      {!noShips && query.trim() && !refreshing && !result.isError && result.data && <p className="calendar-search-status">
+        Calendar filtered by “{query}” · Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
+        {result.data.meta.executedMode === "hybrid" && " Ranked results may include related messages without a literal word match."}
+      </p>}
       {refreshing && <p role="status">Loading schedule…</p>}
-      {result.isError && (
+      {!noShips && result.isError && (
         <div className="alert" role="alert">
           Calendar could not be loaded. {result.error.message}
           <button className="btn btn-sm" onClick={() => void result.refetch()}>
@@ -186,7 +194,7 @@ export default function Calendar() {
             {date === today && <span className="revision">Today</span>}
           </h2>
         </div>
-        <DayTimeline
+        {noShips ? <p className="calendar-result-limit">No ships selected. Choose a ship or Unassigned.</p> : <DayTimeline
           commands={roster.isError ? [] : roster.data?.commands}
           shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
           selectedShips={ships}
@@ -207,27 +215,24 @@ export default function Calendar() {
           expanded={params.get("layout") === "expanded"}
           startHour={0}
           endHour={24}
-          onDay={(chosen) => {
-            const next = new URLSearchParams(canonical);
+          onDay={(chosen) => setParams((next) => {
             next.set("date", chosen);
             next.set("view", "day");
-            setParams(next);
-          }}
-        />
+          })}
+        />}
       </section>
-      {dataset === "canonical" && result.data && !refreshing && !result.isError && (
+      {dataset === "canonical" && (noShips || (result.data && !refreshing && !result.isError)) && (
         <CalendarReview
-          items={result.data.meta.reviewItems}
+          items={noShips ? undefined : result.data?.meta.reviewItems}
+          notQueried={noShips}
           commands={roster.isError ? [] : roster.data?.commands}
-          limited={result.data.meta.windowLimited === true}
+          limited={!noShips && result.data?.meta.windowLimited === true}
           filtered={ships !== undefined || query.trim() !== ""}
           returnTo={returnTo}
-          onShowAll={() => {
-            const next = new URLSearchParams(canonical);
+          onShowAll={() => setParams((next) => {
             next.delete("ships");
             next.delete("q");
-            setParams(next);
-          }}
+          })}
         />
       )}
       </div>

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { messageHref } from "./calendar-links";
 import type { TimelineItem } from "./source-data";
 import { CommandChips, type Command } from "./command-roster";
+import { reviewTime } from "./review-time";
 
 /** A bounded source projection, never a count of all unresolved tasking. */
 export function CalendarReview({
@@ -9,6 +10,7 @@ export function CalendarReview({
   commands = [],
   limited,
   filtered,
+  notQueried = false,
   returnTo,
   onShowAll,
 }: {
@@ -16,17 +18,18 @@ export function CalendarReview({
   commands?: Command[];
   limited: boolean;
   filtered: boolean;
+  notQueried?: boolean;
   returnTo: string;
   onShowAll: () => void;
 }) {
   return (
     <section className="calendar-review" aria-label="Needs review">
       <details open>
-        <summary>Needs review · {items === undefined ? "unavailable" : `${items.length} returned`}</summary>
+        <summary>Needs review · {notQueried ? "not queried" : items === undefined ? "unavailable" : `${items.length} returned`}</summary>
         <div className="calendar-review-content">
           <p>
-            Unresolved times are not plotted. These are returned source facts, not a complete
-            review queue; their dates may be unknown. Timed facts also need operational confirmation.
+            Undated items appear in every calendar view because they cannot be placed on a date.
+            These returned source facts are not a complete review queue; timed facts also need operational confirmation.
           </p>
           {limited && <p className="calendar-review-limit">Source limit reached; review results are incomplete.</p>}
           {filtered && (
@@ -35,10 +38,12 @@ export function CalendarReview({
               <button className="btn btn-sm" onClick={onShowAll}>Show all ships and clear search</button>
             </p>
           )}
-          {items === undefined ? (
+          {notQueried ? (
+            <p>No ships selected; review was not queried.</p>
+          ) : items === undefined ? (
             <p>Review data unavailable.</p>
           ) : items.length === 0 ? (
-            <p>No unresolved times in the returned records.</p>
+            <p>{filtered ? "No review items match the current filters in returned records." : "No unresolved times in the returned records."}</p>
           ) : (
             <ul>
               {items.map((item) => (
@@ -47,7 +52,7 @@ export function CalendarReview({
                   {item.messageKey ? (
                     <Link to={messageHref(item.messageKey, returnTo)}>{item.title}</Link>
                   ) : <strong>{item.title}</strong>}
-                  <p>{item.reason || "Source time is unresolved."}</p>
+                  <p>{reviewTime(item)}</p>
                   <small>
                     {item.messageKey || "Source unavailable"}
                     {item.messageKey && item.factId ? ` · Fact ${item.factId}` : ""}

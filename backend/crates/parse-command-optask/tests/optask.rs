@@ -66,6 +66,32 @@ fn body(kind: &str, sets: &str) -> String {
     )
 }
 #[test]
+fn baseline_crypto_recurrence_is_additive_and_requires_an_unambiguous_explicit_source_period() {
+    let source = include_str!("../../../config/watchdesk-fixtures/baseline-crypto.txt");
+    let security = Security { policy: "FICTIONAL_DEMO_ONLY".into(), classification: Some(SecurityClassification::Unclassified), release_to: vec![], status: SecurityStatus::Unvalidated };
+    let old_source = source.replace("PERIOD/050000ZNOV2026/082359ZNOV2026//\n", "");
+    let old = run(&old_source, Some(&security)).unwrap();
+    let parsed = run(source, Some(&security)).unwrap();
+    assert_eq!(serde_json::to_vec(&old.core.get().activities).unwrap(), serde_json::to_vec(&parsed.core.get().activities).unwrap());
+    assert!(old.core.get().recurrences.is_empty());
+    let recurrence = &parsed.core.get().recurrences[0];
+    assert_eq!(recurrence.id,"r1"); assert_eq!(recurrence.activity_id.as_deref(),Some("a1"));
+    assert_eq!(recurrence.rule,"FREQ=DAILY;BYHOUR=13;BYMINUTE=30");
+    assert_eq!(recurrence.dtstart.as_ref().unwrap().as_str(),"2026-11-05T00:00:00Z");
+    assert_eq!(recurrence.until.as_ref().unwrap().as_str(),"2026-11-08T23:59:00Z");
+    let evidence = parsed.audit.iter().map(|e| e.get()).find(|e| e.subject_id.as_deref()==Some("r1")).unwrap();
+    assert_eq!(evidence.payload["rule_id"],"optask.crypto.recurrence.v1");
+    let span=&evidence.payload["span"];
+    assert!(source.get(span["start_byte"].as_u64().unwrap() as usize..span["end_byte"].as_u64().unwrap() as usize).unwrap().starts_with("CRYPTDAT/"));
+    let span=&evidence.payload["detail"]["period_span"];
+    assert!(source.get(span["start_byte"].as_u64().unwrap() as usize..span["end_byte"].as_u64().unwrap() as usize).unwrap().starts_with("PERIOD/"));
+    let inferred_year = run(&source.replace("ZNOV2026", "ZNOV"), Some(&security)).unwrap();
+    assert!(inferred_year.core.get().periods[0].start_at.is_some()); // old approved year-default behavior survives
+    assert!(inferred_year.core.get().recurrences.is_empty()); // it is not an explicit recurrence anchor
+    let repeated = source.replace("PERIOD/050000ZNOV2026/082359ZNOV2026//", "PERIOD/050000ZNOV2026/082359ZNOV2026//\nPERIOD/050000ZNOV2026/082359ZNOV2026//");
+    assert!(run(&repeated, Some(&security)).unwrap().core.get().recurrences.is_empty());
+}
+#[test]
 fn every_listed_type_is_explicitly_registered_and_profile_versioned() {
     for kind in SUPPORTED_MESSAGE_TYPES {
         let parsed = run(&body(kind, "PERIOD/011200ZJAN2026/021200ZJAN2026//"), None).unwrap();

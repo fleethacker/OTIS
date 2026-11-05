@@ -25,6 +25,7 @@ mod tests {
     struct Fake {
         input: std::io::Cursor<Vec<u8>>,
         written: Vec<u8>,
+        write_deadline_expired: bool,
     }
     impl Read for Fake {
         fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
@@ -34,6 +35,12 @@ mod tests {
     }
     impl Write for Fake {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            if self.write_deadline_expired {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "expired prior command",
+                ));
+            }
             self.written.extend_from_slice(bytes);
             Ok(bytes.len())
         }
@@ -43,6 +50,7 @@ mod tests {
     }
     impl DeadlineStream for Fake {
         fn read_timeout(&mut self, _: Duration) -> std::io::Result<()> {
+            self.write_deadline_expired = false;
             Ok(())
         }
     }
@@ -51,6 +59,7 @@ mod tests {
             stream: Fake {
                 input: std::io::Cursor::new(bytes.to_vec()),
                 written: Vec::new(),
+                write_deadline_expired: false,
             },
             buffer: Vec::new(),
             tag: 0,
@@ -80,6 +89,14 @@ mod tests {
         assert_eq!(c.body(8, &config()).err().unwrap().0, "imap_body_identity");
         let mut c = connection(b"P999 OK done\r\n", 1024);
         assert_eq!(c.body(7, &config()).err().unwrap().0, "imap_command");
+    }
+    #[test]
+    fn each_command_renews_transport_deadline_before_writing() {
+        let bytes = b"* 3 FETCH (UID 7 BODY[]<0> {5}\r\nhello)\r\nP1 OK done\r\n";
+        let mut mailbox = connection(bytes, 1024);
+        // Custody persistence may outlast the previous command's deadline.
+        mailbox.stream.write_deadline_expired = true;
+        assert_eq!(mailbox.body(7, &config()).unwrap().unwrap(), b"hello");
     }
     #[test]
     fn malformed_or_oversized_server_responses_fail_without_allocation_from_literal_length() {
@@ -384,6 +401,8 @@ impl<S: DeadlineStream> Mailbox<S> {
         self.tag = self.tag.checked_add(1).ok_or(IntakeError("imap_tag"))?;
         let tag = format!("P{}", self.tag);
         self.deadline = Instant::now() + timeout;
+        // The bounded transport also gates writes; retire the prior command deadline first.
+        self.stream.read_timeout(timeout)?;
         write!(self.stream, "{tag} {command}\r\n").map_err(|_| IntakeError("imap_write"))?;
         for _ in 0..self.max_responses {
             let bytes = self.response()?;

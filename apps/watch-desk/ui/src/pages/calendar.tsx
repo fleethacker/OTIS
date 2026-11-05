@@ -1,7 +1,8 @@
 import { AppButton, Notice, TextInput } from "../components/ui";
+import { CalendarParamsProvider, useCalendarParams } from "../components/calendar-params";
+import { BrowserPreferenceScope, CalendarPreferencesProvider } from "../components/calendar-preferences";
 import { useSettings } from "../components/settings-data";
-import { useSearchParams } from "react-router-dom";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
@@ -14,13 +15,23 @@ import {
   type CalendarView,
 } from "../components/calendar-time";
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
-import { readShips } from "../components/ship-calendars";
+import { ALL_SHIPS, effectiveShips, selectedShipFilters } from "../components/ship-calendars";
+import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
+import { useCommands } from "../components/command-roster";
+import { ShipsSidebar } from "../components/ships-sidebar";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
+  const scope = useContext(BrowserPreferenceScope);
+  return <CalendarPreferencesProvider scope={scope}>
+    <CalendarParamsProvider><CalendarPage /></CalendarParamsProvider>
+  </CalendarPreferencesProvider>;
+}
+function CalendarPage() {
   const { shared } = useSettings();
   const { zone } = useDisplayTime();
-  const [params, setParams] = useSearchParams();
+  const roster = useCommands();
+  const [params, changeParams] = useCalendarParams();
   const today = civilDate(new Date(), zone);
   const [landingDate] = useState(today);
   const date = utcDate(params.get("date"), landingDate);
@@ -36,39 +47,34 @@ export default function Calendar() {
   const to = month ? bounds.to : week ? weekly.to : civilHour(date, 24, zone);
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const ships = params.has("ships")
-    ? readShips(params.get("ships"))
-    : (shared?.settings.commandIds.length ?? 0) > 0
-      ? new Set((shared?.settings.commandIds ?? []).map((id) => `unit:${id}`))
-      : null;
+  const ships = effectiveShips(params.get("ships"), shared?.settings);
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
+  const filters = selectedShipFilters(ships);
+  const noShips = ships !== undefined && (filters.noCommands === true ||
+    (!!roster.data && !roster.isError && ![...ships].some((key) => key === "unassigned:" || roster.data.commands.some((c) => key === `unit:${c.id}`))));
   const result = useSource("timeline", {
-    dataset,
-    query: debounced,
-    mode: "hybrid",
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
-    filters: ships
-      ? {
-          commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
-          unassignedOnly: ships.has("unassigned:"),
-          noCommands:
-            ships.size === 0 ||
-            [...ships].some((v) => !v.startsWith("unit:") && v !== "unassigned:"),
-        }
-      : {},
-  });
+    dataset, query: debounced, mode: "hybrid",
+    from: new Date(from).toISOString(), to: new Date(to).toISOString(), filters,
+  }, !noShips);
   const messages = result.data?.messages ?? [];
+  const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
   canonical.set("view", view);
   canonical.set("interval", String(interval));
   canonical.delete("hours");
   const returnTo = `/calendar?${canonical.toString()}`;
+  function setParams(change: (next: URLSearchParams) => void, replace = false) {
+    changeParams((next) => {
+      if (!next.has("date")) next.set("date", date);
+      if (!next.has("view")) next.set("view", view);
+      if (!next.has("interval")) next.set("interval", String(interval));
+      next.delete("hours");
+      change(next);
+    }, replace);
+  }
   function update(key: string, value: string) {
-    const next = new URLSearchParams(canonical);
-    next.set(key, value);
-    setParams(next, { replace: key === "q" });
+    setParams((next) => next.set(key, value), key === "q");
   }
   function move(direction: number) {
     update(
@@ -82,18 +88,35 @@ export default function Calendar() {
     );
   }
   return (
-    <div className={`calendar-page${week ? " calendar-page-week" : ""}`}>
+    <div className={`calendar-page calendar-with-ships${week ? " calendar-page-week" : ""}`}>
+      <ShipsSidebar
+        roster={roster.data}
+        selected={ships}
+        pending={roster.isPending}
+        error={roster.isError ? roster.error.message : undefined}
+        retry={() => { void roster.refetch(); }}
+        onChange={(selected) => setParams((next) => {
+          if (selected === undefined) next.set("ships", ALL_SHIPS);
+          else next.set("ships", JSON.stringify([...selected].sort()));
+        })}
+        onReset={() => setParams((next) => next.delete("ships"))}
+      />
+      <div className="calendar-main">
+      {dataset === "canonical" && <WatchTurnoverPanel
+        turnovers={shared?.settings.turnoverUtc}
+        commands={roster.isError ? [] : roster.data?.commands}
+        returnTo={returnTo}
+      />}
       <section className="calendar-controls" aria-label="Calendar controls">
-        <label className="schedule-search">
-          Search schedule
-          <TextInput
-            className="input-sm"
-            type="search"
-            value={query}
-            placeholder="Search"
-            onChange={(event) => update("q", event.target.value)}
-          />
-        </label>
+        <TextInput
+          className="schedule-search input-sm"
+          type="search"
+          aria-label="Search schedule"
+          title="Search schedule"
+          value={query}
+          placeholder="Search"
+          onChange={(event) => update("q", event.target.value)}
+        />
         <div className="join" aria-label="Calendar view">
           <AppButton
             size="sm"
@@ -120,6 +143,26 @@ export default function Calendar() {
             Month
           </AppButton>
         </div>
+        {view === "day" && (
+          <div className="join" aria-label="Day ship layout">
+            <AppButton
+              size="sm"
+              className="join-item"
+              aria-pressed={params.get("shipLayout") !== "side"}
+              onClick={() => update("shipLayout", "combined")}
+            >
+              Combined
+            </AppButton>
+            <AppButton
+              size="sm"
+              className="join-item"
+              aria-pressed={params.get("shipLayout") === "side"}
+              onClick={() => update("shipLayout", "side")}
+            >
+              Side by side
+            </AppButton>
+          </div>
+        )}
         <AppButton size="sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
           ← Previous
         </AppButton>
@@ -129,22 +172,27 @@ export default function Calendar() {
         <AppButton size="sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
           Next →
         </AppButton>
-        <label>
-          {zone === "UTC" ? "UTC date" : "Date"}
-          <TextInput
-            className="input-sm"
-            type="date"
-            value={date}
-            onChange={(event) => {
-              if (event.target.value) {
-                update("date", event.target.value);
-              }
-            }}
-          />
-        </label>
+        <TextInput
+          className="calendar-date input-sm"
+          type="date"
+          aria-label={zone === "UTC" ? "UTC date" : "Date"}
+          title={`Date (${zone})`}
+          value={date}
+          onChange={(event) => {
+            if (event.target.value) {
+              update("date", event.target.value);
+            }
+          }}
+        />
       </section>
-      {(result.isPending || result.isFetching) && <p role="status">Loading schedule…</p>}
-      {result.isError && (
+      {!noShips && query.trim() && !refreshing && !result.isError && result.data && (
+        <p className="calendar-search-status">
+          Calendar filtered by “{query}” · Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
+          {result.data.meta.executedMode === "hybrid" && " Ranked results may include related messages without a literal word match."}
+        </p>
+      )}
+      {refreshing && <p role="status">Loading schedule…</p>}
+      {!noShips && result.isError && (
         <Notice role="alert" tone="error">
           Calendar could not be loaded. {result.error.message}
           <AppButton size="sm" onClick={() => void result.refetch()}>
@@ -156,8 +204,10 @@ export default function Calendar() {
         className={`timeline-section ${date === today ? "is-today" : ""}`}
         aria-labelledby="schedule-heading"
       >
-        {result.data?.meta.windowLimited === true && !result.isFetching && !result.isError && (
-          <p role="status">Result limit reached. Narrow the range or search.</p>
+        {result.data?.meta.windowLimited === true && !refreshing && !result.isError && (
+          <p className="calendar-result-limit" role="status">
+            Partial source results. Narrow the range or search; counts cover returned records only.
+          </p>
         )}
         <div className="timeline-toolbar">
           <h2 id="schedule-heading">
@@ -173,11 +223,15 @@ export default function Calendar() {
             {date === today && <span className="revision">Today</span>}
           </h2>
         </div>
-        <DayTimeline
-          messages={result.isError || result.isFetching ? [] : messages}
+        {noShips ? <p className="calendar-result-limit">No ships selected. Choose a ship or Unassigned.</p> : <DayTimeline
+          commands={roster.isError ? [] : roster.data?.commands}
+          shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
+          selectedShips={ships}
+          ready={!refreshing && !result.isError}
+          messages={result.isError || refreshing ? [] : messages}
           sourceItems={
             dataset === "canonical"
-              ? result.isError || result.isFetching
+              ? result.isError || refreshing
                 ? []
                 : (result.data?.meta.timelineItems ?? [])
               : undefined
@@ -190,14 +244,13 @@ export default function Calendar() {
           expanded={params.get("layout") === "expanded"}
           startHour={0}
           endHour={24}
-          onDay={(chosen) => {
-            const next = new URLSearchParams(canonical);
+          onDay={(chosen) => setParams((next) => {
             next.set("date", chosen);
             next.set("view", "day");
-            setParams(next);
-          }}
-        />
+          })}
+        />}
       </section>
+      </div>
     </div>
   );
 }

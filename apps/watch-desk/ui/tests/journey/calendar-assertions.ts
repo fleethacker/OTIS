@@ -13,9 +13,8 @@ export async function expectCalendarSections(page: Page) {
   const review = page.getByRole("region", { name: "Needs review", exact: true });
   await expect(calendar).toBeVisible();
   await expect(upcoming).toBeVisible();
-  await expect(review).toBeVisible();
+  await expect(review).toHaveCount(0);
   await expect(calendar.locator("+ section")).toHaveAttribute("aria-labelledby", "upcoming-heading");
-  await expect(upcoming.locator("+ section")).toHaveAttribute("aria-label", "Needs review");
   await expect(page.getByRole("region", { name: "Exact event details", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Exact event details/ })).toHaveCount(0);
   await expect(page.locator(".calendar-details, [data-testid^='event-']")).toHaveCount(0);

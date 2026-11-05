@@ -86,7 +86,11 @@ test("pinned session groups additions, navigates to the event date, and records 
     deny = false;
     await act(async () => { fireEvent.click(view.getByRole("button", { name: "Mark all reviewed" })); });
     await waitFor(() => expect(view.getByText(/3 of 3 reviewed/)).toBeTruthy());
-    expect(requests.find((r) => r.path.endsWith("/review-all"))?.body).toEqual({ watermark: "shown-window-one" });
+    // review-all echoes the shown window and filters so the server marks exactly what was listed.
+    expect(requests.find((r) => r.path.endsWith("/review-all"))?.body).toEqual({
+      watermark: "shown-window-one", since: "2026-11-05T08:12:00Z", until: "2026-11-05T10:00:00.001Z",
+      filters: { commandIds: ["demo-meridian"], noCommands: false, unassignedOnly: false },
+    });
     expect(view.container.querySelector("details")!.open).toBe(false);
   } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
 });

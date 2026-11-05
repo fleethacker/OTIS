@@ -665,12 +665,23 @@ async fn save(
             "Settings changed; reload before saving",
         ));
     }
-    let options = command_options(app).await?;
+    // Command-free settings must remain editable before the first source index exists.
+    let roster = crate::commands::catalog(app.config.intake.demo_fixture_assignments)?;
+    let needs_options = !settings.command_ids.is_empty()
+        || settings
+            .default_ships
+            .iter()
+            .filter_map(|v| v.strip_prefix("unit:"))
+            .any(|id| !roster.commands.iter().any(|c| c.id == id));
+    let options = if needs_options {
+        command_options(app).await?
+    } else {
+        Vec::new()
+    };
     if settings.command_ids.iter().any(|v| !options.contains(v)) {
         return Err(Error::invalid("Select an indexed command"));
     }
     // Default ships may also name the configured demo roster before its fixtures index.
-    let roster = crate::commands::catalog(app.config.intake.demo_fixture_assignments)?;
     if settings
         .default_ships
         .iter()

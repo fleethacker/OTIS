@@ -28,7 +28,7 @@ function MapDisclosure({ features }: { features: MessageMapFeature[] }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return (
-    <section className="message-map-disclosure" aria-label="Message map">
+    <section className="message-map-disclosure" aria-label="Message chart">
       <button
         type="button"
         className="message-map-toggle"
@@ -37,7 +37,7 @@ function MapDisclosure({ features }: { features: MessageMapFeature[] }) {
         onClick={() => setOpen((value) => !value)}
       >
         <TbMap aria-hidden="true" />
-        <span>Map</span>
+        <span>Chart</span>
         <TbChevronDown className="message-map-chevron" aria-hidden="true" />
       </button>
       <div id={id} hidden={!open}>
@@ -95,7 +95,7 @@ function MapCanvas({ features }: { features: MessageMapFeature[] }) {
   const reset = () => { setZoom(1); setOffset([0, 0]); };
   return (
     <div className="message-map-canvas">
-      <div className="message-map-controls" role="group" aria-label="Map controls">
+      <div className="message-map-controls" role="group" aria-label="Chart controls">
         <AppButton size="xs" variant="ghost" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 8} onClick={() => changeZoom(2)}><TbPlus aria-hidden="true" /></AppButton>
         <AppButton size="xs" variant="ghost" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 0.125} onClick={() => changeZoom(0.5)}><TbMinus aria-hidden="true" /></AppButton>
         <AppButton size="xs" variant="ghost" aria-label="Fit message locations" title="Fit message locations" onClick={reset}><TbFocus2 aria-hidden="true" /></AppButton>

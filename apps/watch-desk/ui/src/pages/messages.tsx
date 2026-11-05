@@ -4,25 +4,32 @@ import { useRef, useState } from "react";
 import { TbX } from "react-icons/tb";
 import type { RouteMeta } from "../route-registry";
 import { calendarReturn } from "../components/calendar-links";
-import { useSource, useDebounced } from "../components/source-data";
+import { useSource, useDebounced, sourceScopeKey } from "../components/source-data";
 import { MessageReader } from "../components/message-reader";
 import { messageSearchState, type MessageFilters } from "../components/message-search-state";
 import { MessageSearchControls, MessagePagination } from "../components/message-search-controls";
 import { MessageSearchCard } from "../components/message-search-card";
+import { useSession } from "../components/session";
+import { SimilarMessages } from "../components/similar-messages";
 
 export const route: RouteMeta = { path: "/messages", label: "Message records", order: 1 };
 
 export default function Messages() {
+  const [params] = useSearchParams();
+  return params.has("similarTo") ? <SimilarMessages /> : <MessageSearch />;
+}
+function MessageSearch() {
   const { zone } = useDisplayTime();
+  const { session } = useSession();
   const [params, setParams] = useSearchParams();
   const record = params.get("record") ?? "";
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
   const criteria = JSON.stringify([
     zone,
-    ...["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) =>
-      params.get(key)
-    ),
+    ["q", "messageType", "sender", "fromDate", "throughDate", "sort"].map((key) => params.get(key)),
+    session?.user?.id,
+    sourceScopeKey(session),
   ]);
   const [page, setPage] = useState<{ criteria: string; token?: string }>({ criteria: "" });
   const pageToken = page.criteria === criteria ? page.token : undefined;
@@ -130,6 +137,14 @@ export default function Messages() {
           />
         </div>
       </div>
+      {query.trim() && !waiting && !result.isFetching && !result.isError && result.data && (
+        <p className="calendar-search-status">
+          Executed search: {result.data.meta.executedMode ?? "not reported by server"}.
+          {result.data.meta.executedMode === "hybrid"
+            ? " Related ranked results may have no exact word match; this is not an exhaustive keyword result set."
+            : " Searches indexed narrative passages, not all event titles."}
+        </p>
+      )}
       {search.error !== undefined ? (
         <div role="alert" className="alert">
           {search.error}
@@ -163,7 +178,7 @@ export default function Messages() {
                 <MessageSearchCard
                   key={m.sourceMessageId}
                   message={m}
-                  header={result.data.meta.messageHeaders?.[m.sourceMessageId]}
+                  header={result.data?.meta.messageHeaders?.[m.sourceMessageId]}
                   selected={record === m.sourceMessageId}
                   onSelect={() => update("record", m.sourceMessageId)}
                 />

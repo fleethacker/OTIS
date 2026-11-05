@@ -50,11 +50,11 @@ Build and start OTIS, `parse-command-server` and OpenSearch (Docker Compose 2.24
 ```sh
 docker compose -f demo/docker-compose.yml up -d --wait --wait-timeout 180
 docker compose up --build -d --wait
-curl http://localhost:8080/api/health
+curl http://127.0.0.1:8080/api/health
 curl http://localhost:9200
 ```
 
-Open [OTIS](http://localhost:8080). This local-demo profile reads parsed
+Open [OTIS](http://127.0.0.1:8080). This local-demo profile reads parsed
 OpenSearch messages through Rust. Search combines BM25 and local MiniLM semantic
 retrieval using OpenSearch reciprocal rank fusion. Full structured/raw content
 and audit evidence load on demand. Existing legacy records and private history
@@ -157,4 +157,18 @@ Support is specific to these tested layouts and extraction rules. Output remains
 
 The [intake runbook](backend/INTAKE.md) covers starting the demo monitor, inspecting per-email custody, restart/retry behavior and loading isolated OpenSearch UI test indices. The worker retains original email bytes and commits parser results with a durable audit outbox before marking a receipt parsed. Duplicate bodies share a projection; IMAP server receipt time selects the newest subject and differences remain flagged.
 
-The [ICD 1.1.0](docs/ICD.md) adds optional geographic locations: points, channel endpoint lines and area polygons, with WGS84 as the approved default only when a datum is absent. Source evidence remains in audit. The demo worker monitors IMAP continuously; production Exchange PKI and continuous OpenSearch delivery remain subsequent acceptance work.
+The [ICD 1.2.0](docs/ICD.md) includes bounded recurrence and optional geographic locations: points, channel endpoint lines and area polygons, with WGS84 as the approved default only when a datum is absent. Source evidence remains in audit. The demo worker monitors IMAP continuously; verified implicit IMAP TLS is available for approved mailboxes. Production Exchange-specific authentication still needs acceptance.
+
+## This branch update
+
+The supplied `main-3` is the baseline. This update carries recurring calendar
+activities, watch context/turnover, station assignments and responsibilities,
+shift briefings and related-message search into its native OIDC, settings and
+hidden OpenSearch storage. Admin/Viewer permissions, per-user IANA timezone and
+activity-driven session renewal remain authoritative. Drafts stay unsent.
+
+Start with [the integration record](docs/integration/main3-sync.md) for changes,
+verification and applying the contribution patch in a real Git clone. The
+[UDS packaging](deploy/uds/README.md) now uses native OIDC. The optional
+[fictional watch demo](compose.watchdesk-demo.yml) explicitly enables demonstration
+roster/defaults; it does not reload mail or reset data.

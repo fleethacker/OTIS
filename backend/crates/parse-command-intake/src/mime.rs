@@ -103,21 +103,18 @@ fn walk(
             let trimmed = trimmed.trim_ascii_end();
             if trimmed == marker.as_bytes() || trimmed == closing.as_bytes() {
                 if let Some(s) = start.take() {
-                    let mut end = cursor;
-                    // MIME boundary owns the preceding CRLF; it is not payload data.
-                    if end >= 2 && &body[end - 2..end] == b"\r\n" {
-                        end -= 2;
-                    } else if end >= 1 && body[end - 1] == b'\n' {
-                        end -= 1;
+                    let part = body
+                        .get(s..cursor)
+                        .ok_or(IntakeError("mime_part_boundary"))?;
+                    // Strip only within this part: consecutive boundaries have no payload.
+                    let part = part
+                        .strip_suffix(b"\r\n")
+                        .or_else(|| part.strip_suffix(b"\n"))
+                        .unwrap_or(part);
+                    if part.is_empty() {
+                        return Err(IntakeError("mime_empty_part"));
                     }
-                    walk(
-                        &body[s..end],
-                        offset + n + s,
-                        depth + 1,
-                        l,
-                        parts,
-                        candidates,
-                    )?;
+                    walk(part, offset + n + s, depth + 1, l, parts, candidates)?;
                 }
                 if trimmed == closing.as_bytes() {
                     closed = true;

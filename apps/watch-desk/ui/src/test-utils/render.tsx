@@ -1,8 +1,30 @@
+import { QueryClient } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
-import { type ReactElement, type PropsWithChildren } from "react";
+import { useEffect, useState, type ReactElement, type PropsWithChildren } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { ConnectQueryProvider } from "@defense-unicorns/ark-ui";
 import { themeName } from "../theme";
+import { SessionContext, defaultSettings, type AccountSession } from "../components/session";
+
+export const testSession: AccountSession = {
+  authenticated: true,
+  authMode: "local_demo",
+  loginUrl: "/auth/login",
+  user: {
+    id: "test-user",
+    username: "Test watchstander",
+    displayName: "Test watchstander",
+    email: "",
+    role: "viewer",
+    active: true,
+    createdAt: "2026-11-04T00:00:00Z",
+    lastLoginAt: "2026-11-05T10:00:00Z",
+    previousLoginAt: null,
+  },
+  permissions: ["schedule:read", "draft:write"],
+  settings: defaultSettings,
+  login: { startedAt: "2026-11-05T10:00:00Z", previousLoginAt: null, briefingAvailable: true },
+};
 
 /**
  * Mount a component inside the same provider stack App.tsx uses in
@@ -42,13 +64,32 @@ type ProviderOptions = Omit<RenderOptions, "wrapper"> & {
 
 function makeWrapper(route: string) {
   return function AllProviders({ children }: PropsWithChildren) {
+    const [client] = useState(
+      () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    );
+    useEffect(
+      () => () => {
+        void client.cancelQueries();
+        client.clear();
+      },
+      [client]
+    );
     // Set the theme once per render — idempotent, no-ops if already set.
     if (typeof document !== "undefined") {
       document.documentElement.setAttribute("data-theme", themeName);
     }
     return (
-      <ConnectQueryProvider baseUrl="/">
-        <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+      <ConnectQueryProvider baseUrl="/" queryClient={client}>
+        <SessionContext.Provider
+          value={{
+            session: testSession,
+            refresh: async () => {},
+            saveSettings: async () => {},
+            logout: async () => {},
+          }}
+        >
+          <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+        </SessionContext.Provider>
       </ConnectQueryProvider>
     );
   };

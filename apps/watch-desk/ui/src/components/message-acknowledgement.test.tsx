@@ -57,12 +57,12 @@ test("acknowledgement defaults use source identity and reference time, never rec
   });
   expect(acknowledgementDefaults(fromSet).serial).toBe("PC-C001");
 });
-test("one-dropdown modal generates an unsent draft, handles retry and keeps acknowledgement status accurate", async () => {
+test("viewer one-dropdown modal generates an unsent draft, handles retry and keeps acknowledgement status accurate", async () => {
   let saved = "";
   let fail = true;
   let state = { fieldsJson: "{}", generatedText: "", acknowledged: false, historyJson: "[]" };
   const transport = createRouterTransport((router) => {
-    router.service(AppService, { getIdentity: () => ({ username: "alpha" }) });
+    router.service(AppService, { getIdentity: () => ({ username: "alpha", role: "viewer" }) });
     router.service(DraftService, {
       readPreparation: () => state,
       savePreparation: (request) => {
@@ -112,7 +112,7 @@ test("one-dropdown modal generates an unsent draft, handles retry and keeps ackn
 });
 test("missing reference time blocks generation without fabricating receipt or current date", async () => {
   const transport = createRouterTransport((router) => {
-    router.service(AppService, { getIdentity: () => ({ username: "alpha" }) });
+    router.service(AppService, { getIdentity: () => ({ username: "alpha", role: "viewer" }) });
     router.service(DraftService, {
       readPreparation: () => ({
         fieldsJson: "{}",

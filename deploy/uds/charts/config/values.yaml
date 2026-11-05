@@ -1,0 +1,16 @@
+common:
+  domain: uds.dev
+  host: parse-command
+  clientId: parse-command
+  adminGroup: /Parse Command/Admin
+  viewerGroup: /Parse Command/Viewer
+  # Native OIDC uses the HTTPS tenant gateway; adjust for a custom UDS gateway.
+  idpGatewayNamespace: istio-tenant-gateway
+  idpGatewaySelector: {app: tenant-ingressgateway}
+  # HTTPS pod target port; external issuer URLs remain on HTTPS port 443.
+  idpGatewayPort: 443
+  storageClass: ""
+  imapHost: ""
+  imapPort: 993
+  # Set a fixed mailbox CIDR; no arbitrary Internet egress is granted.
+  imapCidr: ""

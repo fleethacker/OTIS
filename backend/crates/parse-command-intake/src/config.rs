@@ -1,6 +1,7 @@
 use crate::{IntakeError, Result};
 use serde::Deserialize;
-use std::io::Read;
+use sha2::{Digest, Sha256};
+use std::{io::Read, path::PathBuf};
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -12,6 +13,8 @@ pub struct Config {
     pub mailbox: String,
     pub password_env: String,
     pub transport: Transport,
+    #[serde(default)]
+    pub tls_ca: Option<PathBuf>,
     #[serde(default = "default_search")]
     pub opensearch_url: String,
     #[serde(default = "default_index")]
@@ -34,6 +37,11 @@ pub struct Config {
     pub parser: parse_command_core::HostLimits,
     pub enabled_types: Vec<String>,
     pub subject_policy: SubjectPolicy,
+    /// Opt-in exact-hash assignments for fictional Watch Desk fixtures only.
+    #[serde(default)]
+    pub demo_fixture_assignments: bool,
+    #[serde(default, rename = "sourceRouting")]
+    pub source_routing: Option<SourceRouting>,
 }
 fn default_search() -> String {
     std::env::var("PARSE_COMMAND_OPENSEARCH_URL")
@@ -43,10 +51,44 @@ fn default_index() -> String {
     std::env::var("PARSE_COMMAND_CUSTODY_INDEX")
         .unwrap_or_else(|_| ".parse-command-custody-v1".into())
 }
+/// Operator-approved applicability for every message received from this source.
+/// This never derives recipient authority or access grants from message contents.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceRouting {
+    pub policy_id: String,
+    pub command_ids: Vec<String>,
+}
+impl SourceRouting {
+    fn validate(&self) -> Result<()> {
+        parse_command_types::validate_revision(&self.policy_id, "policy_id")
+            .map_err(|_| IntakeError("source_routing_policy_id"))?;
+        if self.command_ids.is_empty()
+            || self.command_ids.len() > 32
+            || self.command_ids.iter().any(|id| {
+                id.is_empty()
+                    || id.len() > 256
+                    || id.trim() != id
+                    || id.chars().any(char::is_control)
+            })
+            || self
+                .command_ids
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != self.command_ids.len()
+        {
+            return Err(IntakeError("source_routing_command_ids"));
+        }
+        Ok(())
+    }
+}
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Transport {
     PlaintextDemo,
+    /// Implicit TLS with certificate and hostname verification; never STARTTLS downgrade.
+    Tls,
 }
 #[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -80,9 +122,23 @@ impl Config {
             .map_err(|_| IntakeError("account_id"))?;
         parse_command_types::validate_revision(&self.revision, "revision")
             .map_err(|_| IntakeError("revision"))?;
+        if let Some(routing) = &self.source_routing {
+            routing.validate()?;
+            if self.demo_fixture_assignments {
+                return Err(IntakeError("conflicting_source_routing_modes"));
+            }
+        }
         // This explicit demo transport never sends credentials to a remote Exchange host.
-        if !matches!(self.host.as_str(), "127.0.0.1" | "::1" | "mailserver") {
+        if matches!(self.transport, Transport::PlaintextDemo)
+            && !matches!(self.host.as_str(), "127.0.0.1" | "::1" | "mailserver")
+        {
             return Err(IntakeError("demo_host_only"));
+        }
+        if self.host.is_empty()
+            || self.host.len() > 253
+            || self.host.contains(['/', '\\', '\r', '\n', '\0'])
+        {
+            return Err(IntakeError("imap_host"));
         }
         if self.port == 0
             || self.username.is_empty()
@@ -140,5 +196,70 @@ impl Config {
             return Err(IntakeError("parser_limits"));
         }
         Ok(())
+    }
+    pub fn command_ids(&self) -> Vec<String> {
+        let mut ids = self
+            .source_routing
+            .as_ref()
+            .map(|v| v.command_ids.clone())
+            .unwrap_or_default();
+        ids.sort();
+        ids
+    }
+    pub fn routing_fingerprint(&self) -> String {
+        if self.demo_fixture_assignments {
+            return format!(
+                "{:x}",
+                Sha256::digest(
+                    concat!(
+                        "watchdesk-demo:",
+                        include_str!("../../../config/watchdesk-demo.json")
+                    )
+                    .as_bytes()
+                )
+            );
+        }
+        routing_fingerprint(
+            self.source_routing.as_ref().map(|v| v.policy_id.as_str()),
+            &self.command_ids(),
+        )
+    }
+    pub fn command_ids_for(&self, body: &str) -> Result<Vec<String>> {
+        if self.demo_fixture_assignments {
+            return Ok(crate::demo::Catalog::load()?
+                .assignment(body)
+                .map(|fixture| fixture.command_ids.clone())
+                .unwrap_or_default());
+        }
+        Ok(self.command_ids())
+    }
+}
+pub(crate) fn routing_fingerprint(policy: Option<&str>, command_ids: &[String]) -> String {
+    format!(
+        "{:x}",
+        Sha256::digest(
+            serde_json::json!({"policyId":policy,"commandIds":command_ids})
+                .to_string()
+                .as_bytes()
+        )
+    )
+}
+
+#[cfg(test)]
+mod transport_tests {
+    use super::*;
+    #[test]
+    fn remote_mail_requires_tls_and_plaintext_demo_stays_restricted() {
+        let mut c = Config::load(
+            &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/demo-intake.json"),
+        )
+        .unwrap();
+        c.host = "mail.example.invalid".into();
+        assert_eq!(c.validate().unwrap_err().0, "demo_host_only");
+        c.transport = Transport::Tls;
+        c.port = 993;
+        assert!(c.validate().is_ok());
+        c.host = "mail.example.invalid/attacker".into();
+        assert!(c.validate().is_err());
     }
 }

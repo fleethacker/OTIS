@@ -1,0 +1,20 @@
+common:
+  domain: uds.dev
+  host: parse-command
+  clientId: parse-command
+  adminGroup: /Parse Command/Admin
+  viewerGroup: /Parse Command/Viewer
+  imapHost: ""
+  imapPort: 993
+image: "invalid.example/prepare-first:unbuilt"
+config:
+  sessionSecret: parse-command-session
+  imapSecret: parse-command-imap
+  requireStationAssignment: false
+  # Set true only after verified offline SQLite snapshot migration.
+  requireStateMigration: false
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 384Mi}
+  # Complete bounded TLS IMAP configuration with hidden OpenSearch custody.
+  intake: {}

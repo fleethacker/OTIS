@@ -1,4 +1,4 @@
-# Initial mailbox test
+# Mailbox intake and retained custody
 
 The worker retrieves SMTP-delivered email through IMAP, decodes the message body and subject, invokes the compiled OPTASK parser, and persists the result in a hidden OpenSearch custody index. The application server continuously publishes the outbox to OpenSearch; `parsed` means durably staged, not yet necessarily indexed.
 
@@ -70,11 +70,36 @@ Accepted custody data is not automatically purged. Retained serialized-byte and 
 
 An account ID is bound to its configured endpoint, username, mailbox and parser revision. Changing those against an existing journal fails clearly. Reprocessing under a new revision requires an explicit migration/replay workflow; do not edit custody states or silently reuse the old revision. Configure a separate hidden custody index for independent tests.
 
+## Source routing and fictional fixtures
+
+`sourceRouting` is optional operator-approved applicability for every message from one configured source. For example:
+
+```json
+"sourceRouting": {
+  "policyId": "approved-feed-v1",
+  "commandIds": ["SHIP-A", "SHIP-B"]
+}
+```
+
+Command IDs are exact, unique identifiers; intake sorts this set before parsing and fingerprints it together with the policy ID. Neither subject text nor originator text assigns a command. Each receipt retains a `source_routing_applied` audit event with the source, policy fingerprint and command IDs. Applicability does not grant access.
+
+A hidden custody `source_routing_revision` record binds each parser revision to one routing policy, across all source accounts sharing that custody index. A different policy or switching demo assignments on/off requires a new revision and an explicit replay plan; existing projections remain unchanged. An unbound historical OpenSearch revision fails with `source_routing_revision_unbound`. For retained new-main state that previously used no routing, stop every application and standalone intake writer, wait for the worker lease to expire, and inspect the existing revision:
+
+```sh
+python3 backend/tools/migrate_routing.py --url http://127.0.0.1:9200 --custody-index .parse-command-custody-v1 --revision intake-optask-geo-1
+# Review the counts and fingerprint, then run the same command with --apply.
+python3 backend/tools/migrate_routing.py --url http://127.0.0.1:9200 --custody-index .parse-command-custody-v1 --revision intake-optask-geo-1 --apply
+```
+
+The first command is read-only. The apply command repeats the metadata-only scan, rejects an active server lease or changed snapshot, and creates only the missing binding. It never overwrites an existing policy. Every relevant retained core must have an explicit empty command-ID list; any source-routing/demo audit evidence or nonempty/unknown command set fails closed for a separate reviewed migration. Raw mail and parser prose are excluded from the scan. Do not delete custody or invent a binding to bypass this check.
+
+`demo_fixture_assignments: true` enables only the exact body hashes in `backend/config/watchdesk-demo.json`. Its fictional catalog includes command assignments, bounded recurring radio checks and one explicit unvalidated security policy for the synthetic baseline crypto fixture. Modified or unknown bodies receive none of those demo privileges. It is mutually exclusive with `sourceRouting`, and both checked-in mailbox configurations leave it disabled. Use a separate custody index, account identity and revision for this demonstration.
+
 ## MIME and geographic contract
 
 The decoder bounds header bytes/counts, part count, nesting and decoded body bytes. It handles base64, quoted-printable and unencoded UTF-8/ASCII text/plain, including bounded multipart mixed/alternative/related wrappers. Exactly one eligible inline plain-text body is required; attachments and HTML are not executed or interpreted as orders. Ambiguous/malformed email is retained for review. Decoded source whitespace and line endings remain unchanged. Subject decoding and one leading `SUBJ:` removal are separate from body-based parser dispatch. Both local custody time and IMAP server receipt time are retained separately. Original headers and selected-part byte provenance accompany the receipt audit event; full original email remains in hidden OpenSearch custody.
 
-ICD 1.1.0 adds optional `locations` with `geo_point` and GeoJSON `geo_shape` mappings. Supported coordinate forms produce points, channel endpoint lines, and closed area polygons. Circle centers retain their radius without invented polygon vertices. WGS84 is the approved default only when no datum is declared; explicit different/unknown datums and unresolved locations retain review states without map geometry. Geometry does not imply tasking or local C2 responsibility. Detailed tokens, spans and rules remain in audit.
+ICD 1.2.0 retains optional `locations` with `geo_point` and GeoJSON `geo_shape` mappings. Supported coordinate forms produce points, channel endpoint lines, and closed area polygons. Circle centers retain their radius without invented polygon vertices. WGS84 is the approved default only when no datum is declared; explicit different/unknown datums and unresolved locations retain review states without map geometry. Geometry does not imply tasking or local C2 responsibility. Detailed tokens, spans and rules remain in audit. ICD 1.2.0 also carries bounded recurrence rules; ordinary date and time fields do not imply recurrence.
 
 ## Populate the local UI test indices
 
@@ -82,8 +107,19 @@ The application server continuously publishes queued records and validates each 
 
 ## Production boundary
 
-The intended mailbox is enclave-local on-premises Exchange protected by PKI. The current `plaintext_demo` transport is deliberately restricted to loopback or the demo `mailserver` container name. It is not a production Exchange adapter. Verified TLS/PKI, the exact approved authentication mechanism, production limits and recovery objectives require validation before enabling that endpoint. No cloud mail or token-service dependency is introduced. The root application server now includes continuous OpenSearch publication and
-the UI API; see the [combined-stack runbook](../docs/integration/combined-stack.md).
+The intended mailbox is enclave-local on-premises Exchange protected by PKI. `transport: "tls"` uses implicit TLS, normally port 993, and verifies the server certificate and configured hostname before sending IMAP credentials. The bundled root store can be extended with a mounted PEM CA file through `tls_ca`; mount that file read-only when using containers. An untrusted certificate or hostname mismatch fails closed. There is no plaintext fallback or STARTTLS downgrade. Client-certificate authentication is not implemented by this adapter; the approved Exchange authentication mechanism still needs deployment validation.
+
+`plaintext_demo` is deliberately restricted to loopback or the demo `mailserver` container name. The password is read from the configured environment variable on each poll. Production limits and recovery objectives must be set for the deployment. No cloud mailbox or token-service dependency is introduced by intake. The application server includes continuous OpenSearch publication and the UI API; see the [combined-stack runbook](../docs/integration/combined-stack.md).
+
+## Importing the earlier branch's saved state
+
+`backend/tools/migrate_state.py` reads consistent SQLite snapshots and imports documents into the new hidden indices. SQLite is an import/rollback format only; it is not runtime persistence. Run the tool without `--apply` first. It checks retained raw-email hashes, routing fingerprints, demo assignment evidence and immutable availability history before writing. It never overwrites differing target records, verifies every imported document, and writes the migration marker last.
+
+The importer carries forward local demo accounts, station assignments, responsibility profiles, account settings/audits, shared watch context, first-publication history and saved login checkpoints. Native authentication maps earlier `platform_admin` to `admin` and `user`/`viewer` to `viewer`, matching new main's roles. Existing sessions, login attempts and search windows expire. Earlier provider accounts require an explicit reviewed ownership mapping; browser-local timezone preferences require an explicit IANA timezone. Unknown tables, unknown routing fingerprints and conflicting history fail before import instead of being silently skipped.
+
+First-publication history is an immutable, bounded custody log. Migration retains the old sequence high-water mark, including gaps from retry/audit events, so the next arrival cannot be skipped by a saved login checkpoint. The 20,000-entry and 16 MiB limits fail closed; larger histories require an explicit archival migration.
+
+Synthetic importer regressions run with `python3 -m unittest discover -s backend/tools -p 'test_migrat*.py'`. Intake's TLS/config/MIME unit tests run with `cargo test --manifest-path backend/Cargo.toml --locked -p parse-command-intake`; the TLS test opens a temporary loopback listener. Custody integration tests require an isolated OpenSearch endpoint, `PARSE_COMMAND_TEST_OPENSEARCH_URL`, and `-- --include-ignored`. Tests create uniquely named `.parse-command-test-custody-*` indices and remove only those indices when that test endpoint is explicitly configured.
 
 ## Historical initial verification evidence (SQLite prototype)
 

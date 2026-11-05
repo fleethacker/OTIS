@@ -42,3 +42,15 @@ export function readShips(value: string | null): Set<string> | undefined {
   }
   return new Set(["invalid-selection:"]);
 }
+
+/** Shared by timeline and custody reads; explicit empty/invalid URLs never broaden. */
+export function selectedShipFilters(ships?: Set<string>) {
+  return ships
+    ? {
+        commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
+        unassignedOnly: ships.has(UNASSIGNED),
+        noCommands:
+          ships.size === 0 || [...ships].some((v) => !v.startsWith("unit:") && v !== UNASSIGNED),
+      }
+    : {};
+}

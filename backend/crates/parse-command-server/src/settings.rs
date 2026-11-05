@@ -265,9 +265,11 @@ pub async fn execute(
                     "Settings changed; reload before saving",
                 ));
             }
-            let options = command_options(app).await?;
-            if settings.command_ids.iter().any(|v| !options.contains(v)) {
-                return Err(Error::invalid("Select an indexed command"));
+            if !settings.command_ids.is_empty() {
+                let options = command_options(app).await?;
+                if settings.command_ids.iter().any(|v| !options.contains(v)) {
+                    return Err(Error::invalid("Select an indexed command"));
+                }
             }
             let mut row = doc.record.clone();
             let old = row.payload["settings"].clone();

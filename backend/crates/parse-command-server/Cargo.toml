@@ -9,6 +9,7 @@ publish.workspace = true
 parse-command-state = { path = "../parse-command-state" }
 parse-command-intake = { path = "../parse-command-intake" }
 parse-command-types.workspace = true
+parse-command-optask = { path = "../parse-command-optask" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

@@ -1,4 +1,4 @@
-import { create } from "@bufbuild/protobuf";
+import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ExtractedEventSchema } from "../gen/app/v1/models_pb";
 import type { TimelineItem } from "./source-data";
@@ -27,13 +27,20 @@ import { calendarLocalizer } from "./calendar-localizer";
 import { messageHref } from "./calendar-links";
 import { useDisplayTime, civilDate, civilHour } from "./display-time";
 import moment from "moment-timezone";
-import { shipColor, shipKey } from "./ship-calendars";
-import { ShipMarker } from "./ship-marker";
+import { commandColor, commandKeys, commandName, type Command } from "./command-roster";
+import { CommandChips } from "./command-chips";
 import { OptaskIcon } from "./optask-icons";
 import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";
 import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
+import { inShipColumns, shipResources, type ShipResource } from "./calendar-resources";
+import {
+  calendarGridWidth,
+  openingScrollTime,
+  useOpeningScroll,
+  useCalendarOverflow,
+} from "./calendar-viewport";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -47,6 +54,10 @@ interface ScheduleEntry {
   point?: boolean;
   reviewRequired?: boolean;
   sourceType?: string;
+  commandIds?: string[];
+  recurrence?: TimelineItem["recurrence"];
+  commands: Command[];
+  resourceId?: string;
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -73,7 +84,7 @@ function sourceType(message: MessageRecord) {
   return typeof value === "string" ? value : undefined;
 }
 function eventKey(row: ScheduleEntry) {
-  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}`;
+  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}${(row.resourceId ?? "") !== "" ? `:${row.resourceId}` : ""}`;
 }
 function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const { format: utc } = useDisplayTime();
@@ -81,10 +92,15 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const information = [
     row.title,
     row.sourceType,
+    row.recurrence
+      ? `${row.recurrence.description}\nRule: ${row.recurrence.rule}\nOccurrence: ${row.recurrence.occurrenceId}\nAudited rule fact: ${row.recurrence.ruleFactId}`
+      : undefined,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
       : `Start: ${utc(row.event.startAt)}\nEnd: ${utc(row.event.endAt)}`,
-    `Unit: ${row.event.unit ?? "Unassigned"}`,
+    `Applicability: ${commandKeys(row.commandIds)
+      .map((key) => commandName(key, row.commands))
+      .join(", ")}`,
     (row.event.location ?? "") !== "" ? `Location: ${row.event.location}` : undefined,
     row.reviewRequired === true ? "Requires review" : undefined,
     row.event.isRevised ? "Revised" : undefined,
@@ -95,11 +111,16 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
     .join("\n");
   const content = (
     <>
+      {row.recurrence && (
+        <span aria-hidden="true" title="Recurring source fact">
+          ↻
+        </span>
+      )}
       <OptaskIcon type={row.sourceType} />
       <span className="calendar-event-title">{row.title}</span>
     </>
   );
-  return disclose ? (
+  const target = disclose ? (
     <button
       type="button"
       className="week-event calendar-event-card"
@@ -121,6 +142,14 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
       {content}
     </Link>
   );
+  return (
+    <div className="calendar-event-copy">
+      {row.resourceId === undefined && (
+        <CommandChips ids={row.commandIds} commands={row.commands} />
+      )}
+      {target}
+    </div>
+  );
 }
 
 export function DayTimeline({
@@ -135,6 +164,10 @@ export function DayTimeline({
   endHour,
   onDay,
   expanded = false,
+  commands = [],
+  shipLayout = "combined",
+  selectedShips,
+  ready = true,
 }: {
   messages: MessageRecord[];
   sourceItems?: TimelineItem[];
@@ -147,12 +180,21 @@ export function DayTimeline({
   endHour?: number;
   onDay?: (date: string) => void;
   expanded?: boolean;
+  commands?: Command[];
+  shipLayout?: "combined" | "side";
+  selectedShips?: Set<string>;
+  ready?: boolean;
 }) {
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
   const dialog = useRef<HTMLDialogElement>(null);
   const calendarRoot = useRef<HTMLDivElement>(null);
-  useCalendarZoom(calendarRoot, view, interval, `${from}:${to}`);
+  useCalendarZoom(
+    calendarRoot,
+    view,
+    interval,
+    `${from}:${to}:${shipLayout}:${JSON.stringify(selectedShips ? [...selectedShips] : null)}`
+  );
   const measurements = useCalendarMeasurements(calendarRoot);
   const [selected, setSelected] = useState<ScheduleEntry | null>(null);
   const [showIndex, setShowIndex] = useState(false);
@@ -193,6 +235,7 @@ export function DayTimeline({
                 before: position.before || parts.some((part) => part?.before === true),
                 after: position.after || parts.some((part) => part?.after === true),
                 sourceType: sourceType(message),
+                commands,
               },
             ]
           : [];
@@ -220,7 +263,9 @@ export function DayTimeline({
               return [];
             }
             const existing = message.events.find((event) => event.sourceEventId === item.factId);
-            const event = create(ExtractedEventSchema, existing);
+            const event = existing
+              ? clone(ExtractedEventSchema, existing)
+              : create(ExtractedEventSchema);
             event.title = item.title;
             event.sourceEventId = item.factId ?? item.key;
             event.startAt = timestampFromDate(new Date(start));
@@ -239,24 +284,58 @@ export function DayTimeline({
                 point,
                 reviewRequired: item.reviewRequired,
                 sourceType: item.sourceType,
+                commandIds: item.commandIds ?? [],
+                recurrence: item.recurrence,
+                commands,
               },
             ];
           })
           .sort((a, b) => +a.start - +b.start);
+  const side = view === "day" && shipLayout === "side";
+  const resources = shipResources(commands, rows, selectedShips);
+  const displayed = side ? inShipColumns(rows, resources) : rows;
   const minimumHeight = (row: ScheduleEntry) => measurements.titles.get(eventKey(row)) ?? 40;
+  const laneGroups = side
+    ? resources.map((r) => displayed.filter((row) => row.resourceId === r.id))
+    : [rows];
   const columns = Math.max(
     1,
-    ...calendarLanes(
-      rows.map((row) => ({
-        event: row,
-        top: Math.max(from, +row.start),
-        height: Math.max(
-          +row.end - Math.max(from, +row.start),
-          (minimumHeight(row) / measurements.height) * 86400000
-        ),
-      }))
-    ).map((row) => row.columns)
+    ...laneGroups.flatMap((group) =>
+      calendarLanes(
+        group.map((row) => ({
+          event: row,
+          top: Math.max(from, +row.start),
+          height: Math.max(
+            +row.end - Math.max(from, +row.start),
+            (minimumHeight(row) / measurements.height) * 86400000
+          ),
+        }))
+      ).map((row) => row.columns)
+    )
   );
+  const dayLanes = windows.map((window) =>
+    Math.max(
+      1,
+      ...calendarLanes(
+        rows
+          .filter(
+            (row) =>
+              +row.start < window.to &&
+              (row.point === true ? +row.start >= window.from : +row.end > window.from)
+          )
+          .map((row) => ({
+            event: row,
+            top: Math.max(window.from, +row.start),
+            height: Math.max(
+              Math.min(window.to, +row.end) - Math.max(window.from, +row.start),
+              (minimumHeight(row) / measurements.height) * (window.to - window.from)
+            ),
+          }))
+      ).map((row) => row.columns)
+    )
+  );
+  const gridWidth = calendarGridWidth(view, side, resources.length, columns, expanded, dayLanes);
+  const overflow = useCalendarOverflow(calendarRoot, gridWidth);
   const layout: DayLayoutFunction<ScheduleEntry> = ({ events, slotMetrics }) => {
     // The library's public hook types slotMetrics as any; narrow it at this boundary.
     const metrics = slotMetrics as {
@@ -281,16 +360,63 @@ export function DayTimeline({
       },
     }));
   };
-  const midnight = civilHour(civilDate(new Date(from), zone), 0, zone);
+  const day = civilDate(new Date(from), zone);
+  const midnight = civilHour(day, 0, zone);
+  const axisStart = civilHour(day, startHour ?? 0, zone);
+  const axisEnd = civilHour(day, endHour ?? 24, zone);
+  const opening = openingScrollTime(
+    from,
+    to,
+    displayed.map((row) => +row.start),
+    Date.now(),
+    view,
+    zone
+  );
+  const focusParams = new URLSearchParams(returnTo.split("?")[1] ?? "");
+  const focusKey = `${view}:${from}:${to}:${interval}:${shipLayout}:${focusParams.get("q")}:${focusParams.get("dataset")}:${JSON.stringify(selectedShips ? [...selectedShips].sort() : null)}`;
+  // Turnover disclosure/UTC edits are not schedule navigation and must not reset scrolling.
+  useOpeningScroll(
+    calendarRoot,
+    focusKey,
+    ready && view !== "month",
+    (opening - axisStart) / (axisEnd - axisStart)
+  );
+  if (side && resources.length === 0) {
+    return (
+      <p className="calendar-result-limit">
+        No valid ship calendars selected. Choose a ship or Unassigned.
+      </p>
+    );
+  }
   return (
     <>
+      {view !== "month" && overflow && (
+        <div className="calendar-overflow">
+          Readable lanes extend beyond this view. Scroll horizontally for more{" "}
+          {side ? "ships" : "days"}.
+          <button
+            className="btn btn-xs"
+            aria-label="Scroll calendar left"
+            onClick={() => calendarRoot.current?.scrollBy({ left: -320, behavior: "smooth" })}
+          >
+            ←
+          </button>
+          <button
+            className="btn btn-xs"
+            aria-label="Scroll calendar right"
+            onClick={() => calendarRoot.current?.scrollBy({ left: 320, behavior: "smooth" })}
+          >
+            →
+          </button>
+        </div>
+      )}
       <div
         ref={calendarRoot}
         style={
           view === "month"
             ? undefined
             : ({
-                "--calendar-grid-min-width": `${52 + (view === "week" ? 7 : 1) * columns * 128}px`,
+                "--calendar-grid-min-width": `${gridWidth}px`,
               } as CSSProperties)
         }
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}
@@ -300,15 +426,19 @@ export function DayTimeline({
       >
         <WeekDisclosure.Provider value={view === "week" ? disclose : null}>
           <CalendarAccessibility>
-            <Calendar<ScheduleEntry>
-              className={`ship-calendar ${view === "week" ? "ship-calendar-week" : ""}`}
+            <Calendar<ScheduleEntry, ShipResource>
+              className={`ship-calendar ${view === "week" ? "ship-calendar-week" : ""}${side ? " ship-calendar-resources" : ""}`}
               key={`${zone}-${from}-${to}`}
               localizer={localizer}
               date={new Date(midnight)}
               view={view}
               views={["day", "week", "month"]}
               toolbar={false}
-              events={rows}
+              events={displayed}
+              resources={side ? resources : undefined}
+              resourceIdAccessor="id"
+              resourceTitleAccessor="title"
+              resourceAccessor="resourceId"
               onNavigate={(date) => onDay?.(civilDate(date, zone))}
               onView={() => {
                 /* View is owned by the URL controls. */
@@ -337,9 +467,18 @@ export function DayTimeline({
                     : civilHour(civilDate(new Date(from), zone), endHour, zone) - 1
                 )
               }
-              scrollToTime={new Date(from)}
+              scrollToTime={new Date(opening)}
               getNow={() => new Date()}
               tooltipAccessor={() => ""}
+              dayPropGetter={(date) => {
+                if (view !== "week" || expanded) {
+                  return {};
+                }
+                const index = windows.findIndex(
+                  (window) => civilDate(new Date(window.from), zone) === civilDate(date, zone)
+                );
+                return { style: { minWidth: `${Math.max(1, dayLanes[index] ?? 1) * 128}px` } };
+              }}
               eventPropGetter={(row) => ({
                 className: [
                   row.event.isRevised ? "calendar-revised" : "",
@@ -347,7 +486,13 @@ export function DayTimeline({
                 ]
                   .filter(Boolean)
                   .join(" "),
-                style: { borderLeft: `5px solid ${shipColor(shipKey(row.event.unit))}` },
+                style: {
+                  "--ship-color": commandColor(
+                    row.resourceId ?? commandKeys(row.commandIds)[0],
+                    commands
+                  ),
+                  borderLeft: `5px solid ${row.event.isRevised ? "var(--color-warning)" : commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}`,
+                } as CSSProperties,
               })}
               formats={{
                 timeGutterFormat: (date) =>
@@ -363,6 +508,15 @@ export function DayTimeline({
               components={{
                 eventWrapper: SourceEventWrapper,
                 event: EventContent,
+                resourceHeader: ({ resource }) => (
+                  <span
+                    className="resource-ship-chip"
+                    title={resource.name}
+                    style={{ backgroundColor: commandColor(resource.id, commands) }}
+                  >
+                    {resource.id === "unassigned:" ? "Unassigned" : resource.title}
+                  </span>
+                ),
                 // Public 1.20 hook; @types 1.16 predates it. Suppress a retained
                 // indicator when changing to a window that excludes the real now.
                 ...{
@@ -408,7 +562,7 @@ export function DayTimeline({
               {showIndex ? (
                 <ul>
                   {rows.map((row) => (
-                    <li key={String(row.event.id)}>
+                    <li key={eventKey(row)}>
                       <button
                         className="btn btn-ghost"
                         onClick={() => {
@@ -416,7 +570,7 @@ export function DayTimeline({
                           setShowIndex(false);
                         }}
                       >
-                        {row.title} · <ShipMarker unit={row.event.unit} />
+                        {row.title} · <CommandChips ids={row.commandIds} commands={commands} />
                         {row.event.isRevised ? " · Revised" : ""}
                       </button>
                     </li>
@@ -426,7 +580,7 @@ export function DayTimeline({
                 selected && (
                   <>
                     <p>
-                      <ShipMarker unit={selected.event.unit} /> ·{" "}
+                      <CommandChips ids={selected.commandIds} commands={commands} /> ·{" "}
                       {(selected.event.location ?? "").trim() !== ""
                         ? selected.event.location
                         : "Location unavailable"}
@@ -437,6 +591,18 @@ export function DayTimeline({
                         : `${format(selected.event.startAt)} → ${format(selected.event.endAt)}`}
                       {selected.reviewRequired === true && " · Requires review"}
                     </p>
+                    {selected.recurrence && (
+                      <>
+                        <p>↻ {selected.recurrence.description}</p>
+                        <p>
+                          Rule: <code>{selected.recurrence.rule}</code>
+                          <br />
+                          Audited fact: {selected.recurrence.ruleFactId}
+                          <br />
+                          Occurrence: {selected.recurrence.occurrenceId}
+                        </p>
+                      </>
+                    )}
                     {selected.before && <p>Continues from earlier than a selected window.</p>}
                     {selected.after && <p>Continues later than a selected window.</p>}
                     {selected.event.isRevised && (

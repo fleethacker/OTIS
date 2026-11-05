@@ -3,7 +3,8 @@ import { expect, test, spyOn } from "bun:test";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
-import { renderWithProviders } from "../test-utils/render";
+import { renderWithProviders, testSession } from "../test-utils/render";
+import { sourceScopeKey } from "./source-data";
 import { NotificationPanel } from "./notifications";
 import {
   notificationTime,
@@ -28,7 +29,10 @@ function Location() {
 }
 function mount(page: NotificationPage, identity = "watch") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(["notifications", identity, "list"], { pages: [page], pageParams: [null] });
+  client.setQueryData(
+    ["notifications", identity, "list", testSession.user!.id, sourceScopeKey(testSession)],
+    { pages: [page], pageParams: [null] }
+  );
   const view = renderWithProviders(
     <QueryClientProvider client={client}>
       <NotificationPanel identity={identity} />
@@ -80,10 +84,13 @@ test("opening an item persists its exact version then navigates; bulk read uses 
     expect(writes).toEqual([{ id: 1, version: 2 }]);
     expect(view.getByRole("button", { name: "Notifications", exact: true })).toBeTruthy();
     current = page([item]);
-    view.client.setQueryData(["notifications", "watch", "list"], {
-      pages: [current],
-      pageParams: [null],
-    });
+    view.client.setQueryData(
+      ["notifications", "watch", "list", testSession.user!.id, sourceScopeKey(testSession)],
+      {
+        pages: [current],
+        pageParams: [null],
+      }
+    );
     await waitFor(() =>
       expect(view.getByRole("button", { name: "Notifications, 1 unread" })).toBeTruthy()
     );
@@ -128,10 +135,13 @@ test("group opens its messages, and a failed save keeps unread state with retry"
     await waitFor(() => expect(view.getByRole("link", { name: /Exercise tasking/ })).toBeTruthy());
     expect(view.container.textContent).not.toContain("private-id");
     fireEvent.click(view.getByRole("button", { name: "Back to notifications" }));
-    view.client.setQueryData(["notifications", "watch", "list"], {
-      pages: [page([item])],
-      pageParams: [null],
-    });
+    view.client.setQueryData(
+      ["notifications", "watch", "list", testSession.user!.id, sourceScopeKey(testSession)],
+      {
+        pages: [page([item])],
+        pageParams: [null],
+      }
+    );
     await waitFor(() =>
       expect(view.getByRole("button", { name: "Mark all as read" }).hasAttribute("disabled")).toBe(
         false

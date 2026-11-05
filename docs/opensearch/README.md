@@ -1,6 +1,14 @@
 # UI fixture index mappings
 
-These index-creation bodies implement the compact [ICD 1.1.0](../ICD.md) shape for an isolated UI test dataset. They contain no sample messages. Raw and parsed fixtures remain outside Git at `../OPTASK_Messages/parsed` relative to the repository.
+The 1.2 extension adds nested `recurrences` to messages. The Rust publisher checks
+an existing 1.1/1.2 message mapping before an additive upgrade; it does not delete or
+recreate the index, change other properties, or reset volumes. An incompatible
+existing recurrence field or unrecognized schema requires operator migration.
+Timeline candidate reads include recurrence-only and unanchored records; exact
+window expansion and unsupported-rule review happen in Rust under the shared fact
+bound. This is a bounded candidate read, not an unbounded/global recurrence total.
+
+These index-creation bodies implement the compact [ICD 1.2.0](../ICD.md) shape for an isolated UI test dataset. They contain no sample messages. Raw and parsed fixtures remain outside Git at `../OPTASK_Messages/parsed` relative to the repository.
 
 | Creation body | Suggested backing index | Alias |
 | --- | --- | --- |

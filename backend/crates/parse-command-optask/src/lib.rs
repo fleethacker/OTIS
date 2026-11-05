@@ -1,4 +1,5 @@
 //! Compiled OPTASK contribution. Rules operate only on explicit profiles and supplied evidence.
+mod crypto_recurrence;
 mod frequency;
 mod geo;
 mod interpretation;
@@ -15,7 +16,7 @@ pub use profile::TYPES as SUPPORTED_MESSAGE_TYPES;
 pub struct OptaskParser;
 static DESCRIPTOR: ParserDescriptor = ParserDescriptor {
     id: "optask",
-    version: "0.2.0",
+    version: "0.3.0",
     icd_major: ICD_MAJOR,
     message_types: profile::TYPES,
     profiles: &[profile::BASELINE, profile::EXAMPLES],
@@ -25,6 +26,7 @@ static DESCRIPTOR: ParserDescriptor = ParserDescriptor {
         FactCategory::Activity,
         FactCategory::Contact,
         FactCategory::Location,
+        FactCategory::Recurrence,
     ],
 };
 impl MessageParser for OptaskParser {
@@ -86,12 +88,14 @@ impl MessageParser for OptaskParser {
         };
         let mut counts = [0usize; 5];
         let mut message_periods = Vec::new();
+        let mut recurrences = crypto_recurrence::Collector::default();
         for record in input.records {
             context.budget.checkpoint(1 + record.fields.len() as u64)?;
             if record.set_id == "MSGID" {
                 continue;
             }
             scope.advance(record, input.message_type)?;
+            recurrences.record(record, &scope, profile);
             let defaulted: Vec<_> = record
                 .fields
                 .iter()
@@ -136,6 +140,7 @@ impl MessageParser for OptaskParser {
                         for mut fact in extraction.facts {
                             fact.assign_id(&mut counts);
                             let id = fact.id().to_owned();
+                            recurrences.observe(&fact, record, profile);
                             if matches!(&fact,Fact::Location(v) if v.status==LocationStatus::Unresolved)
                                 && extraction.diagnostic.is_some()
                             {
@@ -202,6 +207,7 @@ impl MessageParser for OptaskParser {
                 }
             }
         }
+        recurrences.emit(output, context.budget)?;
         Ok(ParseSummary {
             profile: profile.name(),
             completeness: Completeness::Partial,

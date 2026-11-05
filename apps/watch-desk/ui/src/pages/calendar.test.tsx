@@ -1,5 +1,6 @@
 import "../route-registry";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import { waitFor } from "@testing-library/react";
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { renderWithProviders } from "../test-utils/render";
@@ -115,43 +116,72 @@ test("actual UTC month lengths, exact fractions and keyboard day controls", () =
   expect(moveMonth("2026-12-31", 1)).toBe("2027-01-01");
   expect(moveMonth("2026-03-31", -1)).toBe("2026-02-01");
 });
-test("calendar mounts controls and truthful loading", () => {
-  const view = renderWithProviders(<Calendar />, {
-    route: "/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch",
-  });
-  expect(view.getByLabelText("UTC date")).toHaveValue("2026-11-04");
-  expect(view.queryByLabelText("Grid interval")).toBeNull();
-  expect(view.getByRole("searchbox", { name: "Search schedule" })).toHaveValue("watch");
-  const search = view.getByRole("searchbox", { name: "Search schedule" });
-  expect(search.closest("section")?.getAttribute("aria-label")).toBe("Calendar controls");
-  expect(search).not.toHaveAttribute("aria-describedby");
-  expect(view.queryByText(/Ship schedule/)).toBeNull();
-  expect(view.queryByText(/Hybrid keyword/)).toBeNull();
-  expect(view.container.querySelector(".view-label")).toBeNull();
-  expect(view.getByRole("status").textContent).toContain("Loading schedule");
-});
-test("week is an accessible URL-owned view with civil DST/year boundaries", () => {
-  const view = renderWithProviders(<Calendar />, {
-    route: "/calendar?view=week&date=2026-11-04&interval=30&hours=6-12&q=watch",
-  });
-  expect(view.getByRole("button", { name: "Week", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true"
+async function withCalendar(
+  route: string,
+  assertions: (view: ReturnType<typeof renderWithProviders>) => void
+) {
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (url) =>
+    Response.json(
+      String(url).endsWith("/commands/list")
+        ? {
+            commands: [],
+            source: "fictional config",
+            version: "test",
+            provenance: "fictional",
+            assignmentEnabled: false,
+          }
+        : { messages: [], meta: { reviewItems: [], timelineItems: [] } }
+    )
   );
-  expect(view.getByRole("button", { name: "Previous week" })).toBeTruthy();
-  expect(view.queryByLabelText("Grid interval")).toBeNull();
-  expect(view.queryByLabelText("Visible hours (UTC)")).toBeNull();
-  expect(
-    (weekBounds("2026-11-04", "America/New_York").to -
-      weekBounds("2026-11-04", "America/New_York").from) /
-      HOUR
-  ).toBe(169);
-  expect(
-    (weekBounds("2026-03-11", "America/New_York").to -
-      weekBounds("2026-03-11", "America/New_York").from) /
-      HOUR
-  ).toBe(167);
-  expect(new Date(weekBounds("2027-01-01").from).toISOString()).toBe("2026-12-27T00:00:00.000Z");
+  const view = renderWithProviders(<Calendar />, { route });
+  try {
+    assertions(view);
+    await waitFor(() => expect(view.getByRole("region", { name: "Needs review" })).toBeTruthy());
+  } finally {
+    view.unmount();
+    fetch.mockRestore();
+  }
+}
+test("calendar mounts controls and truthful loading", async () => {
+  await withCalendar("/calendar?date=2026-11-04&interval=30&hours=6-12&q=watch", (view) => {
+    expect(view.getByLabelText("UTC date")).toHaveValue("2026-11-04");
+    expect(view.queryByLabelText("Grid interval")).toBeNull();
+    expect(view.getByRole("searchbox", { name: "Search schedule" })).toHaveValue("watch");
+    const search = view.getByRole("searchbox", { name: "Search schedule" });
+    expect(search.closest("section")?.getAttribute("aria-label")).toBe("Calendar controls");
+    expect(search).not.toHaveAttribute("aria-describedby");
+    expect(view.queryByText(/Ship schedule/)).toBeNull();
+    expect(view.queryByText(/Hybrid keyword/)).toBeNull();
+    expect(view.container.querySelector(".view-label")).toBeNull();
+    expect(view.getByRole("status").textContent).toContain("Loading schedule");
+  });
+});
+test("week is an accessible URL-owned view with civil DST/year boundaries", async () => {
+  await withCalendar(
+    "/calendar?view=week&date=2026-11-04&interval=30&hours=6-12&q=watch",
+    (view) => {
+      expect(view.getByRole("button", { name: "Week", exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "true"
+      );
+      expect(view.getByRole("button", { name: "Previous week" })).toBeTruthy();
+      expect(view.queryByLabelText("Grid interval")).toBeNull();
+      expect(view.queryByLabelText("Visible hours (UTC)")).toBeNull();
+      expect(
+        (weekBounds("2026-11-04", "America/New_York").to -
+          weekBounds("2026-11-04", "America/New_York").from) /
+          HOUR
+      ).toBe(169);
+      expect(
+        (weekBounds("2026-03-11", "America/New_York").to -
+          weekBounds("2026-03-11", "America/New_York").from) /
+          HOUR
+      ).toBe(167);
+      expect(new Date(weekBounds("2027-01-01").from).toISOString()).toBe(
+        "2026-12-27T00:00:00.000Z"
+      );
+    }
+  );
 });
 test("weekly daily windows include the last day and exclude unresolved events", () => {
   const bounds = weekBounds("2026-11-04");

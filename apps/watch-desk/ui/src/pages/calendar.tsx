@@ -1,10 +1,10 @@
-import { useSettings } from "../components/settings-data";
-import { useSearchParams } from "react-router-dom";
+import { useCalendarParams } from "../components/calendar-params";
 import { useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
 import { DayTimeline } from "../components/day-timeline";
+import { CalendarReview } from "../components/calendar-review";
 import {
   utcDate,
   monthBounds,
@@ -13,18 +13,26 @@ import {
   type CalendarView,
 } from "../components/calendar-time";
 import { useDisplayTime, civilDate, civilHour } from "../components/display-time";
-import { readShips } from "../components/ship-calendars";
+import { readShips, selectedShipFilters } from "../components/ship-calendars";
+import { WatchTurnoverPanel } from "../components/watch-turnover-panel";
+import { useCommands } from "../components/command-roster";
+import { ShipsSidebar } from "../components/ships-sidebar";
+import { useAccountSettings } from "../components/session";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
-  const { shared } = useSettings();
   const { zone } = useDisplayTime();
-  const [params, setParams] = useSearchParams();
+  const settings = useAccountSettings();
+  const roster = useCommands();
+  const [params, changeParams] = useCalendarParams();
   const today = civilDate(new Date(), zone);
   const [landingDate] = useState(today);
   const date = utcDate(params.get("date"), landingDate);
+  const requestedView = params.get("view");
   const view: CalendarView =
-    params.get("view") === "month" ? "month" : params.get("view") === "week" ? "week" : "day";
+    requestedView === "month" || requestedView === "week" || requestedView === "day"
+      ? requestedView
+      : settings.defaultCalendarView;
   const month = view === "month";
   const week = view === "week";
   const bounds = monthBounds(date, zone);
@@ -35,39 +43,54 @@ export default function Calendar() {
   const to = month ? bounds.to : week ? weekly.to : civilHour(date, 24, zone);
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const ships = params.has("ships")
-    ? readShips(params.get("ships"))
-    : (shared?.settings.commandIds.length ?? 0) > 0
-      ? new Set((shared?.settings.commandIds ?? []).map((id) => `unit:${id}`))
-      : null;
+  const ships = readShips(params.get("ships"));
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
-  const result = useSource("timeline", {
-    dataset,
-    query: debounced,
-    mode: "hybrid",
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
-    filters: ships
-      ? {
-          commandIds: [...ships].filter((v) => v.startsWith("unit:")).map((v) => v.slice(5)),
-          unassignedOnly: ships.has("unassigned:"),
-          noCommands:
-            ships.size === 0 ||
-            [...ships].some((v) => !v.startsWith("unit:") && v !== "unassigned:"),
-        }
-      : {},
-  });
+  const filters = selectedShipFilters(ships);
+  const noShips =
+    ships !== undefined &&
+    (filters.noCommands === true ||
+      (!!roster.data &&
+        !roster.isError &&
+        ![...ships].some(
+          (key) => key === "unassigned:" || roster.data.commands.some((c) => key === `unit:${c.id}`)
+        )));
+  const result = useSource(
+    "timeline",
+    {
+      dataset,
+      query: debounced,
+      mode: "hybrid",
+      from: new Date(from).toISOString(),
+      to: new Date(to).toISOString(),
+      filters,
+    },
+    !noShips
+  );
   const messages = result.data?.messages ?? [];
+  const refreshing = !noShips && (result.isPending || result.isFetching || query !== debounced);
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
   canonical.set("view", view);
   canonical.set("interval", String(interval));
   canonical.delete("hours");
   const returnTo = `/calendar?${canonical.toString()}`;
+  function setParams(change: (next: URLSearchParams) => void, replace = false) {
+    changeParams((next) => {
+      if (!next.has("date")) {
+        next.set("date", date);
+      }
+      if (!next.has("view")) {
+        next.set("view", view);
+      }
+      if (!next.has("interval")) {
+        next.set("interval", String(interval));
+      }
+      next.delete("hours");
+      change(next);
+    }, replace);
+  }
   function update(key: string, value: string) {
-    const next = new URLSearchParams(canonical);
-    next.set(key, value);
-    setParams(next, { replace: key === "q" });
+    setParams((next) => next.set(key, value), key === "q");
   }
   function move(direction: number) {
     update(
@@ -81,119 +104,225 @@ export default function Calendar() {
     );
   }
   return (
-    <div className={`calendar-page${week ? " calendar-page-week" : ""}`}>
-      <section className="calendar-controls" aria-label="Calendar controls">
-        <label className="schedule-search">
-          Search schedule
-          <input
-            className="input input-sm"
-            type="search"
-            value={query}
-            placeholder="Search"
-            onChange={(event) => update("q", event.target.value)}
+    <div className={`calendar-page calendar-with-ships${week ? " calendar-page-week" : ""}`}>
+      <ShipsSidebar
+        roster={roster.data}
+        selected={ships}
+        pending={roster.isPending}
+        error={roster.isError ? roster.error.message : undefined}
+        retry={() => {
+          void roster.refetch();
+        }}
+        onChange={(selected) =>
+          setParams((next) => {
+            if (selected === undefined) {
+              next.delete("ships");
+            } else {
+              next.set("ships", JSON.stringify([...selected].sort()));
+            }
+          })
+        }
+      />
+      <div className="calendar-main">
+        {dataset === "canonical" && (
+          <WatchTurnoverPanel
+            turnovers={roster.isError ? undefined : roster.data?.turnoverUtc}
+            commands={roster.isError ? [] : roster.data?.commands}
+            returnTo={returnTo}
           />
-        </label>
-        <div className="join" aria-label="Calendar view">
-          <button
-            className="btn btn-sm join-item"
-            aria-pressed={view === "day"}
-            onClick={() => update("view", "day")}
-          >
-            Day
-          </button>
-          <button
-            className="btn btn-sm join-item"
-            aria-pressed={week}
-            onClick={() => update("view", "week")}
-          >
-            Week
-          </button>
-          <button
-            className="btn btn-sm join-item"
-            aria-pressed={month}
-            onClick={() => update("view", "month")}
-          >
-            Month
-          </button>
-        </div>
-        <button className="btn btn-sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
-          ← Previous
-        </button>
-        <button className="btn btn-sm" onClick={() => update("date", today)}>
-          Today
-        </button>
-        <button className="btn btn-sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
-          Next →
-        </button>
-        <label>
-          {zone === "UTC" ? "UTC date" : "Date"}
-          <input
-            className="input input-sm"
-            type="date"
-            value={date}
-            onChange={(event) => {
-              if (event.target.value) {
-                update("date", event.target.value);
-              }
-            }}
-          />
-        </label>
-      </section>
-      {(result.isPending || result.isFetching) && <p role="status">Loading schedule…</p>}
-      {result.isError && (
-        <div className="alert" role="alert">
-          Calendar could not be loaded. {result.error.message}
-          <button className="btn btn-sm" onClick={() => void result.refetch()}>
-            Retry
-          </button>
-        </div>
-      )}
-      <section
-        className={`timeline-section ${date === today ? "is-today" : ""}`}
-        aria-labelledby="schedule-heading"
-      >
-        {result.data?.meta.windowLimited === true && !result.isFetching && !result.isError && (
-          <p role="status">Result limit reached. Narrow the range or search.</p>
         )}
-        <div className="timeline-toolbar">
-          <h2 id="schedule-heading">
-            {week
-              ? `${moment.tz(from, zone).format("DD MMM YYYY")} – ${moment.tz(to, zone).subtract(1, "day").format("DD MMM YYYY")}`
-              : new Date(midnight).toLocaleDateString("en-GB", {
-                  timeZone: zone,
-                  weekday: month ? undefined : "long",
-                  day: month ? undefined : "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-            {date === today && <span className="revision">Today</span>}
-          </h2>
-        </div>
-        <DayTimeline
-          messages={result.isError || result.isFetching ? [] : messages}
-          sourceItems={
-            dataset === "canonical"
-              ? result.isError || result.isFetching
-                ? []
-                : (result.data?.meta.timelineItems ?? [])
-              : undefined
-          }
-          from={from}
-          to={to}
-          interval={interval}
-          returnTo={returnTo}
-          view={view}
-          expanded={params.get("layout") === "expanded"}
-          startHour={0}
-          endHour={24}
-          onDay={(chosen) => {
-            const next = new URLSearchParams(canonical);
-            next.set("date", chosen);
-            next.set("view", "day");
-            setParams(next);
-          }}
-        />
-      </section>
+        <section className="calendar-controls" aria-label="Calendar controls">
+          <label className="schedule-search">
+            Search schedule
+            <input
+              className="input input-sm"
+              type="search"
+              value={query}
+              placeholder="Search"
+              onChange={(event) => update("q", event.target.value)}
+            />
+          </label>
+          <div className="join" aria-label="Calendar view">
+            <button
+              className="btn btn-sm join-item"
+              aria-pressed={view === "day"}
+              onClick={() => update("view", "day")}
+            >
+              Day
+            </button>
+            <button
+              className="btn btn-sm join-item"
+              aria-pressed={week}
+              onClick={() => update("view", "week")}
+            >
+              Week
+            </button>
+            <button
+              className="btn btn-sm join-item"
+              aria-pressed={month}
+              onClick={() => update("view", "month")}
+            >
+              Month
+            </button>
+          </div>
+          {view === "day" && (
+            <div className="join" aria-label="Day ship layout">
+              <button
+                className="btn btn-sm join-item"
+                aria-pressed={params.get("shipLayout") !== "side"}
+                onClick={() => update("shipLayout", "combined")}
+              >
+                Combined
+              </button>
+              <button
+                className="btn btn-sm join-item"
+                aria-pressed={params.get("shipLayout") === "side"}
+                onClick={() => update("shipLayout", "side")}
+              >
+                Side by side
+              </button>
+            </div>
+          )}
+          <button className="btn btn-sm" onClick={() => move(-1)} aria-label={`Previous ${view}`}>
+            ← Previous
+          </button>
+          <button className="btn btn-sm" onClick={() => update("date", today)}>
+            Today
+          </button>
+          <button className="btn btn-sm" onClick={() => move(1)} aria-label={`Next ${view}`}>
+            Next →
+          </button>
+          <label>
+            {zone === "UTC" ? "UTC date" : "Local date"}
+            <input
+              className="input input-sm"
+              type="date"
+              value={date}
+              onChange={(event) => {
+                if (event.target.value) {
+                  update("date", event.target.value);
+                }
+              }}
+            />
+          </label>
+          <button
+            className="btn btn-sm"
+            disabled={noShips || result.isFetching}
+            onClick={() => void result.refetch()}
+          >
+            {result.isFetching && result.data ? "Refreshing…" : "Refresh calendar"}
+          </button>
+        </section>
+        {!noShips && query.trim() && !refreshing && !result.isError && result.data && (
+          <p className="calendar-search-status">
+            Calendar filtered by “{query}” · Executed search:{" "}
+            {result.data.meta.executedMode ?? "not reported by server"}.
+            {result.data.meta.executedMode === "hybrid" &&
+              " Ranked results may include related messages without a literal word match."}
+          </p>
+        )}
+        {refreshing && !result.data && <p role="status">Loading schedule…</p>}
+        {!noShips && result.data && (
+          <p className="text-sm text-bc-muted px-4" role="status">
+            {result.isFetching ? "Refreshing schedule… " : ""}
+            Last refreshed:{" "}
+            <time dateTime={new Date(result.dataUpdatedAt).toISOString()}>
+              {new Date(result.dataUpdatedAt).toLocaleString("en-GB", {
+                timeZone: zone,
+                timeZoneName: "short",
+              })}
+            </time>
+            {settings.calendarRefreshSeconds === 0
+              ? " · Manual refresh"
+              : ` · Every ${settings.calendarRefreshSeconds} seconds`}
+          </p>
+        )}
+        {!noShips && result.isError && (
+          <div className="alert" role="alert">
+            {result.data
+              ? "Refresh failed. Showing the last successful schedule. "
+              : "Calendar could not be loaded. "}
+            {result.error.message}
+            <button className="btn btn-sm" onClick={() => void result.refetch()}>
+              Retry
+            </button>
+          </div>
+        )}
+        <section
+          className={`timeline-section ${date === today ? "is-today" : ""}`}
+          aria-labelledby="schedule-heading"
+        >
+          {result.data?.meta.windowLimited === true && !refreshing && !result.isError && (
+            <p className="calendar-result-limit" role="status">
+              Partial source results. Narrow the range or search; counts cover returned records
+              only.
+            </p>
+          )}
+          <div className="timeline-toolbar">
+            <h2 id="schedule-heading">
+              {week
+                ? `${moment.tz(from, zone).format("DD MMM YYYY")} – ${moment.tz(to, zone).subtract(1, "day").format("DD MMM YYYY")}`
+                : new Date(midnight).toLocaleDateString("en-GB", {
+                    timeZone: zone,
+                    weekday: month ? undefined : "long",
+                    day: month ? undefined : "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+              {date === today && <span className="revision">Today</span>}
+            </h2>
+          </div>
+          {noShips ? (
+            <p className="calendar-result-limit">No ships selected. Choose a ship or Unassigned.</p>
+          ) : (
+            <DayTimeline
+              commands={roster.isError ? [] : roster.data?.commands}
+              shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
+              selectedShips={ships}
+              ready={!!result.data && query === debounced}
+              messages={query !== debounced ? [] : messages}
+              sourceItems={
+                dataset === "canonical"
+                  ? query !== debounced
+                    ? []
+                    : (result.data?.meta.timelineItems ?? [])
+                  : undefined
+              }
+              from={from}
+              to={to}
+              interval={interval}
+              returnTo={returnTo}
+              view={view}
+              expanded={params.get("layout") === "expanded"}
+              startHour={0}
+              endHour={24}
+              onDay={(chosen) =>
+                setParams((next) => {
+                  next.set("date", chosen);
+                  next.set("view", "day");
+                })
+              }
+            />
+          )}
+        </section>
+        {dataset === "canonical" &&
+          (noShips || (result.data && !refreshing && !result.isError)) && (
+            <CalendarReview
+              items={noShips ? undefined : result.data?.meta.reviewItems}
+              notQueried={noShips}
+              commands={roster.isError ? [] : roster.data?.commands}
+              limited={!noShips && result.data?.meta.windowLimited === true}
+              filtered={ships !== undefined || query.trim() !== ""}
+              returnTo={returnTo}
+              onShowAll={() =>
+                setParams((next) => {
+                  next.delete("ships");
+                  next.delete("q");
+                })
+              }
+            />
+          )}
+      </div>
     </div>
   );
 }

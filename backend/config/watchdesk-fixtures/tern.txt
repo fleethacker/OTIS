@@ -1,0 +1,4 @@
+MSGID/OPTASK COMMS/MIL-STD-6040(SERIES)/B.1.01.12/FICTIONAL DEMO ORIGIN/3/20261105T080000Z/-/-/USA/UNCLASSIFIED//
+EXER/FICTIONAL COPPER LANTERN//
+COMPLAN/FICTIONAL TERN WATCH/A/051400ZNOV2026/051600ZNOV2026/UHF:1//
+GENTEXT/FICTIONAL LOGISTICS NOTE/USNS Tern uses this fictional resupply exercise to practise coordination between training watch teams. Confirm the simulated cargo checklist and receive-only communications before the rehearsal. This paragraph creates no additional tasking or event times.//

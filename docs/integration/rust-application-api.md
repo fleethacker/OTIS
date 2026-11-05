@@ -5,7 +5,7 @@ Current authentication, roles and persistence are defined in [Settings, OIDC and
 The React app calls the same-origin Rust server through `web`. OpenSearch DSL,
 index names, model IDs, passage grouping and search templates stay in Rust.
 The browser does not receive vectors, credentials or arbitrary query access.
-The parsed-message ICD 1.1.0 remains the contributor/storage contract.
+The parsed-message ICD 1.2.0 remains the contributor/storage contract.
 
 ## Reads
 
@@ -63,8 +63,7 @@ List/search accept `sort: relevance | issued_desc | issued_asc`. Browsing uses
 newest issue time when relevance has no query; missing issue times sort last in
 both date directions. Date ties use source ID and revision for stable ordering.
 Sender filtering means exact MSGID originating commands (`filters.originators`),
-not RFC email senders. The UI's issued-through date includes that entire Zulu day;
-it becomes the next midnight in the exclusive `issuedTo` API parameter.
+not RFC email senders. The UI's issued-through date includes that entire day in the selected IANA timezone; the exclusive `issuedTo` instant is converted to UTC.
 
 `meta` supplies `page`, `pageSize: 20`, `totalRecords`, `totalRelation`, optional
 `totalPages`, and opaque `currentPageToken` / `previousPageToken` / `nextPageToken`.
@@ -189,9 +188,7 @@ REF represents the source issue minute in its required DTG form; original
 second precision remains in the source MSGID card and raw body. Missing
 mandatory reference data blocks generation with a compact field error.
 
-Outgoing command and responding authority temporarily use the user-approved
-`FLEETHACKER` placeholder. Shared Settings must replace both independently;
-tracked in GitHub issue #6. Saving/copying a draft never records a sent or
+Outgoing command and responding authority come from shared Settings. Both must be configured before draft generation; no placeholder authority is supplied. Saving/copying a draft never records a sent or
 acknowledged state. The status pill distinguishes existing externally recorded
 acknowledgement, a saved unsent draft, and no acknowledgement. No SMTP sending
 is added by this change. Private state remains isolated by the existing verified
@@ -248,7 +245,7 @@ application-state index. It is available across browsers using that identity.
 An inbox item contains `id`, `version`, `kind` (`traffic`, `failed`, `recovered`),
 `context`, `messageKey`, `at`, `detail`, `resolvedAt`, `count`, and `unread`.
 IDs and versions are transport tokens, never display text. `at` is an actual
-recorded custody/publication timestamp, displayed in Zulu; traffic becomes
+recorded custody/publication timestamp, displayed in the user's selected IANA timezone; traffic becomes
 available when message publication succeeds. Group members contain the source
 subject, message type/originator context, message link, timestamp and version.
 The message viewer accepts `tab=lifecycle` for notification links.
@@ -279,3 +276,40 @@ parser re-interpretation and draft edits are not represented as schedule changes
 The UI polls every 30 seconds while foregrounded (one second during bounded
 catch-up); notifications use local storage/API resources only, without OpenSearch
 searches, email delivery, push services, or runtime external dependencies.
+
+## Watch, station and briefing additions on main-3
+
+The native `/auth/*` routes remain the authentication boundary. Additional
+`GET /api/v1/auth/session` returns profile/station metadata for that already
+validated session; it does not create a competing login mechanism. Account
+preferences are read from that profile and updated with `PATCH /api/v1/account/settings`; native shared settings and
+IANA timezone APIs retain their existing authority. Admin station management uses
+`GET /api/v1/users` and `PATCH /api/v1/users/{id}`. Role/enablement/revocation remain
+with native IdP claims and `/api/v1/settings/*`, not station updates.
+
+Responsibility directory routes are `/api/v1/responsibilities` and
+`/api/v1/briefing/responsibilities` (and their `/{id}` mutations). Profiles contain
+explicit message categories; names never infer scope. Assigned command/category
+scope is applied by the server to searches, hydration, details, evidence, related
+messages, notifications and canonical private-state operations. Personal
+preferences may narrow but cannot broaden that assignment. Read windows bind the
+current scope so station changes invalidate earlier paging tokens.
+
+`POST /api/v1/briefing` pages a frozen login window. First availability is recorded
+in a single CAS-updated custody ledger with its sequence; old issue dates stay
+separate from arrival. Refreshing access tokens does not advance that login
+window. Later login sessions capture the next checkpoint. The ledger is bounded;
+full capacity fails explicitly and requires an archival plan.
+
+`POST /api/v1/messages/similar` takes an exact seed key. Rust obtains the seed's
+source content and enforces its scope; callers cannot substitute source text or
+broaden result filters. A new `POST /api/v1/changes/list` supplies bounded watch
+turnover results. `/api/v1/watch-context/{operation}` manages shared roster/watch
+context and conflict-checked field updates. `POST /api/v1/commands/list` supplies
+command choices. The UI separates watch context at `/watch-settings` from the
+native administrator settings modal.
+
+ICD 1.2 daily crypto recurrences expand only within requested calendar bounds;
+each occurrence keeps its source fact link and review state. Partial/unresolved
+time expressions remain unresolved. These extensions do not send messages or
+turn a private draft into an acknowledgement.

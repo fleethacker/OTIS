@@ -1,6 +1,7 @@
-import { SettingsProvider } from "./SettingsProvider";
 import { Link, Outlet } from "react-router-dom";
 import otisIcon from "../assets/otis/otis-icon.webp";
+import { WatchContextHeader } from "./watch-context-header";
+import { StationAssignmentNotice } from "./station-assignment";
 import { HeaderClock } from "./header-clock";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
@@ -10,11 +11,9 @@ import { DisplayTimeProvider, useDisplayTime } from "./display-time";
 
 export function AppLayout() {
   return (
-    <SettingsProvider>
-      <DisplayTimeProvider>
-        <DeskLayout />
-      </DisplayTimeProvider>
-    </SettingsProvider>
+    <DisplayTimeProvider>
+      <DeskLayout />
+    </DisplayTimeProvider>
   );
 }
 function DeskLayout() {
@@ -27,12 +26,17 @@ function DeskLayout() {
       <header className="desk-header">
         <div className="header-start">
           <NavigationMenu />
-          <Link className="wordmark" to="/calendar" aria-label="OTIS calendar">
-            <img className="otis-mark" src={otisIcon} width={44} height={44} alt="" />
+          <div className="wordmark">
+            <Link to="/calendar" aria-label="OTIS calendar">
+              <img className="otis-mark" src={otisIcon} width={44} height={44} alt="" />
+            </Link>
             <span>
-              OTIS<small>Keeping the Watch</small>
+              <span className="wordmark-title">
+                OTIS<small>Keeping the Watch</small>
+              </span>
+              <WatchContextHeader />
             </span>
-          </Link>
+          </div>
         </div>
         <HeaderClock />
         <div className="account">
@@ -42,6 +46,7 @@ function DeskLayout() {
         </div>
       </header>
       <main id="main" tabIndex={-1}>
+        <StationAssignmentNotice />
         <Outlet />
       </main>
       <footer className="desk-footer">

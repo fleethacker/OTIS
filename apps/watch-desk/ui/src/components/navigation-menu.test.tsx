@@ -7,7 +7,7 @@ function CurrentRoute() {
   return <p>Route: {useLocation().pathname}</p>;
 }
 
-test("burger opens navigation, follows links and closes after selection", () => {
+test("burger follows briefing, workspace and OTIS links and closes after selection", () => {
   const view = renderWithProviders(
     <>
       <NavigationMenu />
@@ -21,7 +21,11 @@ test("burger opens navigation, follows links and closes after selection", () => 
   fireEvent.click(trigger);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
   expect(view.getByRole("dialog", { name: "Navigation menu" })).toBeTruthy();
-  expect(view.getByRole("link", { name: "Calendar" })).toBe(document.activeElement);
+  expect(view.getByRole("link", { name: "Shift briefing" })).toBe(document.activeElement);
+  fireEvent.click(view.getByRole("link", { name: "Shift briefing" }));
+  expect(view.getByText("Route: /shift")).toBeTruthy();
+  expect(view.queryByRole("dialog")).toBeNull();
+  fireEvent.click(trigger);
   fireEvent.click(view.getByRole("link", { name: "Message Search" }));
   expect(view.getByText("Route: /messages")).toBeTruthy();
   expect(view.queryByRole("dialog")).toBeNull();

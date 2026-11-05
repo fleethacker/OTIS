@@ -5,7 +5,7 @@ Stop old writers and use SQLite backup() before the final import. Existing recor
 must match byte-for-byte after JSON normalization: this never overwrites live state.
 The marker is written only after every imported document is read back and verified.
 """
-import argparse, base64, collections, hashlib, json, pathlib, sqlite3, urllib.error, urllib.request
+import argparse, base64, collections, hashlib, json, pathlib, re, sqlite3, urllib.error, urllib.request
 
 
 def encoded(value):
@@ -39,7 +39,152 @@ def owner(name):
     return 'demo:' + name
 
 
+# These tables are deliberately expired rather than copied into native auth/search.
+EXPIRED_PRIVATE = {'sessions', 'account_sessions', 'login_attempts', 'read_windows', 'cursors'}
+PRIVATE_TABLES = EXPIRED_PRIVATE | {'identities', 'drafts', 'activity', 'preparations', 'legacy_messages', 'legacy_orphans', 'migration', 'notifications', 'notification_members', 'notification_seen', 'notification_incidents', 'notification_reads', 'notification_inboxes', 'notification_cursors', 'notification_clock', 'accounts', 'account_settings', 'account_audit', 'responsibility_profiles', 'watch_context'}
+CUSTODY_TABLES = {'receipts', 'identity', 'cursors', 'projections', 'custody_events', 'audit_outbox', 'publication_jobs', 'publication_events', 'publication_indices', 'source_routing_revisions', 'message_availability', 'message_availability_versions'}
+
+
+def validate_tables(private, custody):
+    for label, tables, known in [('private', private, PRIVATE_TABLES), ('custody', custody, CUSTODY_TABLES)]:
+        unknown = sorted(set(tables) - known)
+        if unknown:
+            raise ValueError('Unsupported ' + label + ' tables; migration requires an explicit mapping: ' + ', '.join(unknown))
+
+
+def account_records(private, users):
+    accounts = {r['id']: r for r in private.get('accounts', [])}
+    if len(accounts) != len(private.get('accounts', [])):
+        raise ValueError('Duplicate account identity')
+    settings = {r['user_id']: json.loads(r['document']) for r in private.get('account_settings', [])}
+    if set(settings) - set(accounts):
+        raise ValueError('Settings reference an unknown account')
+    for name in sorted(users | set(accounts)):
+        if not name:
+            raise ValueError('Unowned private record requires explicit migration mapping')
+        row = accounts.get(name)
+        role = 'admin' if name == 'dev-admin' else 'viewer'
+        payload = dict(username=name, email='', groups=[role], enabled=True, epoch=0, timezone='UTC', identity_type='demo', created_at='', last_login='')
+        if row is not None:
+            # Native OIDC derives owners differently. Never reclassify a provider
+            # identity as a local demo user or assign ownership from an email.
+            if row['issuer'] != 'local_demo' or row['subject'] != name or name not in {'dev-admin', 'dev-user', 'dev-viewer'}:
+                raise ValueError('Legacy provider identity requires explicit reviewed owner mapping')
+            role = {'platform_admin': 'admin', 'user': 'viewer', 'viewer': 'viewer'}[row['role']]
+            prefs = settings.get(name, dict(timezone='UTC', calendarRefreshSeconds=30, defaultCalendarView='day', messageScope=dict(allCommands=True, commandIds=[], includeUnassigned=True, responsibilityIds=[])))
+            if prefs.get('timezone') == 'local':
+                raise ValueError('Legacy local timezone needs an explicit IANA timezone before migration')
+            assignment = json.loads(row['station_assignment']) if row.get('station_assignment') else None
+            payload.update(username=row['username'], displayName=row['display_name'], email=row['email'], groups=[role], enabled=bool(row['active']), created_at=row['created_at'], last_login=row.get('last_login_at'), previous_login=row.get('previous_login_at'), stationAssignment=assignment, stationRevision=row.get('station_revision', 0), accountSettings=prefs, timezone=prefs.get('timezone', 'UTC'), briefingCheckpoint=row.get('last_login_sequence'), briefingSnapshotAt=row.get('last_snapshot_at'), briefingLastLogin=row.get('last_login_at'))
+        yield record('user', owner(name), payload, owner=owner(name), category=role)
+
+
+def routing_records(custody):
+    catalog_path = pathlib.Path(__file__).parents[1] / 'config/watchdesk-demo.json'
+    catalog_bytes = catalog_path.read_bytes()
+    catalog = json.loads(catalog_bytes)
+    fixtures = {key: fixture for fixture in catalog['fixtures'] for key in fixture['bodyHashes']}
+    demo_fingerprint = digest(b'watchdesk-demo:' + catalog_bytes)
+    def fingerprint(policy, ids):
+        return digest(encoded({'policyId': policy, 'commandIds': ids}))
+    bindings = {r['revision']: r for r in custody.get('source_routing_revisions', [])}
+    revisions = {r['revision'] for table in ['identity', 'receipts', 'projections', 'message_availability', 'message_availability_versions'] for r in custody.get(table, []) if r.get('revision')} | set(bindings)
+    audits = collections.defaultdict(list)
+    for row in custody.get('audit_outbox', []):
+        event = json.loads(row['document'])
+        if event.get('kind') == 'demo_command_assignment':
+            audits[(row['message_id'], row['revision'])].append(event)
+    for revision in sorted(revisions):
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', revision):
+            raise ValueError('Invalid legacy interpretation revision')
+        projections = [r for r in custody.get('projections', []) if r['revision'] == revision]
+        old = bindings.get(revision)
+        policy = old['policy_id'] if old else None
+        ids = json.loads(old['command_ids']) if old else []
+        if policy is not None and (not isinstance(policy, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', policy)):
+            raise ValueError('Invalid legacy source routing policy ID')
+        demo = old['fingerprint'] == demo_fingerprint if old else any(audits[(r['message_id'], revision)] for r in projections)
+        if not isinstance(ids, list) or any(not isinstance(v, str) or not v or v.strip() != v or len(v.encode('utf-8')) > 256 or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in v) for v in ids) or len(ids) > 32 or len(set(ids)) != len(ids):
+            raise ValueError('Invalid legacy routing command IDs')
+        if ids != sorted(ids) or (demo and (policy is not None or ids)) or (not demo and ((policy is None) != (not ids))):
+            raise ValueError('Ambiguous legacy routing policy')
+        expected_fingerprint = demo_fingerprint if demo else fingerprint(policy, ids)
+        if old and old['fingerprint'] != expected_fingerprint:
+            raise ValueError('Unknown legacy routing fingerprint; retain the original policy/catalog for explicit migration')
+        for row in projections:
+            core = json.loads(row['core'])
+            if core.get('id') != row['message_id'] or core.get('revision') != revision:
+                raise ValueError('Projection identity mismatch')
+            fixture = fixtures.get(row['message_id']) if demo else None
+            expected_ids = fixture['commandIds'] if fixture else ([] if demo else ids)
+            if core.get('command_ids', []) != expected_ids:
+                raise ValueError('Retained projection disagrees with revision routing policy')
+            if demo and fixture:
+                evidence = audits[(row['message_id'], revision)]
+                if not any(a.get('payload', {}).get('version') == catalog['version'] and a['payload'].get('fixture') == fixture['file'] and a['payload'].get('command_ids') == expected_ids for a in evidence):
+                    raise ValueError('Legacy demo assignment lacks matching retained evidence')
+        for table in ['message_availability', 'message_availability_versions']:
+            for available in custody.get(table, []):
+                if available['revision'] != revision:
+                    continue
+                fixture = fixtures.get(available['message_id']) if demo else None
+                expected_ids = fixture['commandIds'] if fixture else ([] if demo else ids)
+                if json.loads(available['command_ids']) != expected_ids:
+                    raise ValueError('Immutable availability disagrees with revision routing policy')
+        yield record('source_routing_revision', revision, dict(fingerprint=expected_fingerprint, policyId=policy, commandIds=ids, demoFixtureAssignments=demo))
+
+
+def availability_record(private, custody):
+    entries = {}
+    sequences = {}
+    def add(core, sequence, at):
+        key = core['id'] + '@' + core['revision']
+        if type(sequence) is not int or not 0 < sequence <= 2**63 - 1 or not isinstance(at, str) or not at:
+            raise ValueError('Invalid legacy availability checkpoint')
+        entry = dict(messageKey=key, core=core, availableAt=at, sequence=sequence)
+        if key in entries and entries[key] != entry:
+            raise ValueError('Conflicting immutable availability history')
+        if sequence in sequences and sequences[sequence] != key:
+            raise ValueError('Conflicting availability sequence')
+        entries[key] = entry
+        sequences[sequence] = key
+    for table in ['message_availability', 'message_availability_versions']:
+        for row in custody.get(table, []):
+            core = {key: row[key] for key in ['revision', 'subject', 'type', 'originator']}
+            core.update(id=row['message_id'], command_ids=json.loads(row['command_ids']))
+            if row.get('issued_at') is not None:
+                core['issued_at'] = row['issued_at']
+            add(core, row['sequence'], row['available_at'])
+    # Backfill only from successful published documents, never a newer pending
+    # projection. The first successful event provides the immutable arrival.
+    jobs = {(r['id'], r['kind']): r for r in custody.get('publication_jobs', [])}
+    for event in sorted(custody.get('publication_events', []), key=lambda r: r['sequence']):
+        key = event['message_id'] + '@' + event['revision']
+        job = jobs.get((event['message_id'] + ':' + event['revision'], 'message'))
+        if key in entries or event['stage'] != 'message' or event['code'] != 'publication_succeeded' or not job or job['state'] != 'published' or not job.get('published_at'):
+            continue
+        published = json.loads(job['source'])
+        if published.get('id') != event['message_id'] or published.get('revision') != event['revision']:
+            raise ValueError('Published availability identity mismatch')
+        core = {k: published.get(k, '') for k in ['id', 'revision', 'subject', 'type', 'originator']}
+        core['command_ids'] = published.get('command_ids', [])
+        if published.get('issued_at') is not None:
+            core['issued_at'] = published['issued_at']
+        add(core, event['sequence'], event['at'])
+    # Legacy checkpoints counted every publication event, including failures.
+    # Keep that allocator floor so future arrivals cannot fall below a saved login.
+    highest = max([0] + list(sequences) + [r['sequence'] for r in custody.get('publication_events', [])] + [r.get('last_login_sequence') or 0 for r in private.get('accounts', [])])
+    if type(highest) is not int or not 0 <= highest < 2**63 - 1:
+        raise ValueError('Invalid legacy sequence high-water mark')
+    payload = dict(entries=sorted(entries.values(), key=lambda r: r['sequence']), next=highest)
+    value = record('availability_log', 'committed', payload)
+    if len(entries) > 20000 or len(encoded(value)) > 16 * 1024 * 1024:
+        raise ValueError('Legacy availability exceeds the bounded committed log; explicit archival migration required')
+    return value
+
+
 def convert(private, custody):
+    validate_tables(private, custody)
     state, queue = [], []
     add = lambda kind, key, payload, **kw: state.append(record(kind, key, payload, **kw))
     put = lambda kind, key, payload, **kw: queue.append(record(kind, key, payload, **kw))
@@ -59,10 +204,20 @@ def convert(private, custody):
         row = preps.get((name, key), {})
         add('preparation', owner(name) + '\0' + key, {'fields_json': row.get('fields_json', '{}'), 'generated_text': row.get('generated_text', ''), 'acknowledged': bool(row.get('acknowledged', False)), 'history': histories[(name, key)]}, owner=owner(name), source=key)
     users = {r['owner'] for table in ['drafts', 'preparations', 'activity', 'notification_reads', 'notification_inboxes'] for r in private.get(table, [])}
-    for name in sorted(users):
-        if not name: raise ValueError('Unowned private record requires explicit migration mapping')
-        role = 'admin' if name == 'dev-admin' else 'viewer'
-        add('user', owner(name), dict(username=name, email='', groups=[role], enabled=True, epoch=0, timezone='UTC', identity_type='demo', created_at='', last_login=''), owner=owner(name), category=role)
+    state.extend(account_records(private, users))
+    users |= {row['id'] for row in private.get('accounts', [])}
+    for row in private.get('responsibility_profiles', []):
+        if row['kind'] not in ('department', 'watch_role'):
+            raise ValueError('Unknown responsibility profile kind')
+        add('responsibility', row['id'], dict(id=row['id'], name=row['name'], kind=row['kind'], messageTypes=json.loads(row['message_types'])), category=row['kind'])
+    for row in private.get('watch_context', []):
+        if row['singleton'] != 1:
+            raise ValueError('Unknown shared context identity')
+        add('watch_context', 'shared', json.loads(row['document']))
+    for row in private.get('account_audit', []):
+        add('account_audit', str(row['id']), row, owner=owner(row['target']), source=owner(row['actor']))
+    queue.extend(routing_records(custody))
+    queue.append(availability_record(private, custody))
     for row in private.get('legacy_messages', []): add('legacy_message', row['source_key'], json.loads(row['document']))
     for row in private.get('legacy_orphans', []): add('legacy_orphan', f"{row['kind']}:{row['id']}", json.loads(row['document']))
     for row in private.get('migration', []): add('legacy_migration', row['id'], row)
@@ -97,14 +252,18 @@ def convert(private, custody):
     for row in custody.get('audit_outbox', []):
         value = json.loads(row['document'])
         put('audit_archive', row['id'], value, source=f"{row['message_id']}@{row['revision']}", state=row['delivery_state'])
-        if value['kind'] == 'email_received': email_audits[row['receipt_id']].append(value)
+        if value['kind'] in ('email_received', 'source_routing_applied'): email_audits[row['receipt_id']].append(value)
         else: audits[(row['message_id'], row['revision'])].append(value)
     for row in receipts.values():
         if row['raw'] is not None and row['raw_hash'] != 'sha256:' + digest(row['raw']): raise ValueError('Receipt hash mismatch')
         raw = base64.b64encode(row['raw']).decode() if row['raw'] is not None else None
         payload = {k: row[k] for k in ['validity', 'uid', 'size', 'raw_hash', 'received_at', 'server_received_at', 'attempts', 'code', 'subject']}
-        payload.update(raw=raw, metadata=json.loads(row['metadata']) if row['metadata'] else None, events=events[row['id']], audit=email_audits[row['id']], audit_state='queued')
+        payload.update(raw=raw, metadata=json.loads(row['metadata']) if row['metadata'] else None, events=events[row['id']], audit=email_audits[row['id']], audit_state='pending' if email_audits[row['id']] else 'queued')
         flags = ['missing_received_time'] if row['server_received_at'] is None else []
+        # Re-enqueue receipt evidence idempotently, including audits that had not
+        # reached a publication job when the old writer was stopped.
+        if email_audits[row['id']]:
+            flags.append('audit_pending')
         source = f"{row['body_id']}@{row['revision']}" if row['body_id'] and row['revision'] else ''
         put('receipt', row['id'], payload, owner=row['account_id'], source=source, category=str(row['validity']), state=row['state'], order=row['sequence'], flags=flags, bytes=len(encoded(payload)))
     for row in custody.get('identity', []): put('mailbox_identity', row['account_id'], {k: row[k] for k in ['host', 'port', 'username', 'mailbox', 'revision']})
@@ -175,7 +334,7 @@ def main():
     args=p.parse_args();private=snapshot(args.private);custody=snapshot(args.custody)
     state,queue=convert(private,custody)
     fingerprint=digest(pathlib.Path(args.private).read_bytes()+pathlib.Path(args.custody).read_bytes())
-    report={'snapshot_sha256':fingerprint,'source_counts':{'private':{k:len(v) for k,v in private.items()},'custody':{k:len(v) for k,v in custody.items()}},'records':{'private':len(state),'custody':len(queue)},'content_sha256':{'private':digest(encoded(state)),'custody':digest(encoded(queue))},'invalidated':['sessions','read_windows','cursors (private only)']}
+    report={'snapshot_sha256':fingerprint,'source_counts':{'private':{k:len(v) for k,v in private.items()},'custody':{k:len(v) for k,v in custody.items()}},'records':{'private':len(state),'custody':len(queue)},'content_sha256':{'private':digest(encoded(state)),'custody':digest(encoded(queue))},'invalidated':sorted(EXPIRED_PRIVATE), 'compatibility':['local demo platform_admin maps to admin; user/viewer map to viewer', 'native auth sessions and search windows must be recreated']}
     if args.apply:
         target=Target(args.url)
         for index,rows in [(args.state_index,state),(args.custody_index,queue)]:

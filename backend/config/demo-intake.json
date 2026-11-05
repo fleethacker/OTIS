@@ -6,6 +6,7 @@
   "mailbox": "INBOX",
   "password_env": "PARSE_COMMAND_IMAP_PASSWORD",
   "transport": "plaintext_demo",
+  "demo_fixture_assignments": false,
   "revision": "intake-optask-geo-1",
   "poll_seconds": 5,
   "retry_max_seconds": 60,

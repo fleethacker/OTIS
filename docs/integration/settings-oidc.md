@@ -62,8 +62,7 @@ values through Settings. No public provider or default remote endpoint is config
 
 For UDS packaging, use native `Package.spec.sso` registration and mount its generated
 client secret in Rust. Do not enable the Authservice selector for this application:
-Rust validates the OIDC flow, session, role and ownership itself. Align the separate
-Zarf packaging work with this contract before combining it with this branch.
+Rust validates the OIDC flow, session, role and ownership itself. The [UDS packaging](../../deploy/uds/README.md) follows this contract; live cluster acceptance remains required.
 
 Apply `compose.oidc.yml` only after provisioning the client, trusted HTTPS ingress,
 DNS and secret files. `PARSE_COMMAND_SSO_SECRETS` names a private directory outside

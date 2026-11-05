@@ -17,6 +17,8 @@ services:
     environment:
       PARSE_COMMAND_AUTH_MODE: local_demo
       PARSE_COMMAND_OPENSEARCH_URL: http://opensearch:9200
+      PARSE_COMMAND_CUSTODY_INDEX: .parse-command-custody-v1
+      PARSE_COMMAND_STATE_INDEX: .parse-command-state-v1
       # Public demo credential; never substitute production credentials in this file.
       PARSE_COMMAND_IMAP_PASSWORD: ${PARSE_COMMAND_IMAP_PASSWORD:-ParseCommandDemoOnly123!}
     volumes:
@@ -34,6 +36,8 @@ networks:
   demo-mail:
     external: true
     name: parse-command-demo_mail
+# Retired volume declarations are retained only for explicit import/rollback.
+# Current runtime state lives in the hidden OpenSearch indices above.
 volumes:
   custody:
   private-state:

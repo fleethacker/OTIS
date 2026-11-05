@@ -74,6 +74,10 @@ physical hot/cold topology and policy rollout are separate work.
 
 ## Adopt existing custody and private state
 
+If adopting the earlier main-3 OpenSearch state, use the checked routing-binding
+upgrade in [the intake guide](../../backend/INTAKE.md#source-routing-and-fictional-fixtures)
+before restarting intake. This does not reset the custody index.
+
 Use the [verified snapshot migration procedure](settings-oidc.md#storage-and-migration).
 Stop existing writers, take consistent snapshots, import and verify both hidden
 state indices, then start the coordinated replacement with
@@ -114,6 +118,8 @@ locked checker tools; it does not modify Ark's pipeline or generated bindings.
 The base stack uses the explicit local-demo auth/plaintext IMAP profile already
 approved for v1. The optional OIDC overlay enables native Keycloak authentication;
 its acceptance and cutover status is recorded in [verification](settings-oidc-verification.md).
-On-premises Exchange PKI/TLS remains unimplemented. Runtime airgap assets are bundled, but an ordinary
+Verified implicit IMAP TLS with a mounted trusted CA is supported; Exchange-specific authentication still requires acceptance. Runtime airgap assets are bundled, but an ordinary
 Docker bridge is not an egress firewall; enforce enclave network isolation at
 the deployment boundary. No service needs an external runtime endpoint.
+
+For carried watch/station/briefing features and the explicit demo overlay, see [main-3 integration](main3-sync.md).

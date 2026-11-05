@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { DeskNetwork } from "./xnet-data";
 import { readJson } from "./source-data";
 import { sessionFetch } from "./session-access";
 export interface CommandSettings {
@@ -34,7 +35,7 @@ export async function settingsRequest<T>(operation: string, body: object = {}): 
   });
   return (await readJson(response)) as unknown as T;
 }
-export const SettingsContext = createContext<{ shared?: SettingsReply; timezone: string }>({
+export const SettingsContext = createContext<{ shared?: SettingsReply; timezone: string; deskNetwork?: DeskNetwork }>({
   timezone: "UTC",
 });
 export function useSettings() {

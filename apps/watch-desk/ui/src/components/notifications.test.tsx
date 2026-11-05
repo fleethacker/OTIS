@@ -29,6 +29,7 @@ function Location() {
 function mount(page: NotificationPage, identity = "watch") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["notifications", identity, "list"], { pages: [page], pageParams: [null] });
+  client.setQueryData(["xnet", "ALL", "list"], { items: [] });
   const view = renderWithProviders(
     <QueryClientProvider client={client}>
       <NotificationPanel identity={identity} />

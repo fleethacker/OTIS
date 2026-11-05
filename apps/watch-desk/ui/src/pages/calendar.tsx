@@ -2,6 +2,7 @@ import { AppButton, Notice, TextInput } from "../components/ui";
 import { CalendarParamsProvider, useCalendarParams } from "../components/calendar-params";
 import { BrowserPreferenceScope, CalendarPreferencesProvider } from "../components/calendar-preferences";
 import { useSettings } from "../components/settings-data";
+import { XnetBanner } from "../components/xnet-notices";
 import { useContext, useState } from "react";
 import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
@@ -102,6 +103,7 @@ function CalendarPage() {
         onReset={() => setParams((next) => next.delete("ships"))}
       />
       <div className="calendar-main">
+      <XnetBanner />
       {dataset === "canonical" && <WatchTurnoverPanel
         turnovers={shared?.settings.turnoverUtc}
         commands={roster.isError ? [] : roster.data?.commands}

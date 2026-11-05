@@ -23,6 +23,7 @@ pub fn router(app: Arc<App>) -> axum::Router {
         );
     axum::Router::new()
         .route("/api/health", get(web::health))
+        .route("/api/ready", get(web::ready))
         .route("/auth/login", get(web::oidc_login))
         .route("/auth/callback", get(web::callback))
         .route("/auth/session", get(web::session))

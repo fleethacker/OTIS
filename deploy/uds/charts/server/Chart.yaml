@@ -1,0 +1,6 @@
+apiVersion: v2
+name: parse-command-server
+description: Parse Command server for UDS Core
+type: application
+version: 0.1.0
+appVersion: "0.2.0"

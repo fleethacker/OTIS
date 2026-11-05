@@ -1,0 +1,51 @@
+{
+  "kind": "ZarfPackageConfig",
+  "metadata": {
+    "name": "parse-command-opensearch",
+    "version": "###ZARF_PKG_TMPL_VERSION###",
+    "description": "Disconnected Linux ARM64 Parse Command opensearch"
+  },
+  "components": [
+    {
+      "name": "uds-config",
+      "required": true,
+      "charts": [
+        {
+          "name": "parse-command-config",
+          "version": "0.1.0",
+          "namespace": "###ZARF_PKG_TMPL_NAMESPACE###",
+          "localPath": "../../charts/config"
+        }
+      ],
+      "actions": {
+        "onDeploy": {
+          "after": [
+            {
+              "cmd": "./zarf tools kubectl wait namespace ###ZARF_PKG_TMPL_NAMESPACE### --for=jsonpath='{.metadata.labels.istio-injection}'=enabled --timeout=120s",
+              "description": "Wait for UDS sidecar injection before creating application pods"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "opensearch",
+      "required": true,
+      "charts": [
+        {
+          "name": "parse-command-opensearch",
+          "version": "0.1.0",
+          "namespace": "###ZARF_PKG_TMPL_NAMESPACE###",
+          "localPath": "../../charts/opensearch",
+          "valuesFiles": [
+            "images.yaml"
+          ]
+        }
+      ],
+      "images": [
+        "###ZARF_PKG_TMPL_SEARCH_IMAGE###",
+        "###ZARF_PKG_TMPL_BOOTSTRAP_IMAGE###"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "kind": "ZarfPackageConfig",
+  "metadata": {
+    "name": "parse-command-server",
+    "version": "###ZARF_PKG_TMPL_VERSION###",
+    "description": "Disconnected Linux ARM64 Parse Command server"
+  },
+  "components": [
+    {
+      "name": "server",
+      "required": true,
+      "charts": [
+        {
+          "name": "parse-command-server",
+          "version": "0.1.0",
+          "namespace": "###ZARF_PKG_TMPL_NAMESPACE###",
+          "localPath": "../../charts/server",
+          "valuesFiles": [
+            "images.yaml"
+          ]
+        }
+      ],
+      "images": [
+        "###ZARF_PKG_TMPL_SERVER_IMAGE###"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+common:
+  domain: uds.dev
+  host: parse-command
+  clientId: parse-command
+  clientSecretName: parse-command-oidc-client
+  idpGatewayIp: ""
+  idpNamespace: istio-tenant-gateway
+  idpSelector: {app: tenant-ingressgateway}
+  idpPort: 8443
+  allowedGroups: [/Parse Command/Admin, /Parse Command/Viewer]
+  storageClass: ""
+  imapHost: ""
+  imapPort: 993
+  # Set a fixed mailbox CIDR; no arbitrary Internet egress is granted.
+  imapCidr: ""

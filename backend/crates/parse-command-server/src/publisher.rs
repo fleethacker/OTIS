@@ -158,10 +158,24 @@ impl Publisher {
             )?;
         }
         self.request(reqwest::Method::PUT,"/_search/pipeline/parse-command-hybrid-rrf-v1",json!({"phase_results_processors":[{"score-ranker-processor":{"combination":{"technique":"rrf","rank_constant":60}}}]}))?;
-        self.status.model.store(
-            model_id.is_some_and(|_| matching[0]["_source"]["model_state"] == "DEPLOYED"),
-            Ordering::Relaxed,
-        );
+        // Persisted model metadata is insufficient after a node restart.
+        let inference_ready = model_id.is_some() && self.request(
+            reqwest::Method::POST,
+            &format!("/_ingest/pipeline/{INGEST}/_simulate"),
+            json!({"docs":[{"_index":PASSAGES,"_id":"readiness-probe","_source":{"text":"Coordinate the communications plan and reporting requirements."}}]}),
+        ).is_ok_and(|value| {
+            let source = &value["docs"][0]["doc"]["_source"];
+            source["embedding_status"] == "ready" && source["embedding"].as_array().is_some_and(|v|
+                v.len() == 384 && v.iter().all(|n| n.as_f64().is_some_and(f64::is_finite)))
+        });
+        self.status.model.store(inference_ready, Ordering::Relaxed);
+        if !inference_ready && let Some(id) = model_id {
+            let _ = self.request(
+                reqwest::Method::POST,
+                &format!("/_plugins/_ml/models/{id}/_deploy"),
+                json!({}),
+            );
+        }
         Ok(())
     }
     fn reset_index(&self, target: &str, uuid: &str) -> Result<()> {

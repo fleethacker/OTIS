@@ -1,0 +1,11 @@
+{
+  "architecture": "arm64",
+  "uds_cli": "0.38.0",
+  "embedded_zarf": "0.86.0",
+  "uds_core": "1.14.3",
+  "uds_k3d": "0.21.0-airgap",
+  "kubernetes_image": "ghcr.io/defenseunicorns/uds-k3d/k3s:v1.36.4-k3s1",
+  "opensearch": "3.9.0",
+  "python_image": "python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34",
+  "model_sha256": "61ebca09b70c3061726fcd439dde0ad64ede6c5698cb30b594cb11b02603d64b"
+}

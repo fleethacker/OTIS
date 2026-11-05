@@ -111,3 +111,10 @@ require separate implementation and acceptance; the demo exercises SMTP/IMAP.
 Parser contributors should start with the [parsed-message ICD](docs/ICD.md)
 and [JSON Schemas](docs/schemas/README.md). Operational acceptance examples and
 manual-derived knowledge remain outside Git; see the backend and test-data guides.
+
+## UDS deployment
+
+Issue #9 adds an ARM64 [Zarf/UDS packaging workflow](deploy/uds/README.md) with
+native Keycloak OIDC, verified IMAP TLS and explicit retained storage/mesh policy.
+See the [validation record](deploy/uds/VALIDATION.md) for tested revisions and
+the remaining native-profile migration, browser and recovery acceptance gate.

@@ -5,7 +5,7 @@ Stop old writers and use SQLite backup() before the final import. Existing recor
 must match byte-for-byte after JSON normalization: this never overwrites live state.
 The marker is written only after every imported document is read back and verified.
 """
-import argparse, base64, collections, hashlib, json, pathlib, sqlite3, urllib.error, urllib.request
+import argparse, base64, collections, hashlib, json, pathlib, re, sqlite3, urllib.error, urllib.request
 
 
 def encoded(value):
@@ -35,12 +35,19 @@ def snapshot(path):
     return tables
 
 
-def owner(name):
+def migrated_owner(name, preserve_oidc=False):
+    if name.lower().startswith('oidc:'):
+        if not re.fullmatch(r'oidc:[0-9a-f]{64}', name):
+            raise ValueError('Malformed issuer-scoped OIDC owner')
+        if not preserve_oidc:
+            raise ValueError('OIDC owners require reviewed provenance and --preserve-oidc-owners')
+        return name
     return 'demo:' + name
 
 
-def convert(private, custody):
+def convert(private, custody, preserve_oidc=False):
     state, queue = [], []
+    owner = lambda name: migrated_owner(name, preserve_oidc)
     add = lambda kind, key, payload, **kw: state.append(record(kind, key, payload, **kw))
     put = lambda kind, key, payload, **kw: queue.append(record(kind, key, payload, **kw))
     max_id = max([0] + [r['id'] for r in private.get('identities', [])] + [r['id'] for r in private.get('drafts', [])])
@@ -62,7 +69,8 @@ def convert(private, custody):
     for name in sorted(users):
         if not name: raise ValueError('Unowned private record requires explicit migration mapping')
         role = 'admin' if name == 'dev-admin' else 'viewer'
-        add('user', owner(name), dict(username=name, email='', groups=[role], enabled=True, epoch=0, timezone='UTC', identity_type='demo', created_at='', last_login=''), owner=owner(name), category=role)
+        oidc = owner(name).startswith('oidc:')
+        add('user', owner(name), dict(username=name, email='', groups=[] if oidc else [role], enabled=True, epoch=0, timezone='UTC', identity_type='oidc' if oidc else 'demo', created_at='', last_login=''), owner=owner(name), category=role)
     for row in private.get('legacy_messages', []): add('legacy_message', row['source_key'], json.loads(row['document']))
     for row in private.get('legacy_orphans', []): add('legacy_orphan', f"{row['kind']}:{row['id']}", json.loads(row['document']))
     for row in private.get('migration', []): add('legacy_migration', row['id'], row)
@@ -172,10 +180,13 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--private',required=True);p.add_argument('--custody',required=True)
     p.add_argument('--url',default='http://127.0.0.1:9200');p.add_argument('--state-index',required=True);p.add_argument('--custody-index',required=True);p.add_argument('--apply',action='store_true')
+    p.add_argument('--preserve-oidc-owners', action='store_true', help='Preserve issuer-scoped oidc:<SHA256> owners only from reviewed, trusted UDS snapshots; never map by name/email')
     args=p.parse_args();private=snapshot(args.private);custody=snapshot(args.custody)
-    state,queue=convert(private,custody)
+    state,queue=convert(private,custody,preserve_oidc=args.preserve_oidc_owners)
     fingerprint=digest(pathlib.Path(args.private).read_bytes()+pathlib.Path(args.custody).read_bytes())
     report={'snapshot_sha256':fingerprint,'source_counts':{'private':{k:len(v) for k,v in private.items()},'custody':{k:len(v) for k,v in custody.items()}},'records':{'private':len(state),'custody':len(queue)},'content_sha256':{'private':digest(encoded(state)),'custody':digest(encoded(queue))},'invalidated':['sessions','read_windows','cursors (private only)']}
+    if args.preserve_oidc_owners:
+        report['owner_policy'] = 'preserve_reviewed_oidc'
     if args.apply:
         target=Target(args.url)
         for index,rows in [(args.state_index,state),(args.custody_index,queue)]:

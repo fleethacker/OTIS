@@ -1,0 +1,23 @@
+common:
+  domain: uds.dev
+  host: parse-command
+  clientId: parse-command
+  allowedGroups: [/Parse Command/Admin, /Parse Command/Viewer]
+  storageClass: ""
+  imapHost: ""
+  imapPort: 993
+  # Set a fixed mailbox CIDR; no arbitrary Internet egress is granted.
+  imapCidr: ""
+image: "invalid.example/prepare-first:unbuilt"
+bootstrapImage: "invalid.example/prepare-first:unbuilt"
+config:
+  storage:
+    size: 10Gi
+    existingClaim: ""
+  resources:
+    requests: {cpu: 500m, memory: 1536Mi}
+    limits: {cpu: "2", memory: 3Gi}
+  jvm: -Xms1g -Xmx1g
+  bootstrapResources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 256Mi}

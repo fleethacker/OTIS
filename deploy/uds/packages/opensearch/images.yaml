@@ -1,0 +1,4 @@
+{
+  "image": "###ZARF_PKG_TMPL_SEARCH_IMAGE###",
+  "bootstrapImage": "###ZARF_PKG_TMPL_BOOTSTRAP_IMAGE###"
+}

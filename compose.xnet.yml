@@ -1,0 +1,10 @@
+# Opt-in fictional two-mailbox demo. Keep existing volumes and deployment services.
+services:
+  server:
+    environment:
+      PARSE_COMMAND_ADDITIONAL_MAILBOX_CONFIGS: /etc/parse-command/xnet-low.json
+      PARSE_COMMAND_IMAP_PASSWORD_HIGH: "${PARSE_COMMAND_IMAP_PASSWORD_HIGH:?Set the HIGH fictional mailbox password in the runtime environment}"
+      PARSE_COMMAND_IMAP_PASSWORD_LOW: "${PARSE_COMMAND_IMAP_PASSWORD_LOW:?Set the LOW fictional mailbox password in the runtime environment}"
+    volumes:
+      - ./backend/config/xnet-high.json:/etc/parse-command/config.json:ro
+      - ./backend/config/xnet-low.json:/etc/parse-command/xnet-low.json:ro

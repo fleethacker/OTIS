@@ -15,6 +15,11 @@ Unsupported rules/missing anchors must remain visible review, never acquire an
 issue/receipt-time anchor. See the ICD recurrence section for the bounded Zulu
 convention and the distinction from a full iCalendar component.
 
+The separate [xnet notice schema](xnet-notice.schema.json) describes the strictly
+content-free fictional desk payload. It is an application presentation contract,
+not a change to ICD 1.1.0 or a parser-generated document; see the
+[workflow guide](../integration/xnet-notices.md).
+
 Register all resources locally; references are URNs, not URLs to fetch. Enable `date-time` format checking in addition to structural validation. JSON parsing must reject NaN/Infinity, and the host must enforce finite vectors and the selected model dimension.
 
 Core objects reject extra properties. Arrays can be empty; required nullable fields retain explicit nulls. Short fact IDs are scoped by message/revision. Generic parser-specific detail belongs in audit rather than arbitrary new indexed core properties.

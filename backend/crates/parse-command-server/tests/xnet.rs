@@ -71,6 +71,56 @@ async fn published_high_aggregates_per_ship_and_clears_only_after_high_or_all_op
 }
 #[tokio::test]
 #[ignore = "requires isolated OpenSearch test indices"]
+async fn desk_filters_both_message_and_passage_queries_and_the_ordinary_bell() {
+    use parse_command_server::notifications;
+    let store = support::store().await;
+    let custody = support::store().await;
+    projection(&custody, "high@r1", "HIGH", &["USS Meridian"], json!("IMMEDIATE")).await;
+    projection(&custody, "low@r1", "LOW", &["USS Meridian"], json!("ROUTINE")).await;
+    for (n, key) in [(1, "high@r1"), (2, "low@r1")] {
+        let mut event = Record::new("publication_event", &n.to_string(), json!({"at":"2026-11-05T14:12:00Z"}));
+        event.source = key.into(); event.category = "message".into(); event.owner = key.into(); event.state = "publication_succeeded".into(); event.order = n;
+        custody.put(&event, None).await.unwrap();
+    }
+    custody.refresh().await.unwrap();
+    notifications::sync(&store, &custody).await.unwrap(); store.refresh().await.unwrap();
+    preference(&store, "low-watch", DeskNetwork::Low).await;
+    preference(&store, "high-watch", DeskNetwork::High).await;
+    let low = notifications::execute(&store, "low-watch", "list", notifications::Request::default()).await.unwrap();
+    let high = notifications::execute(&store, "high-watch", "list", notifications::Request::default()).await.unwrap();
+    assert_eq!(low["items"].as_array().unwrap().len(), 1);
+    assert_eq!(low["items"][0]["messageKey"], "low@r1");
+    assert_eq!(high["items"][0]["messageKey"], "high@r1");
+    assert!(notifications::execute(&store, "low-watch", "members", notifications::Request { id: high["items"][0]["id"].as_i64(), ..Default::default() }).await.is_err());
+
+    // A unique disposable index verifies the same filter against both shapes;
+    // never create or overwrite the application's fixed source aliases in tests.
+    let index = format!("{}-view", store.index());
+    let (status, _) = store.request(reqwest::Method::PUT, &format!("/{index}"), Some(json!({"settings":{"index.hidden":true,"number_of_shards":1,"number_of_replicas":0},"mappings":{"dynamic":"strict","properties":{"id":{"type":"keyword"},"message_id":{"type":"keyword"},"revision":{"type":"keyword"}}}}))).await.unwrap();
+    assert!(status.is_success());
+    for network in ["high", "low"] {
+        for shape in ["message", "passage"] {
+            let mut source = json!({"id":network,"revision":"r1"});
+            if shape == "passage" { source["id"] = json!(format!("passage-{network}")); source["message_id"] = json!(network); }
+            let (status, _) = store.request(reqwest::Method::PUT, &format!("/{index}/_doc/{network}-{shape}?refresh=true"), Some(source)).await.unwrap();
+            assert!(status.is_success());
+        }
+    }
+    for (owner, expected) in [("low-watch", "low"), ("high-watch", "high")] {
+        let mut filters = json!([]);
+        xnet::view::apply(&store, &custody, owner, &mut filters).await.unwrap();
+        let (status, result) = store.request(reqwest::Method::POST, &format!("/{index}/_search"), Some(json!({"size":10,"query":{"bool":{"filter":filters}}}))).await.unwrap();
+        assert!(status.is_success());
+        let hits = result["hits"]["hits"].as_array().unwrap();
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().all(|h| h["_id"].as_str().unwrap().starts_with(expected)));
+    }
+    store.request(reqwest::Method::DELETE, &format!("/{index}"), None).await.unwrap();
+    support::cleanup(&store).await; support::cleanup(&custody).await;
+}
+
+#[tokio::test]
+#[ignore = "requires isolated OpenSearch test indices"]
 async fn publication_cursor_replay_and_viewer_ownership_are_enforced_at_http_boundary() {
     use axum::{body::Body, http::{Request as HttpRequest, StatusCode}};
     use tower::ServiceExt;

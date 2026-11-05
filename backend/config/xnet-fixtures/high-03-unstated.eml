@@ -1,0 +1,12 @@
+From: fictional-desk@parse-command.test
+To: high@parse-command.test
+Subject: SUBJ: Fictional example with FLASH in prose, not precedence
+Message-ID: <xnet-fictional-high-03@parse-command.test>
+X-Demo-Command-IDs: USS Meridian
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+MSGID/OPTASK COMMS/MIL-STD-6040(SERIES)/B.1.01.12/FICTIONAL TRAINING DESK/903/20261105T120200Z/-/-/USA/UNCLASSIFIED//
+COMCHECK/051800ZNOV2026/USS Meridian/COORD:FICTIONAL OPS/CND:DEMO ONLY//
+GENTEXT/DEMONSTRATION/UNCLASSIFIED. SYNTHETIC FICTIONAL TRAFFIC ONLY. THE WORD FLASH HERE IS NOT A PRECEDENCE FIELD.//

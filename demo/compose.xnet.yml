@@ -1,0 +1,10 @@
+# Preserve accounts added interactively with docker-mailserver's setup command.
+# No mailbox passwords or new volumes are introduced by this overlay.
+services:
+  mail-config:
+    command:
+      - >-
+        if [ ! -e /tmp/docker-mailserver/postfix-accounts.cf ]; then
+          cp /seed/postfix-accounts.cf /tmp/docker-mailserver/postfix-accounts.cf;
+        fi;
+        cp /seed/postfix-main.cf /tmp/docker-mailserver/postfix-main.cf

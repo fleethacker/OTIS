@@ -80,6 +80,17 @@ ICD 1.1.0 adds optional `locations` with `geo_point` and GeoJSON `geo_shape` map
 
 The application server continuously publishes queued records and validates each Bulk item. Use the demo sender for new test traffic. `backend/tools/load_intake_test.py` is retained only as a legacy read-only SQLite fixture loader; it is not part of runtime intake or the current persistence architecture.
 
+## Optional fictional network demo
+
+[Cross-network notices](../docs/integration/xnet-notices.md) use one strict mailbox
+config per arrival network. `arrival_network` is optional (`HIGH` or `LOW`);
+missing stays unknown. The application server can load additional configs through
+`PARSE_COMMAND_ADDITIONAL_MAILBOX_CONFIGS`, under its existing single-writer lease.
+Receipts and projection arrival metadata are transport-owned; the parser remains
+unchanged. The opt-in Compose overlay, explicit synthetic command-ID header and
+source-only precedence policy are documented in that guide. Existing accounts
+must not be silently relabelled or have their bound command allowlist changed.
+
 ## Production boundary
 
 The intended mailbox is enclave-local on-premises Exchange protected by PKI. The current `plaintext_demo` transport is deliberately restricted to loopback or the demo `mailserver` container name. It is not a production Exchange adapter. Verified TLS/PKI, the exact approved authentication mechanism, production limits and recovery objectives require validation before enabling that endpoint. No cloud mail or token-service dependency is introduced. The root application server now includes continuous OpenSearch publication and

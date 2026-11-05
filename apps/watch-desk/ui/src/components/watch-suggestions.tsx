@@ -79,7 +79,7 @@ export function WatchSuggestions({ active, current, revision, dirty, onSaved }: 
       <div className="settings-actions">
         <button type="button" className="btn btn-primary btn-sm" aria-label={`Use ${suggestion.values.join(", ")}`}
           disabled={pending || dirty || !revision || !suggestion.sources?.length} onClick={() => { void act("use-suggestion", suggestion.id); }}>Use</button>
-        <button type="button" className="btn btn-sm" aria-label={`Dismiss ${suggestion.values.join(", ")}`}
+        <button type="button" className="btn btn-outline btn-sm context-suggestion-dismiss" aria-label={`Dismiss ${suggestion.values.join(", ")}`}
           disabled={pending || dirty || !revision} onClick={() => { void act("dismiss-suggestion", suggestion.id); }}>Dismiss</button>
       </div>
     </article>)}

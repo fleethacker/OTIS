@@ -1,5 +1,5 @@
 import { test, expect, spyOn } from "bun:test";
-import { fireEvent, waitFor } from "@testing-library/react";
+import { fireEvent, waitFor, within } from "@testing-library/react";
 import { createRouterTransport } from "@connectrpc/connect";
 import { TransportProvider } from "@connectrpc/connect-query";
 import { AppService } from "../gen/app/v1/app_pb";
@@ -63,7 +63,7 @@ test("Viewer can save timezone and sees no administration controls", async () =>
     expect(view.queryByRole("button", { name: "Users", exact: true })).toBeNull();
     expect(view.queryByRole("button", { name: "AI", exact: true })).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Command", exact: true }));
-    expect(view.getByLabelText("Ship").closest("fieldset")?.disabled).toBe(true);
+    expect(view.getByLabelText("Ship display name").closest("fieldset")?.disabled).toBe(true);
   } finally {
     view.unmount();
     fetch.mockRestore();
@@ -91,12 +91,12 @@ test("Admin settings save uses revision and a conflict keeps edits unsaved", asy
       expect(view.getByRole("button", { name: "Users", exact: true })).toBeTruthy()
     );
     fireEvent.click(view.getByRole("button", { name: "Command", exact: true }));
-    fireEvent.change(view.getByLabelText("Ship"), { target: { value: "CHANGED SHIP" } });
+    fireEvent.change(view.getByLabelText("Ship display name"), { target: { value: "CHANGED SHIP" } });
     fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
     await waitFor(() => expect(view.getByRole("alert").textContent).toContain("reload"));
     expect(saved.revision).toBe("1:1");
     expect(view.getByText("Unsaved")).toBeTruthy();
-    expect((view.getByLabelText("Ship") as HTMLInputElement).value).toBe("CHANGED SHIP");
+    expect((view.getByLabelText("Ship display name") as HTMLInputElement).value).toBe("CHANGED SHIP");
   } finally {
     view.unmount();
     fetch.mockRestore();
@@ -210,7 +210,16 @@ test("Admin saves watch fields through the revisioned settings update", async ()
     await waitFor(() => expect(view.getByRole("button", { name: "Command", exact: true })).toBeTruthy());
     fireEvent.click(view.getByRole("button", { name: "Command", exact: true }));
     await waitFor(() => expect(view.getByRole("checkbox", { name: "USNS Tern" })).toBeTruthy());
-    fireEvent.change(view.getByLabelText("Own ship"), { target: { value: "demo-meridian" } });
+    const own = view.getByLabelText("Own ship");
+    const display = view.getByLabelText("Ship display name");
+    expect(own.closest("label")?.nextElementSibling).toBe(display.closest("label"));
+    expect(own.tagName).toBe("SELECT");
+    expect(display.tagName).toBe("INPUT");
+    const calendars = within(view.getByRole("group", { name: "Calendar commands" }));
+    expect(calendars.getByRole("checkbox", { name: "USS Meridian demo-meridian" })).toBeTruthy();
+    expect(calendars.getByText("demo-meridian").tagName).toBe("SMALL");
+    fireEvent.change(own, { target: { value: "demo-meridian" } });
+    fireEvent.change(display, { target: { value: "WATCH DISPLAY" } });
     fireEvent.change(view.getByLabelText("Operation / exercise"), { target: { value: "FICTIONAL SLATE" } });
     fireEvent.change(view.getByLabelText("Group / command"), { target: { value: "FICTIONAL GROUP" } });
     fireEvent.change(view.getByLabelText("UTC watch turnovers"), { target: { value: "1600z, 0400Z 0400Z" } });
@@ -223,7 +232,7 @@ test("Admin saves watch fields through the revisioned settings update", async ()
     expect(sent.url).toEndWith("/settings/update");
     expect(sent.body.revision).toBe("7:1");
     expect(sent.body.settings).toMatchObject({
-      commandIds: ["demo-meridian", "demo-tern"], operationName: "FICTIONAL SLATE", groupCommand: "FICTIONAL GROUP",
+      shipName: "WATCH DISPLAY", commandIds: ["demo-meridian", "demo-tern"], operationName: "FICTIONAL SLATE", groupCommand: "FICTIONAL GROUP",
       turnoverUtc: ["0400Z", "1600Z"], defaultShips: ["unassigned:", "unit:demo-tern"],
     });
     await waitFor(() => expect(view.getByRole("status").textContent).toBe("Saved"));
@@ -243,7 +252,9 @@ test("Admin Use and Dismiss send the suggestion with the settings revision", asy
     await waitFor(() => expect(requests.length).toBe(1));
     expect(requests[0]).toEqual({ url: "/api/v1/settings/use-suggestion", body: { suggestion: "context:copper", revision: "7:1" } });
     await waitFor(() => expect((view.getByLabelText("Operation / exercise") as HTMLInputElement).value).toBe("FICTIONAL COPPER"));
-    fireEvent.click(view.getByRole("button", { name: "Dismiss FICTIONAL SLATE" }));
+    const dismiss = view.getByRole("button", { name: "Dismiss FICTIONAL SLATE" });
+    expect(dismiss).toHaveClass("btn", "btn-sm", "context-suggestion-dismiss");
+    fireEvent.click(dismiss);
     await waitFor(() => expect(requests.length).toBe(2));
     expect(requests[1]).toEqual({ url: "/api/v1/settings/dismiss-suggestion", body: { suggestion: "context:slate", revision: "8:1" } });
     fireEvent.change(view.getByLabelText("Group / command"), { target: { value: "EDIT" } });

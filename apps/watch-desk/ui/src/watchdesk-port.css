@@ -99,6 +99,14 @@
 .calendar-with-ships .ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }
 
 /* Watch fields and message suggestions inside the shared Settings form. */
+.settings-content .settings-command-list { grid-column: 1 / -1; display: grid; gap: 5px; font-size: 12px; }
+.settings-content .settings-command-choices { max-height: 200px; overflow: auto; border: 1px solid var(--color-border-strong); border-radius: var(--radius-field); padding: 8px; background: var(--color-base-100); }
+.settings-content .settings-command-choices label { display: flex; align-items: center; gap: 8px; padding: 4px; }
+.settings-content .settings-command-choices input { width: auto; flex: none; }
+.settings-content .settings-command-choices small { display: block; color: var(--color-bc-muted); overflow-wrap: anywhere; }
+.settings-content .context-suggestion-dismiss { background: var(--color-base-100); color: var(--color-base-content); border: 1px solid var(--color-border-strong); }
+.settings-content .context-suggestion-dismiss:hover:not(:disabled) { background: var(--color-base-300); }
+.settings-content .context-suggestion-dismiss:disabled { color: var(--color-bc-muted); cursor: not-allowed; }
 /* Disabled fields stay legible on both theme surfaces, including Safari text fill. */
 .settings-content fieldset:disabled :is(.input, .select),
 .settings-content :is(.input, .select):disabled {

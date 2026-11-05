@@ -1,15 +1,19 @@
+import { SettingsProvider } from "./SettingsProvider";
 import { Outlet } from "react-router-dom";
 import { HeaderClock } from "./header-clock";
 import { NavigationMenu } from "./navigation-menu";
 import { UserMenu } from "./UserMenu";
+import { SettingsButton } from "./settings-button";
 import { Notifications } from "./notifications";
 import { DisplayTimeProvider, useDisplayTime } from "./display-time";
 
 export function AppLayout() {
   return (
-    <DisplayTimeProvider>
-      <DeskLayout />
-    </DisplayTimeProvider>
+    <SettingsProvider>
+      <DisplayTimeProvider>
+        <DeskLayout />
+      </DisplayTimeProvider>
+    </SettingsProvider>
   );
 }
 function DeskLayout() {
@@ -35,6 +39,7 @@ function DeskLayout() {
         <div className="account">
           <Notifications />
           <UserMenu />
+          <SettingsButton />
         </div>
       </header>
       <main id="main" tabIndex={-1}>

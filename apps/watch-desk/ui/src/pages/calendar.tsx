@@ -1,3 +1,4 @@
+import { useSettings } from "../components/settings-data";
 import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import moment from "moment-timezone";
@@ -16,6 +17,7 @@ import { readShips } from "../components/ship-calendars";
 
 export const route: RouteMeta = { path: "/calendar", label: "Calendar", order: 0 };
 export default function Calendar() {
+  const { shared } = useSettings();
   const { zone } = useDisplayTime();
   const [params, setParams] = useSearchParams();
   const today = civilDate(new Date(), zone);
@@ -33,7 +35,11 @@ export default function Calendar() {
   const to = month ? bounds.to : week ? weekly.to : civilHour(date, 24, zone);
   const query = params.get("q") ?? "";
   const debounced = useDebounced(query);
-  const ships = readShips(params.get("ships"));
+  const ships = params.has("ships")
+    ? readShips(params.get("ships"))
+    : (shared?.settings.commandIds.length ?? 0) > 0
+      ? new Set((shared?.settings.commandIds ?? []).map((id) => `unit:${id}`))
+      : null;
   const dataset = params.get("dataset") === "legacy" ? "legacy" : "canonical";
   const result = useSource("timeline", {
     dataset,
@@ -120,7 +126,7 @@ export default function Calendar() {
           Next →
         </button>
         <label>
-          UTC date
+          {zone === "UTC" ? "UTC date" : "Date"}
           <input
             className="input input-sm"
             type="date"

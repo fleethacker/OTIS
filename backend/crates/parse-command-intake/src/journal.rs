@@ -1,10 +1,19 @@
 use crate::{IntakeError, Result, config::Config};
-use parse_command_types::{AuditEvent, Message, event_id, message_id};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use base64::{Engine, engine::general_purpose::STANDARD};
+use parse_command_state::{BlockingStore, Record};
+use parse_command_types::{AuditEvent, Message, Validate, event_id, message_id};
 use serde_json::{Value, json};
+use std::{
+    cell::{Cell, RefCell},
+    collections::VecDeque,
+};
 
 pub struct Journal {
-    db: Connection,
+    pub store: BlockingStore,
+    jobs: RefCell<VecDeque<String>>,
+    scanned: Cell<bool>,
+    count: Cell<u64>,
+    bytes: Cell<u64>,
 }
 pub struct Job {
     pub receipt_id: String,
@@ -24,96 +33,113 @@ pub struct Receipt<'a> {
     pub received_at: &'a str,
     pub server_received_at: Option<&'a str>,
 }
+fn receipt_key(c: &Config, validity: u32, uid: u32) -> String {
+    event_id(&[
+        &c.account_id,
+        &c.mailbox,
+        &validity.to_string(),
+        &uid.to_string(),
+    ])
+}
+fn event(
+    row: &mut Record,
+    state: &str,
+    code: Option<&str>,
+    at: &str,
+) -> parse_command_state::Result<()> {
+    let events = row.payload["events"]
+        .as_array_mut()
+        .ok_or(parse_command_state::Error("state_record"))?;
+    if events.len() >= 10000 {
+        return Err(parse_command_state::Error("state_capacity"));
+    }
+    events.push(json!({"state":state,"code":code,"at":at}));
+    if !row.flags.iter().any(|f| f == "events_pending") {
+        row.flags.push("events_pending".into());
+    }
+    Ok(())
+}
 impl Journal {
     pub fn open(c: &Config) -> Result<Self> {
-        prepare_directory(&c.journal)?;
-        let db = Connection::open(&c.journal)?;
-        db.busy_timeout(std::time::Duration::from_secs(2))?;
-        db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA cache_size=-2048; PRAGMA wal_autocheckpoint=128; PRAGMA journal_size_limit=1048576;")?;
-        let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if ![0, 1, 2].contains(&version) {
-            return Err(IntakeError("journal_schema_version"));
-        }
-        let page: i64 = db.query_row("PRAGMA page_size", [], |r| r.get(0))?;
-        db.pragma_update(
-            None,
-            "max_page_count",
-            i64::try_from(c.max_database_bytes / (page as u64))
-                .map_err(|_| IntakeError("database_limit"))?,
-        )?;
-        let current_pages: i64 = db.query_row("PRAGMA page_count", [], |r| r.get(0))?;
-        if current_pages as u64 > c.max_database_bytes / (page as u64) {
-            return Err(IntakeError("existing_database_limit"));
-        }
-        db.execute_batch("BEGIN IMMEDIATE;
-          CREATE TABLE IF NOT EXISTS identity(account_id TEXT PRIMARY KEY, host TEXT NOT NULL, port INTEGER NOT NULL, username TEXT NOT NULL, mailbox TEXT NOT NULL, revision TEXT NOT NULL);
-          CREATE TABLE IF NOT EXISTS cursors(account_id TEXT NOT NULL, mailbox TEXT NOT NULL, validity INTEGER NOT NULL, uid INTEGER NOT NULL, PRIMARY KEY(account_id,mailbox,validity));
-          CREATE TABLE IF NOT EXISTS receipts(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,account_id TEXT NOT NULL,mailbox TEXT NOT NULL,validity INTEGER NOT NULL,uid INTEGER NOT NULL,size INTEGER NOT NULL,raw BLOB,raw_hash TEXT,received_at TEXT NOT NULL,state TEXT NOT NULL,code TEXT,attempts INTEGER NOT NULL DEFAULT 0,body_id TEXT,revision TEXT,subject TEXT,metadata TEXT,UNIQUE(account_id,mailbox,validity,uid));
-          CREATE INDEX IF NOT EXISTS receipt_state ON receipts(state,sequence);
-          CREATE INDEX IF NOT EXISTS receipt_body ON receipts(body_id,revision);
-          CREATE TABLE IF NOT EXISTS custody_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,receipt_id TEXT NOT NULL REFERENCES receipts(id),state TEXT NOT NULL,code TEXT,at TEXT NOT NULL);
-          CREATE INDEX IF NOT EXISTS custody_receipt ON custody_events(receipt_id,sequence);
-          CREATE TABLE IF NOT EXISTS projections(message_id TEXT NOT NULL,revision TEXT NOT NULL,core TEXT NOT NULL,selected_sequence INTEGER NOT NULL,subject_conflict INTEGER NOT NULL,delivery_state TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(message_id,revision));
-          CREATE TABLE IF NOT EXISTS audit_outbox(id TEXT PRIMARY KEY,message_id TEXT NOT NULL,revision TEXT NOT NULL,receipt_id TEXT NOT NULL REFERENCES receipts(id),document TEXT NOT NULL,delivery_state TEXT NOT NULL DEFAULT 'pending');
-          COMMIT;")?;
-        if version < 2 {
-            db.execute_batch("BEGIN IMMEDIATE;ALTER TABLE receipts ADD COLUMN server_received_at TEXT;PRAGMA user_version=2;COMMIT;")?;
-        }
-        let stored: Option<(String, u16, String, String, String)> = db
-            .query_row(
-                "SELECT host,port,username,mailbox,revision FROM identity WHERE account_id=?",
-                [&c.account_id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-            )
-            .optional()?;
-        let wanted = (
-            c.host.clone(),
-            c.port,
-            c.username.clone(),
-            c.mailbox.clone(),
-            c.revision.clone(),
-        );
-        if let Some(stored) = stored {
-            if stored != wanted {
-                return Err(IntakeError("journal_identity_changed"));
+        let store = BlockingStore::new(&c.opensearch_url, &c.custody_index)?;
+        store.provision()?;
+        let wanted = json!({"host":c.host,"port":c.port,"username":c.username,"mailbox":c.mailbox,"revision":c.revision});
+        store.update("mailbox_identity", &c.account_id, |old| {
+            if let Some(old) = old {
+                if old.payload != wanted {
+                    return Err(parse_command_state::Error("journal_identity_changed"));
+                }
+                return Ok(old.clone());
             }
-        } else {
-            db.execute(
-                "INSERT INTO identity VALUES(?,?,?,?,?,?)",
-                params![
-                    c.account_id,
-                    c.host,
-                    c.port,
-                    c.username,
-                    c.mailbox,
-                    c.revision
-                ],
-            )?;
-        }
-        Ok(Self { db })
+            Ok(Record::new(
+                "mailbox_identity",
+                &c.account_id,
+                wanted.clone(),
+            ))
+        })?;
+        let this = Self {
+            store,
+            jobs: RefCell::new(VecDeque::new()),
+            scanned: Cell::new(false),
+            count: Cell::new(0),
+            bytes: Cell::new(0),
+        };
+        this.begin_cycle()?;
+        Ok(this)
     }
-    pub fn cursor(&self, c: &Config, validity: u32) -> Result<u32> {
-        Ok(self
-            .db
-            .query_row(
-                "SELECT uid FROM cursors WHERE account_id=? AND mailbox=? AND validity=?",
-                params![c.account_id, c.mailbox, validity],
-                |r| r.get(0),
-            )
-            .optional()?
-            .unwrap_or(0))
+    pub fn begin_cycle(&self) -> Result<()> {
+        self.store.refresh()?;
+        let stats=self.store.search(json!({"size":0,"track_total_hits":true,"aggs":{"bytes":{"sum":{"field":"bytes"}},"receipts":{"filter":{"term":{"kind":"receipt"}}}}}))?;
+        self.count.set(
+            stats["aggregations"]["receipts"]["doc_count"]
+                .as_u64()
+                .ok_or(IntakeError("custody_capacity"))?,
+        );
+        self.bytes.set(
+            stats["aggregations"]["bytes"]["value"]
+                .as_f64()
+                .ok_or(IntakeError("custody_capacity"))? as u64,
+        );
+        self.jobs.borrow_mut().clear();
+        self.scanned.set(false);
+        Ok(())
     }
-    fn capacity(db: &Connection, c: &Config, extra: u64, new_receipts: u64) -> Result<()> {
-        let (count,bytes):(i64,i64)=db.query_row("SELECT (SELECT count(*) FROM receipts), COALESCE((SELECT sum(length(raw)+COALESCE(length(metadata),0)+COALESCE(length(subject),0)) FROM receipts),0)+COALESCE((SELECT sum(length(core)) FROM projections),0)+COALESCE((SELECT sum(length(document)) FROM audit_outbox),0)",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
-        if (count as u64).saturating_add(new_receipts) > c.max_receipts
-            || (bytes as u64).saturating_add(extra) > c.max_retained_bytes
+    fn capacity(&self, c: &Config, extra: u64, receipts: u64) -> Result<()> {
+        if self.count.get().saturating_add(receipts) > c.max_receipts
+            || self.bytes.get().saturating_add(extra) > c.max_retained_bytes
         {
             return Err(IntakeError("custody_capacity"));
         }
         Ok(())
     }
     pub fn check_capacity(&self, c: &Config) -> Result<()> {
-        Self::capacity(&self.db, c, c.max_raw_bytes as u64, 1)
+        self.capacity(c, (c.max_raw_bytes as u64).saturating_mul(2), 1)
+    }
+    pub fn cursor(&self, c: &Config, validity: u32) -> Result<u32> {
+        Ok(self
+            .store
+            .get(
+                "mailbox_cursor",
+                &format!("{}:{}:{validity}", c.account_id, c.mailbox),
+            )?
+            .map(|d| d.record.order as u32)
+            .unwrap_or(0))
+    }
+    pub fn advance_empty_range(&mut self, c: &Config, validity: u32, uid: u32) -> Result<()> {
+        let key = format!("{}:{}:{validity}", c.account_id, c.mailbox);
+        self.store.update("mailbox_cursor", &key, |old| {
+            let mut row = old.cloned().unwrap_or_else(|| {
+                Record::new(
+                    "mailbox_cursor",
+                    &key,
+                    json!({"validity":validity,"mailbox":c.mailbox}),
+                )
+            });
+            row.owner = c.account_id.clone();
+            row.order = row.order.max(i64::from(uid));
+            Ok(row)
+        })?;
+        Ok(())
     }
     pub fn accept(&mut self, c: &Config, r: Receipt<'_>) -> Result<bool> {
         if r.validity == 0
@@ -124,72 +150,69 @@ impl Journal {
             )
             || ((r.state == "staged") != r.raw.is_some())
             || r.raw
-                .is_some_and(|raw| raw.len() != r.size as usize || raw.len() > c.max_raw_bytes)
+                .is_some_and(|b| b.len() != r.size as usize || b.len() > c.max_raw_bytes)
         {
             return Err(IntakeError("receipt_invariant"));
         }
-        if let Some(time) = r.server_received_at {
-            parse_command_types::UtcTimestamp::new(time)
-                .map_err(|_| IntakeError("server_receipt_time"))?;
-        }
         parse_command_types::UtcTimestamp::new(r.received_at)
             .map_err(|_| IntakeError("receipt_time"))?;
-        let tx = self
-            .db
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let id = event_id(&[
-            &c.account_id,
-            &c.mailbox,
-            &r.validity.to_string(),
-            &r.uid.to_string(),
-        ]);
-        let exists: bool = tx.query_row(
-            "SELECT EXISTS(SELECT 1 FROM receipts WHERE id=?)",
-            [&id],
-            |r| r.get(0),
-        )?;
+        if let Some(at) = r.server_received_at {
+            parse_command_types::UtcTimestamp::new(at).map_err(|_| IntakeError("receipt_time"))?;
+        }
+        let key = receipt_key(c, r.validity, r.uid);
         let hash = r
             .raw
-            .map(|raw| format!("sha256:{:x}", <sha2::Sha256 as sha2::Digest>::digest(raw)));
-        if exists {
-            let old: (u32, Option<String>) = tx.query_row(
-                "SELECT size,raw_hash FROM receipts WHERE id=?",
-                [&id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )?;
-            if old != (r.size, hash.clone()) {
+            .map(|b| format!("sha256:{:x}", <sha2::Sha256 as sha2::Digest>::digest(b)));
+        let existing = self.store.get("receipt", &key)?;
+        let fresh = existing.is_none();
+        if let Some(old) = existing {
+            if old.record.payload["size"] != r.size || old.record.payload["raw_hash"] != json!(hash)
+            {
                 return Err(IntakeError("receipt_identity_collision"));
             }
+        } else {
+            let mut row = Record::new(
+                "receipt",
+                &key,
+                json!({"validity":r.validity,"uid":r.uid,"size":r.size,"raw":r.raw.map(|b|STANDARD.encode(b)),"raw_hash":hash,"received_at":r.received_at,"server_received_at":r.server_received_at,"attempts":0,"code":r.code,"events":[],"audit":[],"audit_state":"pending"}),
+            );
+            row.owner = c.account_id.clone();
+            row.state = r.state.into();
+            row.order = self.store.next("receipts")?;
+            row.category = r.validity.to_string();
+            if r.server_received_at.is_none() {
+                row.flags.push("missing_received_time".into());
+            }
+            event(&mut row, r.state, r.code, r.received_at)?;
+            row.bytes = row.payload.to_string().len() as u64;
+            self.capacity(c, row.bytes, 1)?;
+            self.store.put(&row, None)?;
+            self.count.set(self.count.get() + 1);
+            self.bytes.set(self.bytes.get() + row.bytes);
         }
-        if !exists {
-            Self::capacity(&tx, c, r.raw.map_or(0, |v| v.len()) as u64, 1)?;
-            tx.execute("INSERT INTO receipts(id,account_id,mailbox,validity,uid,size,raw,raw_hash,received_at,state,code,server_received_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",params![id,c.account_id,c.mailbox,r.validity,r.uid,r.size,r.raw,hash,r.received_at,r.state,r.code,r.server_received_at])?;
-            tx.execute(
-                "INSERT INTO custody_events(receipt_id,state,code,at) VALUES(?,?,?,?)",
-                params![id, r.state, r.code, r.received_at],
-            )?;
-        }
-        Self::advance(&tx, c, r.validity, r.uid)?;
-        tx.commit()?;
-        Ok(!exists)
-    }
-    fn advance(db: &Connection, c: &Config, validity: u32, uid: u32) -> Result<()> {
-        db.execute("INSERT INTO cursors VALUES(?,?,?,?) ON CONFLICT(account_id,mailbox,validity) DO UPDATE SET uid=max(uid,excluded.uid)",params![c.account_id,c.mailbox,validity,uid])?;
-        Ok(())
-    }
-    pub fn advance_empty_range(&mut self, c: &Config, validity: u32, uid: u32) -> Result<()> {
-        let tx = self
-            .db
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        Self::advance(&tx, c, validity, uid)?;
-        tx.commit()?;
-        Ok(())
+        // The receipt must be durably acknowledged before the cursor can advance.
+        // A lost response leaves the cursor behind; replay verifies the receipt hash.
+        self.advance_empty_range(c, r.validity, r.uid)?;
+        Ok(fresh)
     }
     pub fn missing_received_times(&self, c: &Config, validity: u32) -> Result<Vec<u32>> {
-        let mut stmt=self.db.prepare("SELECT uid FROM receipts WHERE account_id=? AND validity=? AND server_received_at IS NULL ORDER BY sequence LIMIT ?")?;
-        Ok(stmt
-            .query_map(params![c.account_id, validity, c.uid_window], |r| r.get(0))?
-            .collect::<std::result::Result<Vec<_>, _>>()?)
+        let rows = self.store.list(
+            "receipt",
+            vec![
+                json!({"term":{"owner":c.account_id}}),
+                json!({"term":{"category":validity.to_string()}}),
+                json!({"term":{"flags":"missing_received_time"}}),
+            ],
+            c.uid_window.min(1000) as usize,
+        )?;
+        Ok(rows
+            .into_iter()
+            .filter(|d| {
+                d.record.payload["validity"] == validity
+                    && d.record.payload["server_received_at"].is_null()
+            })
+            .filter_map(|d| d.record.payload["uid"].as_u64().map(|n| n as u32))
+            .collect())
     }
     pub fn backfill_received_time(
         &self,
@@ -198,261 +221,254 @@ impl Journal {
         uid: u32,
         time: &str,
     ) -> Result<()> {
-        self.db.execute("UPDATE receipts SET server_received_at=? WHERE account_id=? AND validity=? AND uid=? AND server_received_at IS NULL",params![time,c.account_id,validity,uid])?;
+        parse_command_types::UtcTimestamp::new(time).map_err(|_| IntakeError("receipt_time"))?;
+        self.store
+            .update("receipt", &receipt_key(c, validity, uid), |old| {
+                let mut row = old
+                    .cloned()
+                    .ok_or(parse_command_state::Error("state_record"))?;
+                if row.payload["server_received_at"].is_null() {
+                    row.payload["server_received_at"] = json!(time);
+                }
+                row.flags.retain(|f| f != "missing_received_time");
+                Ok(row)
+            })?;
         Ok(())
     }
     pub fn next_job(&self, c: &Config) -> Result<Option<Job>> {
-        Ok(self.db.query_row("SELECT id,raw,received_at,attempts,sequence,server_received_at FROM receipts WHERE state='staged' AND account_id=? ORDER BY sequence LIMIT 1",[&c.account_id],|r|Ok(Job{receipt_id:r.get(0)?,raw:r.get(1)?,received_at:r.get(2)?,attempts:r.get(3)?,sequence:r.get(4)?,server_received_at:r.get(5)?})).optional()?)
+        if !self.scanned.replace(true) {
+            self.store.refresh()?;
+            let rows = self.store.list(
+                "receipt",
+                vec![
+                    json!({"term":{"owner":c.account_id}}),
+                    json!({"term":{"state":"staged"}}),
+                ],
+                c.jobs_per_cycle.min(1000),
+            )?;
+            self.jobs
+                .borrow_mut()
+                .extend(rows.into_iter().map(|d| d.record.key));
+        }
+        loop {
+            let Some(key) = self.jobs.borrow_mut().pop_front() else {
+                return Ok(None);
+            };
+            let Some(doc) = self.store.get("receipt", &key)? else {
+                return Err(IntakeError("receipt_missing"));
+            };
+            if doc.record.state != "staged" {
+                continue;
+            }
+            let p = &doc.record.payload;
+            let raw = STANDARD
+                .decode(p["raw"].as_str().ok_or(IntakeError("receipt_raw"))?)
+                .map_err(|_| IntakeError("receipt_raw"))?;
+            if raw.len() > c.max_raw_bytes {
+                return Err(IntakeError("receipt_size"));
+            }
+            return Ok(Some(Job {
+                receipt_id: key,
+                raw,
+                received_at: p["received_at"]
+                    .as_str()
+                    .ok_or(IntakeError("receipt_time"))?
+                    .into(),
+                server_received_at: p["server_received_at"].as_str().map(str::to_owned),
+                attempts: p["attempts"]
+                    .as_u64()
+                    .ok_or(IntakeError("receipt_attempts"))? as u32,
+                sequence: doc.record.order,
+            }));
+        }
     }
     pub fn attempt(&self, id: &str) -> Result<()> {
-        self.db.execute(
-            "UPDATE receipts SET attempts=attempts+1 WHERE id=? AND state='staged'",
-            [id],
-        )?;
-        Ok(())
+        self.attempt_delta(id, 1)
     }
     pub fn release_attempt(&self, id: &str) -> Result<()> {
-        self.db.execute(
-            "UPDATE receipts SET attempts=max(attempts-1,0) WHERE id=? AND state='staged'",
-            [id],
-        )?;
+        self.attempt_delta(id, -1)
+    }
+    fn attempt_delta(&self, id: &str, delta: i64) -> Result<()> {
+        self.store.update("receipt", id, |old| {
+            let mut row = old
+                .cloned()
+                .ok_or(parse_command_state::Error("state_record"))?;
+            if row.state == "staged" {
+                row.payload["attempts"] =
+                    json!((row.payload["attempts"].as_i64().unwrap_or(0) + delta).max(0));
+            }
+            Ok(row)
+        })?;
         Ok(())
     }
     pub fn identify_body(&self, id: &str, body: &str, revision: &str) -> Result<()> {
-        self.db.execute(
-            "UPDATE receipts SET body_id=?,revision=? WHERE id=? AND state='staged'",
-            params![message_id(body), revision, id],
-        )?;
+        self.store.update("receipt", id, |old| {
+            let mut row = old
+                .cloned()
+                .ok_or(parse_command_state::Error("state_record"))?;
+            row.source = format!("{}@{revision}", message_id(body));
+            Ok(row)
+        })?;
         Ok(())
     }
     pub fn record_retry(&self, id: &str, code: &str) -> Result<()> {
-        self.db.execute(
-            "INSERT INTO custody_events(receipt_id,state,code,at) VALUES(?,'retrying',?,?)",
-            params![id, code, crate::now()?],
-        )?;
+        let at = crate::now()?;
+        self.store.update("receipt", id, |old| {
+            let mut row = old
+                .cloned()
+                .ok_or(parse_command_state::Error("state_record"))?;
+            event(&mut row, "retrying", Some(code), &at)?;
+            Ok(row)
+        })?;
         Ok(())
     }
     pub fn quarantine(&mut self, id: &str, state: &str, code: &str) -> Result<()> {
-        let tx = self
-            .db
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if tx.execute(
-            "UPDATE receipts SET state=?,code=? WHERE id=? AND state='staged'",
-            params![state, code, id],
-        )? > 0
-        {
-            tx.execute(
-                "INSERT INTO custody_events(receipt_id,state,code,at) VALUES(?,?,?,?)",
-                params![id, state, code, crate::now()?],
-            )?;
-        }
-        tx.commit()?;
+        let at = crate::now()?;
+        self.store.update("receipt", id, |old| {
+            let mut row = old
+                .cloned()
+                .ok_or(parse_command_state::Error("state_record"))?;
+            if row.state == "staged" {
+                row.state = state.into();
+                row.payload["code"] = json!(code);
+                event(&mut row, state, Some(code), &at)?;
+            }
+            Ok(row)
+        })?;
         Ok(())
     }
     pub fn finish(
         &mut self,
         c: &Config,
         job: &Job,
-        mut core: Message,
+        core: Message,
         audit: Vec<AuditEvent>,
         email: crate::mime::Email,
     ) -> Result<()> {
-        let tx = self
-            .db
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let staged: bool = tx.query_row(
-            "SELECT state='staged' FROM receipts WHERE id=?",
-            [&job.receipt_id],
-            |r| r.get(0),
-        )?;
-        if !staged {
-            return Ok(());
-        }
         if core.id != message_id(&email.body) {
             return Err(IntakeError("body_identity"));
         }
-        let previous:Option<(String,i64,bool)>=tx.query_row("SELECT core,selected_sequence,subject_conflict FROM projections WHERE message_id=? AND revision=?",params![core.id,core.revision],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
-        let duplicate = previous.is_some();
-        let mut select = true;
-        let mut conflict = false;
-        let mut selected_sequence = job.sequence;
-        if let Some((old, sequence, had_conflict)) = &previous {
-            let old: Message =
-                serde_json::from_str(old).map_err(|_| IntakeError("journal_document"))?;
-            let previous_subject: Option<String> = tx.query_row(
-                "SELECT subject FROM receipts WHERE sequence=?",
-                [sequence],
-                |r| r.get(0),
-            )?;
-            conflict = *had_conflict || previous_subject != email.subject;
-            let old_received: Option<String> = tx.query_row(
-                "SELECT server_received_at FROM receipts WHERE sequence=?",
-                [sequence],
-                |r| r.get(0),
-            )?;
-            select = match (&job.server_received_at, old_received.as_ref()) {
-                (Some(new), Some(old)) => new > old || (new == old && job.sequence > *sequence),
-                _ => {
-                    if !core
-                        .review_flags
-                        .iter()
-                        .any(|v| v == "subject_order_review")
-                    {
-                        core.review_flags.push("subject_order_review".into());
-                    }
-                    false
-                }
-            };
-            if !select {
-                selected_sequence = *sequence;
-            }
-            // Domain projection is body/revision-owned; only approved receipt display metadata changes.
-            let order_review = core
-                .review_flags
-                .iter()
-                .any(|v| v == "subject_order_review");
-            core = old;
-            if order_review
-                && !core
-                    .review_flags
-                    .iter()
-                    .any(|v| v == "subject_order_review")
-            {
-                core.review_flags.push("subject_order_review".into());
-            }
-            if select {
-                core.subject = parse_command_parser_api::display_subject(email.subject.as_deref())
-                    .map(str::to_owned);
-            }
-        }
-        if conflict && !core.review_flags.iter().any(|s| s == "subject_conflict") {
-            core.review_flags.push("subject_conflict".into());
-        }
         core.validate()
             .map_err(|_| IntakeError("projection_validation"))?;
-        let core_json = serde_json::to_string(&core).map_err(|_| IntakeError("projection_json"))?;
-        let metadata =
-            serde_json::to_string(&email.metadata).map_err(|_| IntakeError("metadata_json"))?;
-        let mut events = Vec::new();
-        if !duplicate {
-            for event in audit {
-                events.push((
-                    event.id.clone(),
-                    serde_json::to_string(&event).map_err(|_| IntakeError("audit_json"))?,
-                ));
-            }
+        let receipt = self
+            .store
+            .get("receipt", &job.receipt_id)?
+            .ok_or(IntakeError("receipt_missing"))?;
+        if receipt.record.state != "staged" {
+            return Ok(());
         }
-        let receipt_event=AuditEvent{id:event_id(&[&job.receipt_id,&c.revision,"email_received"]),message_id:core.id.clone(),revision:c.revision.clone(),kind:"email_received".into(),subject_id:None,recorded_at:parse_command_types::UtcTimestamp::new(&job.received_at).map_err(|_|IntakeError("receipt_time"))?,issued_at:core.issued_at.clone(),review_only:None,security:core.security.clone(),payload:json!({"receipt_id":job.receipt_id,"email":email.metadata,"duplicate_body":duplicate,"subject_conflict":conflict,"raw_email_custody":"local_journal","server_received_at":job.server_received_at}).as_object().cloned().ok_or(IntakeError("audit_json"))?};
-        events.push((
-            receipt_event.id.clone(),
-            serde_json::to_string(&receipt_event).map_err(|_| IntakeError("audit_json"))?,
-        ));
-        let extra = core_json
+        let key = format!("{}@{}", core.id, core.revision);
+        let extra = serde_json::to_vec(&audit)
+            .map_err(|_| IntakeError("audit_json"))?
             .len()
-            .saturating_add(metadata.len())
-            .saturating_add(email.subject.as_ref().map_or(0, String::len))
-            .saturating_add(
-                events
-                    .iter()
-                    .fold(0usize, |total, (_, v)| total.saturating_add(v.len())),
-            );
-        Self::capacity(&tx, c, extra as u64, 0)?;
-        if !duplicate || select || conflict {
-            tx.execute("INSERT INTO projections(message_id,revision,core,selected_sequence,subject_conflict) VALUES(?,?,?,?,?) ON CONFLICT(message_id,revision) DO UPDATE SET core=excluded.core,selected_sequence=excluded.selected_sequence,subject_conflict=excluded.subject_conflict,delivery_state='pending'",params![core.id,c.revision,core_json,selected_sequence,conflict])?;
-        }
-        for (id, document) in events {
-            tx.execute("INSERT INTO audit_outbox(id,message_id,revision,receipt_id,document) VALUES(?,?,?,?,?)",params![id,core.id,c.revision,job.receipt_id,document])?;
-        }
+            + serde_json::to_vec(&core)
+                .map_err(|_| IntakeError("projection_json"))?
+                .len();
+        self.capacity(c, extra as u64, 0)?;
+        let projection=self.store.update("projection",&key,|old| {
+            if let Some(old)=old {
+                let mut row=old.clone();
+                let previous_subject=row.payload["selected_subject"].as_str();
+                let conflict=row.payload["subject_conflict"]==true || previous_subject!=email.subject.as_deref();
+                let old_time=row.payload["selected_received_at"].as_str().map(str::to_owned);
+                let select=match (job.server_received_at.as_deref(),old_time.as_deref()) {(Some(a),Some(b))=>a>b || (a==b && job.sequence>row.order),_=>false};
+                let mut selected:Message=serde_json::from_value(row.payload["core"].clone()).map_err(|_|parse_command_state::Error("state_record"))?;
+                if select {selected.subject=parse_command_parser_api::display_subject(email.subject.as_deref()).map(str::to_owned);row.order=job.sequence;row.payload["selected_received_at"]=json!(job.server_received_at);row.payload["selected_subject"]=json!(email.subject);}
+                for (flag,active) in [("subject_conflict",conflict),("subject_order_review",job.server_received_at.is_none() || old_time.is_none())] {if active && !selected.review_flags.iter().any(|f|f==flag) {selected.review_flags.push(flag.into());}}
+                let value=serde_json::to_value(selected).map_err(|_|parse_command_state::Error("state_record"))?;
+                if row.payload["core"]!=value {row.state="pending".into();row.payload["core"]=value;}
+                row.payload["subject_conflict"]=json!(conflict);row.bytes=row.payload.to_string().len() as u64;Ok(row)
+            } else {
+                let mut row=Record::new("projection",&key,json!({"core":core,"audits":audit,"first_receipt":job.receipt_id,"selected_subject":email.subject,"selected_received_at":job.server_received_at,"subject_conflict":false}));
+                row.state="pending".into();row.source=key.clone();row.order=job.sequence;row.bytes=row.payload.to_string().len() as u64;Ok(row)
+            }
+        })?;
+        let duplicate = projection.record.payload["first_receipt"] != job.receipt_id;
         let state = if duplicate { "duplicate" } else { "parsed" };
-        tx.execute("UPDATE receipts SET state=?,code=NULL,body_id=?,revision=?,subject=?,metadata=? WHERE id=?",params![state,core.id,c.revision,email.subject,metadata,job.receipt_id])?;
-        tx.execute(
-            "INSERT INTO custody_events(receipt_id,state,code,at) VALUES(?,?,NULL,?)",
-            params![job.receipt_id, state, crate::now()?],
-        )?;
-        tx.commit()?;
+        let at = crate::now()?;
+        let mut receipt_audit = json!({"id":event_id(&[&job.receipt_id,&c.revision,"email_received"]),"message_id":core.id,"revision":c.revision,"kind":"email_received","recorded_at":job.received_at,"issued_at":core.issued_at,"security":core.security,"payload":{"receipt_id":job.receipt_id,"email":email.metadata,"duplicate_body":duplicate,"subject_conflict":projection.record.payload["subject_conflict"],"raw_email_custody":"opensearch_hidden_index","server_received_at":job.server_received_at}});
+        if core.issued_at.is_none() {
+            receipt_audit
+                .as_object_mut()
+                .ok_or(IntakeError("audit_json"))?
+                .remove("issued_at");
+        }
+        let mut row = receipt.record.clone();
+        row.state = state.into();
+        row.source = key;
+        row.payload["code"] = Value::Null;
+        row.payload["subject"] = json!(email.subject);
+        row.payload["metadata"] = json!(email.metadata);
+        row.payload["audit"] = json!([receipt_audit]);
+        row.payload["audit_state"] = json!("pending");
+        row.flags.push("audit_pending".into());
+        event(&mut row, state, None, &at)?;
+        row.bytes = row.payload.to_string().len() as u64;
+        self.store.put(&row, Some(&receipt))?;
+        self.bytes
+            .set(self.bytes.get().saturating_add(extra as u64));
         Ok(())
     }
     pub fn status(&self) -> Result<Value> {
-        let mut statement = self
-            .db
-            .prepare("SELECT state,count(*) FROM receipts GROUP BY state ORDER BY state")?;
-        let rows =
-            statement.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        self.store.refresh()?;
+        let values=self.store.search(json!({"size":0,"aggs":{"receipts":{"filter":{"term":{"kind":"receipt"}},"aggs":{"states":{"terms":{"field":"state","size":20}}}},"projections":{"filter":{"term":{"kind":"projection"}}}}}))?;
         let mut counts = serde_json::Map::new();
-        for row in rows {
-            let (k, v) = row?;
-            counts.insert(k, json!(v));
+        for b in values["aggregations"]["receipts"]["states"]["buckets"]
+            .as_array()
+            .ok_or(IntakeError("custody_status"))?
+        {
+            counts.insert(
+                b["key"]
+                    .as_str()
+                    .ok_or(IntakeError("custody_status"))?
+                    .into(),
+                b["doc_count"].clone(),
+            );
         }
-        let projections: i64 = self
-            .db
-            .query_row("SELECT count(*) FROM projections", [], |r| r.get(0))?;
-        let audits: i64 = self.db.query_row(
-            "SELECT count(*) FROM audit_outbox WHERE delivery_state='pending'",
-            [],
-            |r| r.get(0),
-        )?;
-        let mut statement = self
-            .db
-            .prepare("SELECT validity,uid FROM cursors ORDER BY account_id,mailbox,validity")?;
-        let cursors = statement
-            .query_map([], |r| {
-                Ok(json!({"uidvalidity":r.get::<_,u32>(0)?,"last_scanned_uid":r.get::<_,u32>(1)?}))
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let cursors=self.store.list("mailbox_cursor",vec![],1000)?.into_iter().map(|d|json!({"uidvalidity":d.record.payload["validity"],"last_scanned_uid":d.record.order})).collect::<Vec<_>>();
         Ok(
-            json!({"receipts":counts,"projections":projections,"audit_pending":audits,"cursors":cursors,"delivery":"local_only"}),
+            json!({"receipts":counts,"projections":values["aggregations"]["projections"]["doc_count"],"cursors":cursors,"delivery":"opensearch"}),
         )
     }
-    pub fn export(&self, mut out: impl std::io::Write) -> Result<()> {
-        let mut stmt = self
-            .db
-            .prepare("SELECT core FROM projections ORDER BY message_id,revision")?;
-        for row in stmt.query_map([], |r| r.get::<_, String>(0))? {
-            writeln!(out, "{}", row?)?;
-        }
-        Ok(())
-    }
-    pub fn receipts(&self, mut out: impl std::io::Write) -> Result<()> {
-        let mut stmt=self.db.prepare("SELECT sequence,id,validity,uid,received_at,state,code,body_id,revision,subject,attempts,raw_hash,length(raw),server_received_at FROM receipts ORDER BY sequence")?;
-        for row in stmt.query_map([],|r|Ok(json!({"sequence":r.get::<_,i64>(0)?,"receipt_id":r.get::<_,String>(1)?,"uidvalidity":r.get::<_,u32>(2)?,"uid":r.get::<_,u32>(3)?,"received_at":r.get::<_,String>(4)?,"state":r.get::<_,String>(5)?,"code":r.get::<_,Option<String>>(6)?,"body_id":r.get::<_,Option<String>>(7)?,"revision":r.get::<_,Option<String>>(8)?,"subject":r.get::<_,Option<String>>(9)?,"attempts":r.get::<_,u32>(10)?,"raw_sha256":r.get::<_,Option<String>>(11)?,"raw_bytes":r.get::<_,Option<i64>>(12)?,"server_received_at":r.get::<_,Option<String>>(13)?})))? {writeln!(out,"{}",row?)?;}
-        Ok(())
-    }
-}
-use parse_command_types::Validate;
-
-fn prepare_directory(path: &std::path::Path) -> Result<()> {
-    let parent = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .ok_or(IntakeError("journal_directory"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(parent)?;
-        let info = std::fs::symlink_metadata(parent)?;
-        if !info.is_dir() || info.permissions().mode() & 0o077 != 0 {
-            return Err(IntakeError("journal_directory_permissions"));
-        }
-        match std::fs::symlink_metadata(path) {
-            Ok(info) => {
-                if !info.is_file() || info.permissions().mode() & 0o077 != 0 {
-                    return Err(IntakeError("journal_file_permissions"));
+    fn export_kind(&self, kind: &str, mut out: impl std::io::Write) -> Result<()> {
+        self.store.refresh()?;
+        let mut after: Option<Value> = None;
+        loop {
+            let mut query =
+                json!({"size":100,"query":{"term":{"kind":kind}},"sort":["order","key"]});
+            if let Some(value) = after {
+                query["search_after"] = value;
+            }
+            let response = self.store.search(query)?;
+            let hits = response["hits"]["hits"]
+                .as_array()
+                .ok_or(IntakeError("custody_status"))?;
+            for hit in hits {
+                let mut value = if kind == "projection" {
+                    hit["_source"]["payload"]["core"].clone()
+                } else {
+                    hit["_source"]["payload"].clone()
+                };
+                if kind == "receipt" {
+                    if let Some(object) = value.as_object_mut() {
+                        object.remove("raw");
+                        object.remove("audit");
+                        object.remove("metadata");
+                    }
                 }
+                writeln!(out, "{value}")?;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .mode(0o600)
-                    .open(path)?;
+            if hits.len() < 100 {
+                break;
             }
-            Err(error) => return Err(error.into()),
+            after = hits.last().map(|h| h["sort"].clone());
         }
+        Ok(())
     }
-    #[cfg(not(unix))]
-    std::fs::create_dir_all(parent)?;
-    Ok(())
+    pub fn export(&self, out: impl std::io::Write) -> Result<()> {
+        self.export_kind("projection", out)
+    }
+    pub fn receipts(&self, out: impl std::io::Write) -> Result<()> {
+        self.export_kind("receipt", out)
+    }
 }

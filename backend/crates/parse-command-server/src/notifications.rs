@@ -1,224 +1,288 @@
-//! Small durable notification inbox, derived only from recorded custody events.
-use crate::{Error, Result, api::App, private::timestamp};
+//! Idempotent notification projection. The source cursor advances only after all
+//! writes for an event have been acknowledged. Replay never increments a group twice.
+use crate::{
+    Error, Result,
+    api::App,
+    private::{text, timestamp},
+};
 use axum::{
     extract::{Json, Path, State},
     http::HeaderMap,
 };
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
+use parse_command_state::{Record, Store};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::{path::Path as FilePath, sync::Arc, time::Duration};
-
-const BATCH: i64 = 256;
-const PAGE: i64 = 20;
-
-pub fn initialize(db: &Connection) -> Result<()> {
-    db.execute_batch("CREATE TABLE IF NOT EXISTS notification_clock(singleton INTEGER PRIMARY KEY CHECK(singleton=1),value INTEGER NOT NULL);
-        INSERT OR IGNORE INTO notification_clock VALUES(1,0);
-        CREATE TABLE IF NOT EXISTS notification_cursors(stream TEXT PRIMARY KEY,sequence INTEGER NOT NULL);
-        CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,group_key TEXT UNIQUE NOT NULL,version INTEGER NOT NULL,kind TEXT NOT NULL,context TEXT NOT NULL,source_key TEXT NOT NULL,at TEXT NOT NULL,detail TEXT NOT NULL,resolved_at TEXT,count INTEGER NOT NULL DEFAULT 1);
-        CREATE INDEX IF NOT EXISTS notifications_version ON notifications(version DESC);
-        CREATE TABLE IF NOT EXISTS notification_members(notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,source_key TEXT NOT NULL,subject TEXT NOT NULL,context TEXT NOT NULL,at TEXT NOT NULL,version INTEGER NOT NULL,PRIMARY KEY(notification_id,source_key));
-        CREATE TABLE IF NOT EXISTS notification_seen(source_key TEXT PRIMARY KEY);
-        CREATE TABLE IF NOT EXISTS notification_incidents(scope TEXT PRIMARY KEY,notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE);
-        CREATE TABLE IF NOT EXISTS notification_reads(owner TEXT NOT NULL,notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,version INTEGER NOT NULL,PRIMARY KEY(owner,notification_id));
-        CREATE TABLE IF NOT EXISTS notification_inboxes(owner TEXT PRIMARY KEY,read_through INTEGER NOT NULL);")?;
-    Ok(())
-}
-
-fn next(db: &Connection) -> Result<i64> {
-    Ok(db.query_row(
-        "UPDATE notification_clock SET value=value+1 WHERE singleton=1 RETURNING value",
-        [],
-        |r| r.get(0),
-    )?)
-}
-fn add(
-    db: &Connection,
-    kind: &str,
-    group: &str,
-    source: &Source,
-    at: &str,
-    detail: &str,
-) -> Result<i64> {
-    let version = next(db)?;
-    Ok(db.query_row("INSERT INTO notifications(group_key,version,kind,context,source_key,at,detail) VALUES(?,?,?,?,?,?,?) RETURNING id",
-        params![group,version,kind,source.context,source.key,at,detail],|r|r.get(0))?)
-}
+use std::sync::Arc;
+const BATCH: usize = 32;
+const PAGE: usize = 20;
 #[derive(Default)]
 struct Source {
     key: String,
     subject: String,
     context: String,
 }
-fn source(row: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Source> {
-    let key = row.get::<_, Option<String>>(offset)?.unwrap_or_default();
-    let subject = row
-        .get::<_, Option<String>>(offset + 1)?
-        .unwrap_or_default();
-    let kind = row
-        .get::<_, Option<String>>(offset + 2)?
-        .unwrap_or_default();
-    let originator = row
-        .get::<_, Option<String>>(offset + 3)?
-        .unwrap_or_default();
-    let context = [kind, originator]
-        .into_iter()
-        .filter(|v| !v.is_empty())
-        .collect::<Vec<_>>()
-        .join(" · ");
+async fn source(store: &Store, key: &str) -> Result<Source> {
+    if key.is_empty() {
+        return Ok(Source::default());
+    }
+    let Some(doc) = store.get("projection", key).await? else {
+        return Ok(Source::default());
+    };
+    let core = &doc.record.payload["core"];
     Ok(Source {
-        key,
-        subject: subject.chars().take(240).collect(),
-        context: context.chars().take(240).collect(),
+        key: if doc.record.state == "published" {
+            key.into()
+        } else {
+            String::new()
+        },
+        subject: text(core, "subject").chars().take(240).collect(),
+        context: [text(core, "type"), text(core, "originator")]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ")
+            .chars()
+            .take(240)
+            .collect(),
     })
 }
-fn failure(db: &Connection, scope: &str, source: &Source, at: &str, detail: &str) -> Result<()> {
-    let open: bool = db.query_row(
-        "SELECT EXISTS(SELECT 1 FROM notification_incidents WHERE scope=?)",
-        [scope],
-        |r| r.get(0),
-    )?;
-    if !open {
-        let id = add(
-            db,
-            "failed",
-            &format!("failure:{scope}:{}", next(db)?),
-            source,
-            at,
-            detail,
-        )?;
-        db.execute(
-            "INSERT INTO notification_incidents VALUES(?,?)",
-            params![scope, id],
-        )?;
-    }
+async fn notice(
+    store: &Store,
+    key: &str,
+    version: i64,
+    kind: &str,
+    source: &Source,
+    at: &str,
+    detail: &str,
+) -> Result<()> {
+    let mut row = Record::new(
+        "notification",
+        key,
+        json!({"id":version,"kind":kind,"context":source.context,"messageKey":source.key,"at":at,"detail":detail,"resolvedAt":null,"count":1,"members":{}}),
+    );
+    row.order = version;
+    let notice = store
+        .update("notification", key, |old| {
+            Ok(old.cloned().unwrap_or_else(|| row.clone()))
+        })
+        .await?;
+    let id = notice.record.payload["id"]
+        .as_i64()
+        .ok_or_else(Error::unavailable)?;
+    // A grouped traffic notice keeps its first ID while its version advances.
+    // Only that public ID needs a lookup row; replay repairs a missing lookup.
+    store
+        .update("notification_id", &id.to_string(), |old| {
+            Ok(old.cloned().unwrap_or_else(|| {
+                Record::new("notification_id", &id.to_string(), json!({"key":key}))
+            }))
+        })
+        .await?;
     Ok(())
 }
-fn recovery(db: &Connection, scope: &str, source: &Source, at: &str) -> Result<()> {
-    let id: Option<i64> = db
-        .query_row(
-            "SELECT notification_id FROM notification_incidents WHERE scope=?",
-            [scope],
-            |r| r.get(0),
-        )
-        .optional()?;
-    if let Some(id) = id {
-        db.execute(
-            "UPDATE notifications SET resolved_at=? WHERE id=?",
-            params![at, id],
-        )?;
-        add(db, "recovered", &format!("recovery:{id}"), source, at, "")?;
-        db.execute("DELETE FROM notification_incidents WHERE scope=?", [scope])?;
+async fn traffic(store: &Store, event: &Record, source: &Source, at: &str) -> Result<()> {
+    if source.key.is_empty() {
+        return Ok(());
     }
-    Ok(())
-}
-fn traffic(db: &Connection, source: &Source, at: &str) -> Result<()> {
     let body = source
         .key
         .rsplit_once('@')
         .map_or(source.key.as_str(), |(body, _)| body);
-    if source.key.is_empty()
-        || db.execute("INSERT OR IGNORE INTO notification_seen VALUES(?)", [body])? == 0
-    {
+    let old = store.get("notification_seen", body).await?;
+    let seen = if let Some(old) = old {
+        old
+    } else {
+        let version = store.next("notifications").await?;
+        let seconds = chrono::DateTime::parse_from_rfc3339(at)
+            .map_err(|_| Error::unavailable())?
+            .timestamp();
+        let key = format!("traffic:{}", seconds.div_euclid(300));
+        let mut row = Record::new(
+            "notification_seen",
+            body,
+            json!({"event":event.key,"group":key,"at":at}),
+        );
+        row.order = version;
+        store.put(&row, None).await?
+    };
+    if seen.record.payload["event"] != event.key {
         return Ok(());
     }
-    let seconds = chrono::DateTime::parse_from_rfc3339(at)
-        .map_err(|_| Error::unavailable())?
-        .timestamp();
-    let group = format!("traffic:{}", seconds.div_euclid(300));
-    let previous: Option<i64> = db
-        .query_row(
-            "SELECT id FROM notifications WHERE group_key=?",
-            [&group],
-            |r| r.get(0),
-        )
-        .optional()?;
-    let id = if let Some(id) = previous {
-        let version = next(db)?;
-        db.execute("UPDATE notifications SET count=count+1,version=?,at=max(at,?),context='',source_key='' WHERE id=?",params![version,at,id])?;
-        id
-    } else {
-        add(db, "traffic", &group, source, at, "")?
-    };
-    db.execute(
-        "INSERT INTO notification_members SELECT id,?,?,?, ?,version FROM notifications WHERE id=?",
-        params![source.key, source.subject, source.context, at, id],
-    )?;
+    let group = text(&seen.record.payload, "group");
+    let version = seen.record.order;
+    notice(store, group, version, "traffic", source, at, "").await?;
+    store.update("notification",group,|old| {
+        let mut row=old.cloned().ok_or(parse_command_state::Error("state_record"))?;
+        let members=row.payload["members"].as_object_mut().ok_or(parse_command_state::Error("state_record"))?;
+        if members.contains_key(body){return Ok(row);}
+        if members.len()>=20000{return Err(parse_command_state::Error("state_capacity"));}
+        members.insert(body.into(),json!({"messageKey":source.key,"subject":source.subject,"context":source.context,"at":at,"version":version}));
+        let count=members.len();row.payload["count"]=json!(count);row.order=row.order.max(version);
+        if at>text(&row.payload,"at"){row.payload["at"]=json!(at);}
+        if count>1{row.payload["context"]=json!("");row.payload["messageKey"]=json!("");}Ok(row)
+    }).await?;
     Ok(())
 }
-
-/// Incremental replay is atomic with its cursor. Retrying/restarting cannot duplicate notices.
-/// Current status flags, inferred profiles, named places and draft edits are never alert sources.
-pub fn sync(db: &mut Connection, path: &FilePath) -> Result<bool> {
-    let journal = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    journal.busy_timeout(Duration::from_millis(250))?;
-    let tx = db.transaction()?;
-    let mut catching_up = false;
-    for stream in ["custody", "publication"] {
-        let cursor: i64 = tx
-            .query_row(
-                "SELECT sequence FROM notification_cursors WHERE stream=?",
-                [stream],
-                |r| r.get(0),
-            )
-            .optional()?
-            .unwrap_or(0);
-        let sql = if stream == "custody" {
-            "SELECT e.sequence,e.state,e.at,e.receipt_id,COALESCE(e.code,''),CASE WHEN p.delivery_state='published' THEN p.message_id||'@'||p.revision END,COALESCE(json_extract(p.core,'$.subject'),r.subject),json_extract(p.core,'$.type'),json_extract(p.core,'$.originator') FROM custody_events e JOIN receipts r ON r.id=e.receipt_id LEFT JOIN projections p ON p.message_id=r.body_id AND p.revision=r.revision WHERE e.sequence>? ORDER BY e.sequence LIMIT ?"
+async fn incident(
+    store: &Store,
+    scope: &str,
+    event: &Record,
+    source: &Source,
+    at: &str,
+    detail: Option<&str>,
+) -> Result<()> {
+    let old = store.get("notification_incident", scope).await?;
+    if let Some(detail) = detail {
+        let doc = if let Some(old) = old.filter(|d| d.record.state == "open") {
+            old
         } else {
-            "SELECT e.sequence,e.code,e.at,e.message_id||'@'||e.revision||':'||e.stage||':'||e.job_id,e.stage,CASE WHEN p.delivery_state='published' THEN p.message_id||'@'||p.revision END,json_extract(p.core,'$.subject'),json_extract(p.core,'$.type'),json_extract(p.core,'$.originator') FROM publication_events e LEFT JOIN projections p ON p.message_id=e.message_id AND p.revision=e.revision WHERE e.sequence>? ORDER BY e.sequence LIMIT ?"
+            let version = store.next("notifications").await?;
+            store.update("notification_incident",scope,|old| {
+                if let Some(old)=old.filter(|r|r.state=="open"){return Ok(old.clone());}
+                let mut row=Record::new("notification_incident",scope,json!({"failure":format!("failure:{scope}:{}",event.key),"at":at,"detail":detail}));row.state="open".into();row.order=version;Ok(row)
+            }).await?
         };
-        let mut q = journal.prepare(sql)?;
-        let rows = q.query_map(params![cursor, BATCH], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-                r.get::<_, String>(3)?,
-                r.get::<_, String>(4)?,
-                source(r, 5)?,
-            ))
-        })?;
-        let mut last = cursor;
-        let mut count = 0;
-        for row in rows {
-            let (seq, state, at, scope, code, source) = row?;
-            let at = timestamp(&at)?;
-            let scope = format!("{stream}:{scope}");
-            if stream == "custody" {
-                match state.as_str() {
+        notice(
+            store,
+            text(&doc.record.payload, "failure"),
+            doc.record.order,
+            "failed",
+            source,
+            text(&doc.record.payload, "at"),
+            text(&doc.record.payload, "detail"),
+        )
+        .await?;
+    } else if let Some(old) = old {
+        let doc = if old.record.state == "open" {
+            let version = store.next("notifications").await?;
+            let mut row = old.record.clone();
+            row.state = "closed".into();
+            row.payload["recovery_event"] = json!(event.key);
+            row.payload["recovered_at"] = json!(at);
+            row.payload["recovery_version"] = json!(version);
+            store.put(&row, Some(&old)).await?
+        } else {
+            old
+        };
+        if doc.record.payload["recovery_event"] == event.key {
+            let failure = text(&doc.record.payload, "failure");
+            store
+                .update("notification", failure, |old| {
+                    let mut row = old
+                        .cloned()
+                        .ok_or(parse_command_state::Error("state_record"))?;
+                    row.payload["resolvedAt"] = json!(at);
+                    Ok(row)
+                })
+                .await?;
+            notice(
+                store,
+                &format!("recovery:{failure}"),
+                doc.record.payload["recovery_version"]
+                    .as_i64()
+                    .ok_or_else(Error::unavailable)?,
+                "recovered",
+                source,
+                at,
+                "",
+            )
+            .await?;
+        }
+    }
+    Ok(())
+}
+pub async fn sync(store: &Store, custody: &Store) -> Result<bool> {
+    let mut catching_up = false;
+    for kind in ["custody_event", "publication_event"] {
+        let old = store.get("notification_cursor", kind).await?;
+        let cursor = old.as_ref().map(|d| d.record.order).unwrap_or(0);
+        let events = custody
+            .list(kind, vec![json!({"range":{"order":{"gt":cursor}}})], BATCH)
+            .await?;
+        for doc in &events {
+            let row = &doc.record;
+            let at = timestamp(text(&row.payload, "at"))?;
+            let source = source(custody, &row.source).await?;
+            let scope = format!("{kind}:{}", row.owner);
+            if kind == "custody_event" {
+                match row.state.as_str() {
                     "quarantined" | "unsupported" | "retrying" | "fetch_failed" | "rejected" => {
-                        failure(&tx, &scope, &source, &at, intake_reason(&code))?
+                        incident(
+                            store,
+                            &scope,
+                            row,
+                            &source,
+                            &at,
+                            Some(intake_reason(text(&row.payload, "code"))),
+                        )
+                        .await?
                     }
-                    "parsed" | "duplicate" => recovery(&tx, &scope, &source, &at)?,
+                    "parsed" | "duplicate" => {
+                        incident(store, &scope, row, &source, &at, None).await?
+                    }
                     _ => {}
                 }
-            } else if state == "publication_succeeded" {
-                recovery(&tx, &scope, &source, &at)?;
-                if code == "message" {
-                    traffic(&tx, &source, &at)?;
+            } else if row.state == "publication_succeeded" {
+                incident(store, &scope, row, &source, &at, None).await?;
+                if row.category == "message" {
+                    traffic(store, row, &source, &at).await?;
                 }
             } else {
-                let detail = match code.as_str() {
+                let detail = match row.category.as_str() {
                     "message" => "Message indexing failed",
                     "passage" => "Search indexing failed",
                     "enrich" => "Embedding failed",
                     "audit" => "Audit storage failed",
                     _ => "Publication failed",
                 };
-                failure(&tx, &scope, &source, &at, detail)?;
+                incident(store, &scope, row, &source, &at, Some(detail)).await?;
             }
-            last = seq;
-            count += 1;
         }
-        tx.execute("INSERT INTO notification_cursors VALUES(?,?) ON CONFLICT(stream) DO UPDATE SET sequence=excluded.sequence",params![stream,last])?;
-        catching_up |= count == BATCH;
+        if let Some(last) = events.last() {
+            let mut row = Record::new("notification_cursor", kind, json!({}));
+            row.order = last.record.order;
+            store.put(&row, old.as_ref()).await?;
+        }
+        catching_up |= events.len() == BATCH;
     }
-    // The inbox is a bounded convenience view. Full custody/audit history is untouched.
-    tx.execute("DELETE FROM notifications WHERE id IN (SELECT id FROM notifications ORDER BY version DESC LIMIT -1 OFFSET 5000)",[])?;
-    tx.commit()?;
+    prune(store).await?;
+    let status = store.get("notification_status", "sync").await?;
+    if status
+        .as_ref()
+        .is_none_or(|old| old.record.payload["catchingUp"] != catching_up)
+    {
+        let row = Record::new(
+            "notification_status",
+            "sync",
+            json!({"catchingUp":catching_up}),
+        );
+        store.put(&row, status.as_ref()).await?;
+    }
     Ok(catching_up)
+}
+async fn prune(store: &Store) -> Result<()> {
+    let result=store.search(json!({"size":128,"from":5000,"query":{"term":{"kind":"notification"}},"sort":[{"order":"desc"},"key"]})).await?;
+    let docs = parse_command_state::hits(&result)?;
+    for doc in docs {
+        // Read markers for expired notices are removed lazily on the next read
+        // mutation using the monotonically increasing retained floor.
+        store
+            .update("notification_floor", "retained", |old| {
+                let mut row = old
+                    .cloned()
+                    .unwrap_or_else(|| Record::new("notification_floor", "retained", json!({})));
+                row.order = row.order.max(doc.record.order);
+                Ok(row)
+            })
+            .await?;
+        if let Some(id) = doc.record.payload["id"].as_i64()
+            && let Some(reference) = store.get("notification_id", &id.to_string()).await?
+        {
+            store.delete(&reference).await?;
+        }
+        store.delete(&doc).await?;
+    }
+    Ok(())
 }
 fn intake_reason(code: &str) -> &'static str {
     if code.contains("size") || code.contains("limit") {
@@ -235,7 +299,6 @@ fn intake_reason(code: &str) -> &'static str {
         "Message processing failed"
     }
 }
-
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Request {
@@ -249,58 +312,127 @@ fn positive(value: Option<i64>) -> Result<i64> {
         .filter(|v| *v > 0 && *v <= 9_007_199_254_740_991)
         .ok_or_else(|| Error::invalid("Invalid notification selection"))
 }
-pub fn execute(
-    db: &mut Connection,
+async fn selected(store: &Store, id: i64) -> Result<parse_command_state::Document> {
+    let reference = store
+        .get("notification_id", &id.to_string())
+        .await?
+        .ok_or_else(|| Error::invalid("Notification is unavailable"))?;
+    store
+        .get("notification", text(&reference.record.payload, "key"))
+        .await?
+        .ok_or_else(|| Error::invalid("Notification is unavailable"))
+}
+pub async fn execute(
+    store: &Store,
     owner: &str,
     operation: &str,
     request: Request,
 ) -> Result<Value> {
-    let watermark: i64 = db.query_row("SELECT value FROM notification_clock", [], |r| r.get(0))?;
+    let watermark = store
+        .get("counter", "notifications")
+        .await?
+        .map(|d| d.record.order)
+        .unwrap_or(0);
+    let read = store
+        .get("notification_reads", owner)
+        .await?
+        .map(|d| d.record.payload)
+        .unwrap_or_else(|| json!({"through":0,"versions":{}}));
+    let through = read["through"].as_i64().unwrap_or(0);
     match operation {
         "list" => {
-            let before = match request.before {
-                Some(v) => positive(Some(v))?,
-                None => i64::MAX,
-            };
-            let read_through: i64 = db
-                .query_row(
-                    "SELECT read_through FROM notification_inboxes WHERE owner=?",
-                    [owner],
-                    |r| r.get(0),
-                )
-                .optional()?
-                .unwrap_or(0);
-            let unread: i64 = db.query_row("SELECT count(*) FROM notifications n LEFT JOIN notification_reads r ON r.notification_id=n.id AND r.owner=? WHERE n.version>max(?,COALESCE(r.version,0))",params![owner,read_through],|r|r.get(0))?;
-            let mut q = db.prepare("SELECT n.id,n.version,n.kind,n.context,n.source_key,n.at,n.detail,n.resolved_at,n.count,n.version>max(?,COALESCE(r.version,0)) FROM notifications n LEFT JOIN notification_reads r ON r.notification_id=n.id AND r.owner=? WHERE n.version<? ORDER BY n.version DESC LIMIT ?")?;
-            let mut items = q.query_map(params![read_through,owner,before,PAGE+1],|r| Ok(json!({"id":r.get::<_,i64>(0)?,"version":r.get::<_,i64>(1)?,"kind":r.get::<_,String>(2)?,"context":r.get::<_,String>(3)?,"messageKey":r.get::<_,String>(4)?,"at":r.get::<_,String>(5)?,"detail":r.get::<_,String>(6)?,"resolvedAt":r.get::<_,Option<String>>(7)?,"count":r.get::<_,i64>(8)?,"unread":r.get::<_,bool>(9)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
-            let more = items.len() > PAGE as usize;
-            items.truncate(PAGE as usize);
-            let before = if more {
-                items.last().map(|v| v["version"].clone())
+            let before = request
+                .before
+                .map(|v| positive(Some(v)))
+                .transpose()?
+                .unwrap_or(i64::MAX);
+            let value=store.search(json!({"size":PAGE+1,"_source":{"excludes":["payload.members"]},"query":{"bool":{"filter":[{"term":{"kind":"notification"}},{"range":{"order":{"lt":before}}}]}},"sort":[{"order":"desc"},"key"]})).await?;
+            let rows = parse_command_state::hits(&value)?;
+            let more = rows.len() > PAGE;
+            let mut items = Vec::new();
+            for doc in rows.into_iter().take(PAGE) {
+                let mut item = doc.record.payload;
+                let id = item["id"].as_i64().ok_or_else(Error::unavailable)?;
+                item["version"] = json!(doc.record.order);
+                item["unread"] = json!(
+                    doc.record.order
+                        > through.max(read["versions"][id.to_string()].as_i64().unwrap_or(0))
+                );
+                items.push(item);
+            }
+            // The server owns the bounded inbox. Read markers are compared with
+            // indexed versions; payload/member traffic is excluded from this scan.
+            let mut unread = 0;
+            let mut after = None;
+            let mut scanned = 0;
+            loop {
+                let mut q = json!({"size":500,"_source":["kind","key","order","payload.id"],"query":{"bool":{"filter":[{"term":{"kind":"notification"}},{"range":{"order":{"gt":through}}}]}},"sort":[{"order":"desc"},"key"]});
+                if let Some(v) = after {
+                    q["search_after"] = v;
+                }
+                let value = store.search(q).await?;
+                let hits = value["hits"]["hits"]
+                    .as_array()
+                    .ok_or_else(Error::unavailable)?;
+                for hit in hits {
+                    let row = &hit["_source"];
+                    let id = row["payload"]["id"]
+                        .as_i64()
+                        .ok_or_else(Error::unavailable)?
+                        .to_string();
+                    if row["order"].as_i64().unwrap_or(0)
+                        > read["versions"][&id].as_i64().unwrap_or(0)
+                    {
+                        unread += 1;
+                    }
+                }
+                scanned += hits.len();
+                if hits.len() < 500 || scanned >= 5000 {
+                    break;
+                }
+                after = hits.last().map(|h| h["sort"].clone());
+            }
+            let next = if more {
+                items.last().map(|i| i["version"].clone())
             } else {
                 None
             };
-            Ok(json!({"items":items,"unread":unread,"watermark":watermark,"nextBefore":before}))
+            let catching_up = store
+                .get("notification_status", "sync")
+                .await?
+                .is_none_or(|doc| doc.record.payload["catchingUp"] == true);
+            Ok(
+                json!({"items":items,"unread":unread,"watermark":watermark,"nextBefore":next,"catchingUp":catching_up}),
+            )
         }
         "members" => {
-            let id = positive(request.id)?;
-            let before = match request.before {
-                Some(v) => positive(Some(v))?,
-                None => i64::MAX,
-            };
-            let mut q=db.prepare("SELECT source_key,subject,context,at,version FROM notification_members WHERE notification_id=? AND version<? ORDER BY version DESC LIMIT ?")?;
-            let mut items=q.query_map(params![id,before,PAGE+1],|r|Ok(json!({"messageKey":r.get::<_,String>(0)?,"subject":r.get::<_,String>(1)?,"context":r.get::<_,String>(2)?,"at":r.get::<_,String>(3)?,"version":r.get::<_,i64>(4)?})))?.collect::<rusqlite::Result<Vec<_>>>()?;
-            let more = items.len() > PAGE as usize;
-            items.truncate(PAGE as usize);
-            let before = if more {
-                items.last().map(|v| v["version"].clone())
+            let doc = selected(store, positive(request.id)?).await?;
+            let before = request
+                .before
+                .map(|v| positive(Some(v)))
+                .transpose()?
+                .unwrap_or(i64::MAX);
+            let mut items = doc.record.payload["members"]
+                .as_object()
+                .map(|v| {
+                    v.values()
+                        .filter(|v| v["version"].as_i64().is_some_and(|n| n < before))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            items.sort_by_key(|v| std::cmp::Reverse(v["version"].as_i64().unwrap_or(0)));
+            let more = items.len() > PAGE;
+            items.truncate(PAGE);
+            let next = if more {
+                items.last().map(|i| i["version"].clone())
             } else {
                 None
             };
-            Ok(json!({"items":items,"nextBefore":before}))
+            Ok(json!({"items":items,"nextBefore":next}))
         }
         "read" => {
-            if let Some(through) = request.through {
+            let change = if let Some(through) = request.through {
                 if request.id.is_some()
                     || request.version.is_some()
                     || through < 0
@@ -308,20 +440,54 @@ pub fn execute(
                 {
                     return Err(Error::invalid("Invalid read snapshot"));
                 }
-                db.execute("INSERT INTO notification_inboxes VALUES(?,?) ON CONFLICT(owner) DO UPDATE SET read_through=max(read_through,excluded.read_through)",params![owner,through])?;
+                None
             } else {
                 let id = positive(request.id)?;
                 let version = positive(request.version)?;
-                let current: Option<i64> = db
-                    .query_row("SELECT version FROM notifications WHERE id=?", [id], |r| {
-                        r.get(0)
-                    })
-                    .optional()?;
-                if current.is_none_or(|v| version > v) {
-                    return Err(Error::invalid("Notification is unavailable"));
+                let doc = selected(store, id).await?;
+                if version > doc.record.order {
+                    return Err(Error::invalid("Invalid notification version"));
                 }
-                db.execute("INSERT INTO notification_reads VALUES(?,?,?) ON CONFLICT(owner,notification_id) DO UPDATE SET version=max(version,excluded.version)",params![owner,id,version])?;
-            }
+                Some((id, version))
+            };
+            let floor = store
+                .get("notification_floor", "retained")
+                .await?
+                .map(|d| d.record.order)
+                .unwrap_or(0);
+            store
+                .update("notification_reads", owner, |old| {
+                    let mut row = old.cloned().unwrap_or_else(|| {
+                        Record::new(
+                            "notification_reads",
+                            owner,
+                            json!({"through":0,"versions":{}}),
+                        )
+                    });
+                    row.owner = owner.into();
+                    let through = row.payload["through"]
+                        .as_i64()
+                        .unwrap_or(0)
+                        .max(request.through.unwrap_or(0))
+                        .max(floor);
+                    row.payload["through"] = json!(through);
+                    let versions = row.payload["versions"]
+                        .as_object_mut()
+                        .ok_or(parse_command_state::Error("state_record"))?;
+                    versions.retain(|_, v| v.as_i64().is_some_and(|n| n > through));
+                    if let Some((id, version)) = change {
+                        let key = id.to_string();
+                        let current = versions.get(&key).and_then(Value::as_i64).unwrap_or(0);
+                        if version > through {
+                            versions.insert(key, json!(current.max(version)));
+                        }
+                    }
+                    if versions.len() > 5000 {
+                        return Err(parse_command_state::Error("state_capacity"));
+                    }
+                    Ok(row)
+                })
+                .await?;
             Ok(json!({"saved":true}))
         }
         _ => Err(Error::new("not_found", "Unknown notification operation")),
@@ -332,16 +498,9 @@ pub async fn handle(
     Path(operation): Path<String>,
     headers: HeaderMap,
     Json(request): Json<Request>,
-) -> Result<([(String, String); 1], Json<Value>)> {
-    let owner = app.headers_identity(&headers)?.username;
-    let value = tokio::task::spawn_blocking(move || {
-        let mut store = app.store()?;
-        let catching_up = sync(&mut store.db, &app.config.intake.journal)?;
-        let mut result = execute(&mut store.db, &owner, &operation, request)?;
-        result["catchingUp"] = json!(catching_up);
-        Ok::<_, Error>(result)
-    })
-    .await
-    .map_err(|_| Error::unavailable())??;
-    Ok(([("Cache-Control".into(), "no-store".into())], Json(value)))
+) -> Result<Json<Value>> {
+    let owner = app.headers_identity(&headers).await?.owner;
+    Ok(Json(
+        execute(&app.private.state, &owner, &operation, request).await?,
+    ))
 }

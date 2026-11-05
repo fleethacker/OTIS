@@ -15,65 +15,70 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
-    sync::{Arc, Mutex, atomic::Ordering},
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 #[derive(Clone)]
 pub struct App {
     pub config: Config,
+    pub auth: crate::auth::Auth,
     pub search: Search,
-    pub private: Arc<Mutex<Private>>,
+    pub private: Private,
+    pub custody: parse_command_state::Store,
+    pub notification_sync: Arc<tokio::sync::Mutex<()>>,
     pub status: Status,
     pub inference: Arc<tokio::sync::Semaphore>,
 }
 impl App {
-    pub fn store(&self) -> Result<std::sync::MutexGuard<'_, Private>> {
-        self.private.lock().map_err(|_| Error::unavailable())
+    pub fn store(&self) -> Result<&Private> {
+        Ok(&self.private)
     }
-    pub fn identity(
+    pub async fn identity(
         &self,
         cookie: Option<&str>,
         origin: Option<&str>,
         host: Option<&str>,
     ) -> Result<Identity> {
-        if let Some(origin) = origin {
-            let expected = format!("http://{}", host.unwrap_or(""));
-            if origin != expected {
-                return Err(Error::new(
-                    "unauthenticated",
-                    "Cross-origin requests are not accepted",
-                ));
-            }
+        self.auth.config.origin(origin)?;
+        let _ = host;
+        if self.config.auth.mode == "oidc" {
+            return self.auth.identity(cookie).await;
         }
         if let Some(cookie) = cookie
             && let Some(token) = session_token(cookie)
         {
-            let role = self
-                .store()?
-                .session(token)?
-                .ok_or_else(|| Error::new("unauthenticated", "Session expired; sign in again"))?;
-            return role_identity(&role);
+            let role =
+                self.store()?.session(token).await?.ok_or_else(|| {
+                    Error::new("unauthenticated", "Session expired; sign in again")
+                })?;
+            let identity = role_identity(&role)?;
+            crate::settings::ensure_demo_user(&self.private.state, &identity).await?;
+            return Ok(identity);
         }
-        self.config
+        let identity = self
+            .config
             .auto_role
             .as_deref()
             .map(role_identity)
             .transpose()?
-            .ok_or_else(|| Error::new("unauthenticated", "Sign in to Parse Command"))
+            .ok_or_else(|| Error::new("unauthenticated", "Sign in to Parse Command"))?;
+        crate::settings::ensure_demo_user(&self.private.state, &identity).await?;
+        Ok(identity)
     }
-    pub fn headers_identity(&self, headers: &HeaderMap) -> Result<Identity> {
+    pub async fn headers_identity(&self, headers: &HeaderMap) -> Result<Identity> {
         self.identity(
             headers.get("cookie").and_then(|v| v.to_str().ok()),
             headers.get("origin").and_then(|v| v.to_str().ok()),
             headers.get("host").and_then(|v| v.to_str().ok()),
         )
+        .await
     }
     pub async fn scope(&self, key: &str) -> Result<()> {
         if key.starts_with("legacy:") {
             if !self.config.allow_fixtures {
                 return Err(Error::config("Legacy fixture mode is disabled"));
             }
-            self.store()?.legacy(key)?;
+            self.store()?.legacy(key).await?;
             return Ok(());
         }
         let (id, revision) = split_key(key)?;
@@ -89,19 +94,21 @@ impl App {
             let store = self.store()?;
             let documents = if op == "detail" {
                 vec![
-                    store.legacy(
-                        request
-                            .key
-                            .as_deref()
-                            .ok_or_else(|| Error::invalid("message key is required"))?,
-                    )?,
+                    store
+                        .legacy(
+                            request
+                                .key
+                                .as_deref()
+                                .ok_or_else(|| Error::invalid("message key is required"))?,
+                        )
+                        .await?,
                 ]
             } else {
-                store.legacy_list()?
+                store.legacy_list().await?
             };
             let mut messages = Vec::new();
             for row in documents {
-                let value = presentation::legacy(&row, &store, op == "detail")?;
+                let value = presentation::legacy(&row, store, op == "detail").await?;
                 if request.query.is_empty()
                     || row
                         .to_string()
@@ -168,7 +175,7 @@ impl App {
             (
                 id.to_owned(),
                 page,
-                self.store()?.read_window(id, &fingerprint)?,
+                self.store()?.read_window(id, &fingerprint).await?,
             )
         } else {
             let value = self
@@ -183,7 +190,7 @@ impl App {
                 .ok_or_else(Error::unavailable)?
                 .to_owned();
             let state = json!({"kind":"browse","pit":pit,"anchors":[[]]});
-            let stored = { self.store()?.put_read_window(&fingerprint, &state) };
+            let stored = { self.store()?.put_read_window(&fingerprint, &state).await };
             match stored {
                 Ok(id) => (id, 0, state),
                 Err(error) => {
@@ -227,7 +234,9 @@ impl App {
                 return Err(Error::unavailable());
             }
         }
-        self.store()?.save_read_window(&id, &fingerprint, &state)?;
+        self.store()?
+            .save_read_window(&id, &fingerprint, &state)
+            .await?;
         let total = response["hits"]["total"]["value"]
             .as_u64()
             .ok_or_else(Error::unavailable)?;
@@ -244,7 +253,7 @@ impl App {
                     format!("{}@{}", text(core, "id"), text(core, "revision")),
                     presentation::message_header(core),
                 );
-                messages.push(presentation::message(core, &store, false, None, None)?);
+                messages.push(presentation::message(core, store, false, None, None).await?);
             }
         }
         let mut meta = pagination::metadata(&id, page, total, relation, more, "records");
@@ -268,8 +277,8 @@ impl App {
         let fingerprint = read_fingerprint("search", owner, &request, &filters);
         if let Some(value) = &request.page_token {
             let (id, page) = pagination::split_token(value)?;
-            let state = self.store()?.read_window(id, &fingerprint)?;
-            return self.search_page(id, page, &state);
+            let state = self.store()?.read_window(id, &fingerprint).await?;
+            return self.search_page(id, page, &state).await;
         }
         let mode = request.mode.as_str();
         let _permit = if mode != "keyword" {
@@ -345,10 +354,10 @@ impl App {
         }
         pagination::sort_documents(&mut documents, request.sort)?;
         let state = json!({"kind":"search","documents":documents,"excerpts":excerpts,"mode":mode,"windowLimited":hits.len()>=SEARCH_DEPTH,"staleHitsDropped":stale,"tookMs":response["took"],"snapshotAt":now()});
-        let id = self.store()?.put_read_window(&fingerprint, &state)?;
-        self.search_page(&id, 0, &state)
+        let id = self.store()?.put_read_window(&fingerprint, &state).await?;
+        self.search_page(&id, 0, &state).await
     }
-    fn search_page(&self, id: &str, page: usize, state: &Value) -> Result<Value> {
+    async fn search_page(&self, id: &str, page: usize, state: &Value) -> Result<Value> {
         if state["kind"] != "search" {
             return Err(Error::invalid("Invalid result page"));
         }
@@ -372,7 +381,7 @@ impl App {
                 if let Some(value) = state["excerpts"].get(&key) {
                     excerpts.insert(key.clone(), value.clone());
                 }
-                messages.push(presentation::message(core, &store, false, None, None)?);
+                messages.push(presentation::message(core, store, false, None, None).await?);
             }
         }
         let mut meta = pagination::metadata(
@@ -430,17 +439,11 @@ impl App {
         {
             return Err(Error::unavailable());
         }
-        let mut record = presentation::message(&core, &*self.store()?, true, raw, received)?;
+        let mut record = presentation::message(&core, self.store()?, true, raw, received).await?;
         let mut payload = core.clone();
-        let journal_path = self.config.intake.journal.clone();
-        let message_id = id.to_owned();
-        let message_revision = revision.to_owned();
-        let history = tokio::task::spawn_blocking(move || {
-            crate::lifecycle::read(&journal_path, &message_id, &message_revision)
-        })
-        .await;
+        let history = crate::lifecycle::read(&self.custody, id, revision).await;
         match history {
-            Ok(Ok(history)) => {
+            Ok(history) => {
                 record["lifecycleEntries"] = history["entries"].clone();
                 payload["lifecycle_state"] = json!("available");
                 payload["lifecycle_limited"] = history["limited"].clone();
@@ -623,7 +626,7 @@ impl App {
                 let (mut dated, mut unresolved) = presentation::timeline(core, &from, &to)?;
                 items.append(&mut dated);
                 review.append(&mut unresolved);
-                messages.push(presentation::message(core, &store, false, None, None)?);
+                messages.push(presentation::message(core, store, false, None, None).await?);
             }
         }
         if items.len() + review.len() > 2048 {
@@ -649,7 +652,7 @@ impl App {
                 false,
             )
             .await?;
-        let jobs = journal_counts(&self.config.intake.journal)?;
+        let jobs = journal_counts(&self.custody).await?;
         Ok(
             json!({"source":"opensearch","cluster":health["status"],"publicationReady":self.status.ready.load(Ordering::Relaxed),"modelReady":self.status.model.load(Ordering::Relaxed),"publication":jobs,"embeddings":embeddings["aggregations"]["embedding_states"]["buckets"],"observedAt":now()}),
         )
@@ -667,20 +670,24 @@ pub struct Identity {
     pub email: String,
     pub groups: Vec<String>,
     pub role: String,
+    #[serde(skip)]
+    pub owner: String,
 }
 pub fn role_identity(role: &str) -> Result<Identity> {
     match role {
-        "user" => Ok(Identity {
+        "user" | "viewer" => Ok(Identity {
             username: "dev-user".into(),
+            owner: "demo:dev-user".into(),
             email: "dev@localhost".into(),
             groups: vec![],
-            role: role.into(),
+            role: "viewer".into(),
         }),
-        "platform_admin" => Ok(Identity {
+        "platform_admin" | "admin" => Ok(Identity {
             username: "dev-admin".into(),
+            owner: "demo:dev-admin".into(),
             email: "admin@localhost".into(),
-            groups: vec!["/platform-admin".into()],
-            role: role.into(),
+            groups: vec!["/Parse Command/Admin".into()],
+            role: "admin".into(),
         }),
         _ => Err(Error::new("unauthenticated", "Unknown demo identity")),
     }
@@ -847,13 +854,13 @@ pub async fn read(
     headers: HeaderMap,
     Json(request): Json<ReadRequest>,
 ) -> Result<Json<Value>> {
-    let owner = app.headers_identity(&headers)?;
+    let owner = app.headers_identity(&headers).await?;
     if request.query.len() > 240 {
         return Err(Error::invalid("Query exceeds 240 bytes"));
     }
     let value = tokio::time::timeout(
         Duration::from_secs(7),
-        app.execute(&op, request, &owner.username),
+        app.execute(&op, request, &owner.owner),
     )
     .await
     .map_err(|_| Error::unavailable())??;
@@ -866,6 +873,6 @@ pub async fn read(
     Ok(Json(value))
 }
 pub async fn status(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Json<Value>> {
-    app.headers_identity(&headers)?;
+    app.headers_identity(&headers).await?;
     Ok(Json(app.source_status().await?))
 }

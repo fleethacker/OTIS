@@ -1,23 +1,15 @@
-use axum::{
-    extract::{Request, State},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::{get, post},
-};
 use parse_command_server::{
     Error,
     api::App,
     config::Config,
     private::Private,
     publisher::{Publisher, Status},
-    rpc,
     search::Search,
-    web,
 };
 use std::{
     io::{Read, Write},
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -47,25 +39,51 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
         return Ok(());
     }
-    if args.len() == 3 && args[0] == "migrate-private" {
-        let db = Private::open(
-            std::path::Path::new(&args[2]),
-            Some(std::path::Path::new(&args[1])),
-        )?;
-        let counts: String =
-            db.db
-                .query_row("SELECT counts FROM migration WHERE id='go-v1'", [], |r| {
-                    r.get(0)
-                })?;
-        println!("Migration validated: {counts}");
-        return Ok(());
-    }
     if args.len() != 2 || args[0] != "serve" {
         return Err("usage: parse-command-server serve <intake-config.json> | healthcheck".into());
     }
     let config = Config::load(std::path::Path::new(&args[1]))?;
+    // Verify migration and acquire the single-writer lease before starting either worker.
+    let lease_token = parse_command_server::private::random_token()?;
+    {
+        for index in [&config.state_index, &config.intake.custody_index] {
+            let store = parse_command_state::BlockingStore::new(&config.search, index)?;
+            store.provision()?;
+            if std::env::var("PARSE_COMMAND_REQUIRE_STATE_MIGRATION").as_deref() == Ok("true")
+                && store
+                    .get("migration", "sqlite-to-opensearch-v1")?
+                    .is_none_or(|d| d.record.state != "complete")
+            {
+                return Err("verified state migration is required before startup".into());
+            }
+        }
+        let store =
+            parse_command_state::BlockingStore::new(&config.search, &config.intake.custody_index)?;
+        // A replaced container can leave its 30-second lease behind. Wait only
+        // for that bounded interval; a live peer continues renewing and wins.
+        for attempt in 0..=30 {
+            let acquired = store.update("server_lease", "application", |old| {
+                if old.is_some_and(|r| r.available > parse_command_state::epoch()) {
+                    return Err(parse_command_state::Error("another_server_holds_lease"));
+                }
+                let mut row = parse_command_state::Record::new(
+                    "server_lease",
+                    "application",
+                    serde_json::json!({"token":lease_token}),
+                );
+                row.available = parse_command_state::epoch() + 30;
+                Ok(row)
+            });
+            match acquired {
+                Ok(_) => break,
+                Err(error) if error.0 == "another_server_holds_lease" && attempt < 30 => {
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
     let mut intake = parse_command_intake::service::Service::open(config.intake.clone())?;
-    let private = Private::open(&config.private, config.legacy.as_deref())?;
     let status = Status {
         ready: Arc::new(AtomicBool::new(false)),
         model: Arc::new(AtomicBool::new(false)),
@@ -131,53 +149,70 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?;
     let listen = config.listen.clone();
+    let state_cancel = cancelled.clone();
     let result = runtime.block_on(async move {
+        let state = parse_command_state::Store::new(&config.search, &config.state_index)?;
+        state.provision().await?;
+        parse_command_server::settings::bootstrap(&state).await?;
+        let custody =
+            parse_command_state::Store::new(&config.search, &config.intake.custody_index)?;
         let app = Arc::new(App {
             search: Search::new(config.search.clone())?,
+            auth: parse_command_server::auth::Auth::new(config.auth.clone(), state.clone())?,
             config,
-            private: Arc::new(Mutex::new(private)),
+            private: Private::new(state),
+            custody,
+            notification_sync: Arc::new(tokio::sync::Mutex::new(())),
             status,
             inference: Arc::new(tokio::sync::Semaphore::new(1)),
         });
-        let rpc_router = rpc::router(app.clone());
-        let rpc_service = rpc_router
-            .into_axum_service()
-            .with_limits(
-                connectrpc::Limits::default()
-                    .with_max_message_size(2_097_152)
-                    .with_max_request_body_size(131072),
-            )
-            .with_deadline_policy(
-                connectrpc::DeadlinePolicy::new()
-                    .with_default_timeout(Duration::from_secs(7))
-                    .with_max(Duration::from_secs(10)),
-            );
-        let routes = axum::Router::new()
-            .route("/api/health", get(web::health))
-            .route(
-                "/api/v1/source/status",
-                get(parse_command_server::api::status),
-            )
-            .route(
-                "/api/v1/messages/{operation}",
-                post(parse_command_server::api::read),
-            )
-            .route(
-                "/api/v1/notifications/{operation}",
-                post(parse_command_server::notifications::handle),
-            )
-            .route("/__ark/mock-whoami", get(web::whoami))
-            .route("/__ark/mock-roles", get(web::roles))
-            .route("/__ark/mock-login", get(web::login_page).post(web::login))
-            .route("/__ark/mock-logout", get(web::logout))
-            .route("/logout", get(web::logout))
-            .fallback_service(rpc_service)
-            .layer(axum::extract::DefaultBodyLimit::max(131072))
-            .with_state(app)
-            .layer(middleware::from_fn_with_state(
-                Arc::new(tokio::sync::Semaphore::new(8)),
-                bounds,
-            ));
+        let lease_store = app.custody.clone();
+        let lease_cancel = state_cancel.clone();
+        tokio::spawn(async move {
+            while !lease_cancel.load(Ordering::Relaxed) {
+                let renewed = lease_store
+                    .update("server_lease", "application", |old| {
+                        let mut row = old
+                            .cloned()
+                            .ok_or(parse_command_state::Error("lease_lost"))?;
+                        if row.payload["token"] != lease_token
+                            || row.available <= parse_command_state::epoch()
+                        {
+                            return Err(parse_command_state::Error("lease_lost"));
+                        }
+                        row.available = parse_command_state::epoch() + 30;
+                        Ok(row)
+                    })
+                    .await;
+                if renewed.is_err() {
+                    eprintln!("server_error: writer_lease_lost");
+                    std::process::exit(1);
+                }
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+        let background = app.clone();
+        tokio::spawn(async move {
+            while !state_cancel.load(Ordering::Relaxed) {
+                {
+                    let _guard = background.notification_sync.lock().await;
+                    if parse_command_server::notifications::sync(
+                        &background.private.state,
+                        &background.custody,
+                    )
+                    .await
+                    .is_err()
+                    {
+                        eprintln!("notification_error: retry_pending");
+                    }
+                }
+                if background.private.state.cleanup().await.is_err() {
+                    eprintln!("state_cleanup_error: retry_pending");
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+        let routes = parse_command_server::http::router(app);
         let listener = tokio::net::TcpListener::bind(listen)
             .await
             .map_err(|_| Error::config("HTTP listener unavailable"))?;
@@ -193,29 +228,6 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let _ = publish_thread.join();
     result?;
     Ok(())
-}
-async fn bounds(
-    State(limit): State<Arc<tokio::sync::Semaphore>>,
-    request: Request,
-    next: Next,
-) -> Response {
-    let Ok(_permit) = limit.try_acquire_owned() else {
-        return Error::new(
-            "resource_exhausted",
-            "Request concurrency bound reached; retry shortly",
-        )
-        .into_response();
-    };
-    let mut response = next.run(request).await;
-    response.headers_mut().insert(
-        "cache-control",
-        axum::http::HeaderValue::from_static("no-store"),
-    );
-    response.headers_mut().insert(
-        "x-content-type-options",
-        axum::http::HeaderValue::from_static("nosniff"),
-    );
-    response
 }
 async fn shutdown() {
     #[cfg(unix)]

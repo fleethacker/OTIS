@@ -1,3 +1,4 @@
+import { useSettings } from "./settings-data";
 import { useContext, useState } from "react";
 import { useQuery, useMutationWithInvalidate } from "@defense-unicorns/ark-ui";
 import { readPreparation, savePreparation } from "../gen/app/v1/drafts-DraftService_connectquery";
@@ -16,6 +17,7 @@ export function MessageAcknowledgement({ message }: { message: MessageRecord }) 
   );
 }
 function Acknowledgement({ message }: { message: MessageRecord }) {
+  const { shared } = useSettings();
   const read = useQuery(readPreparation, { sourceMessageId: message.sourceMessageId });
   const save = useMutationWithInvalidate(savePreparation, [readPreparation]);
   const [open, setOpen] = useState(false);
@@ -24,7 +26,15 @@ function Acknowledgement({ message }: { message: MessageRecord }) {
   const [failure, setFailure] = useState("");
   const [copied, setCopied] = useState(false);
   const [family = "", response = ""] = selection.split(":");
-  const fields = { ...acknowledgementDefaults(message), family, response, confirmed: true };
+  const fields = {
+    ...acknowledgementDefaults(message, {
+      outgoing: shared?.settings.outgoingCommand ?? "",
+      authority: shared?.settings.actionAuthority ?? "",
+    }),
+    family,
+    response,
+    confirmed: true,
+  };
   const errors = validatePreparation(fields);
   const missing = Object.keys(errors).filter((key) => key !== "family" && key !== "response");
   const preview = Object.keys(errors).length === 0 ? formatPreparation(fields) : "";

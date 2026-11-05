@@ -1,6 +1,6 @@
 use crate::{IntakeError, Result};
 use serde::Deserialize;
-use std::{io::Read, path::PathBuf};
+use std::io::Read;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -12,7 +12,10 @@ pub struct Config {
     pub mailbox: String,
     pub password_env: String,
     pub transport: Transport,
-    pub journal: PathBuf,
+    #[serde(default = "default_search")]
+    pub opensearch_url: String,
+    #[serde(default = "default_index")]
+    pub custody_index: String,
     pub revision: String,
     pub poll_seconds: u64,
     pub retry_max_seconds: u64,
@@ -25,13 +28,20 @@ pub struct Config {
     pub max_responses_per_command: usize,
     pub max_receipts: u64,
     pub max_retained_bytes: u64,
-    pub max_database_bytes: u64,
     pub max_parse_attempts: u32,
     pub parser_work_units: u64,
     pub mime: MimeLimits,
     pub parser: parse_command_core::HostLimits,
     pub enabled_types: Vec<String>,
     pub subject_policy: SubjectPolicy,
+}
+fn default_search() -> String {
+    std::env::var("PARSE_COMMAND_OPENSEARCH_URL")
+        .unwrap_or_else(|_| "http://opensearch:9200".into())
+}
+fn default_index() -> String {
+    std::env::var("PARSE_COMMAND_CUSTODY_INDEX")
+        .unwrap_or_else(|_| ".parse-command-custody-v1".into())
 }
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -82,7 +92,6 @@ impl Config {
             || self.poll_seconds > 3600
             || self.retry_max_seconds > 3600
             || self.jobs_per_cycle > 10000
-            || self.max_database_bytes > i64::MAX as u64
             || self.max_retained_bytes > i64::MAX as u64
             || self.max_receipts > i64::MAX as u64
             || self.uid_window == 0
@@ -95,7 +104,6 @@ impl Config {
                 self.io_timeout_seconds,
                 self.max_receipts,
                 self.max_retained_bytes,
-                self.max_database_bytes,
                 self.parser_work_units,
             ]
             .contains(&0)
@@ -115,7 +123,6 @@ impl Config {
             || self.max_raw_bytes > u32::MAX as usize
             || self.max_response_bytes < self.max_raw_bytes.saturating_add(16384)
             || self.max_wire_bytes_per_poll < self.max_response_bytes
-            || self.max_database_bytes < 1_048_576
             || self.retry_max_seconds < self.poll_seconds
             || self.enabled_types.is_empty()
         {

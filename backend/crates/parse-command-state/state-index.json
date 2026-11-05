@@ -1,0 +1,14 @@
+{
+  "settings": {"index.hidden": true, "number_of_shards": 1, "number_of_replicas": 0, "index.translog.durability": "request", "refresh_interval": "1s"},
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {"parse_command_state_version": 1},
+    "properties": {
+      "kind": {"type": "keyword"}, "key": {"type": "keyword", "ignore_above": 4096},
+      "owner": {"type": "keyword"}, "source": {"type": "keyword"},
+      "state": {"type": "keyword"}, "category": {"type": "keyword"}, "flags": {"type": "keyword"},
+      "order": {"type": "long"}, "expires": {"type": "long"}, "available": {"type": "long"}, "bytes": {"type": "long"},
+      "payload": {"type": "object", "enabled": false}
+    }
+  }
+}

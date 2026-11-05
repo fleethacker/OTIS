@@ -9,20 +9,30 @@ impl TestConfig {
             &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/demo-intake.json"),
         )
         .unwrap();
-        c.journal = std::env::temp_dir().join(format!(
-            "parse-command-custody-{}-{}/custody.sqlite",
+        c.opensearch_url = std::env::var("PARSE_COMMAND_TEST_OPENSEARCH_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:9200".into());
+        c.custody_index = format!(
+            ".parse-command-test-custody-{}-{}-{}",
             std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
             NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        );
         Self(c)
     }
 }
 impl Drop for TestConfig {
     fn drop(&mut self) {
-        for suffix in ["", "-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{suffix}", self.0.journal.display()));
+        if std::env::var_os("PARSE_COMMAND_TEST_OPENSEARCH_URL").is_some() {
+            let _ = reqwest::blocking::Client::new()
+                .delete(format!(
+                    "{}/{}",
+                    self.0.opensearch_url, self.0.custody_index
+                ))
+                .send();
         }
-        let _ = std::fs::remove_dir(self.0.journal.parent().unwrap());
     }
 }
 fn body() -> &'static str {
@@ -49,6 +59,7 @@ fn stage(s: &mut Service, c: &Config, validity: u32, uid: u32, raw: &[u8]) -> bo
         .unwrap()
 }
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn staged_bytes_survive_reopen_and_parsing_commits_with_outbox() {
     let config = TestConfig::new();
     let c = &config.0;
@@ -64,7 +75,18 @@ fn staged_bytes_survive_reopen_and_parsing_commits_with_outbox() {
     let status = s.journal.status().unwrap();
     assert_eq!(status["receipts"]["parsed"], 1);
     assert_eq!(status["projections"], 1);
-    assert!(status["audit_pending"].as_i64().unwrap() > 0);
+    assert_eq!(
+        s.journal
+            .store
+            .list(
+                "receipt",
+                vec![serde_json::json!({"term":{"flags":"audit_pending"}})],
+                10
+            )
+            .unwrap()
+            .len(),
+        1
+    );
     drop(s);
     let mut s = Service::open(c.clone()).unwrap();
     assert_eq!(s.process(&AtomicBool::new(false)).unwrap(), 0);
@@ -72,6 +94,7 @@ fn staged_bytes_survive_reopen_and_parsing_commits_with_outbox() {
     assert_eq!(s.journal.status().unwrap(), status);
 }
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn duplicate_body_latest_subject_and_uidvalidity_epochs_preserve_every_receipt() {
     let config = TestConfig::new();
     let c = &config.0;
@@ -115,6 +138,7 @@ fn duplicate_body_latest_subject_and_uidvalidity_epochs_preserve_every_receipt()
 }
 
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn older_server_receipt_found_during_rescan_cannot_replace_newer_subject() {
     let config = TestConfig::new();
     let c = &config.0;
@@ -151,6 +175,7 @@ fn older_server_receipt_found_during_rescan_cannot_replace_newer_subject() {
     );
 }
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn capacity_failures_never_advance_cursor_or_consume_job_attempts() {
     let mut config = TestConfig::new();
     let raw = email("SUBJ: Example", body());
@@ -176,7 +201,7 @@ fn capacity_failures_never_advance_cursor_or_consume_job_attempts() {
     );
     assert_eq!(s.journal.cursor(c, 10).unwrap(), 0);
     drop(s);
-    config.0.max_retained_bytes = raw.len() as u64 + 1;
+    config.0.max_retained_bytes = 2600;
     let c = &config.0;
     let mut s = Service::open(c.clone()).unwrap();
     stage(&mut s, c, 10, 1, &raw);
@@ -184,6 +209,7 @@ fn capacity_failures_never_advance_cursor_or_consume_job_attempts() {
         s.process(&AtomicBool::new(false)).err().unwrap().0,
         "custody_capacity"
     );
+    s.journal.begin_cycle().unwrap();
     let job = s.journal.next_job(c).unwrap().unwrap();
     assert_eq!(job.attempts, 0);
     assert_eq!(s.journal.status().unwrap()["projections"], 0);
@@ -193,6 +219,7 @@ fn capacity_failures_never_advance_cursor_or_consume_job_attempts() {
     assert_eq!(s.process(&AtomicBool::new(false)).unwrap(), 1);
 }
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn poison_email_does_not_block_later_mail_and_cancel_leaves_staged() {
     let config = TestConfig::new();
     let c = &config.0;
@@ -207,6 +234,7 @@ fn poison_email_does_not_block_later_mail_and_cancel_leaves_staged() {
     assert_eq!(st["receipts"]["parsed"], 1);
 }
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn identity_changes_fail_closed() {
     let mut config = TestConfig::new();
     drop(Service::open(config.0.clone()).unwrap());
@@ -218,6 +246,7 @@ fn identity_changes_fail_closed() {
 }
 
 #[test]
+#[ignore = "requires isolated OpenSearch test indices"]
 fn same_receipt_cannot_silently_replace_its_original_bytes() {
     let config = TestConfig::new();
     let c = &config.0;
@@ -266,4 +295,55 @@ fn mime_preserves_utf8_subject_and_exact_body_and_bounds_multipart() {
     assert!(mime::decode(&email("SUBJ: Example", body()), small).is_err());
     let duplicate = b"Subject: A\r\nSubject: B\r\n\r\nMSGID/TEST//";
     assert!(mime::decode(duplicate, limits).is_err());
+}
+
+#[test]
+#[ignore = "requires isolated OpenSearch test indices"]
+fn burst_is_bounded_and_resumes_without_duplicate_receipts() {
+    let mut config = TestConfig::new();
+    config.0.jobs_per_cycle = 17;
+    let c = &config.0;
+    let mut service = Service::open(c.clone()).unwrap();
+    for uid in 1..=200 {
+        let body = body().replace("/EXAMPLE UNIT/1/", &format!("/EXAMPLE UNIT/{uid}/"));
+        assert!(stage(
+            &mut service,
+            c,
+            40,
+            uid,
+            &email("SUBJ: Burst exercise", &body)
+        ));
+    }
+    assert_eq!(service.journal.cursor(c, 40).unwrap(), 200);
+    drop(service);
+    let mut processed = 0;
+    let mut cycles = 0;
+    loop {
+        let mut service = Service::open(c.clone()).unwrap();
+        let count = service.process(&AtomicBool::new(false)).unwrap();
+        assert!(count <= 17);
+        processed += count;
+        cycles += 1;
+        if count == 0 {
+            break;
+        }
+        assert!(
+            cycles <= 12,
+            "queue did not drain within the bounded cycles"
+        );
+        // Reopen after every cycle to exercise persisted queue recovery.
+    }
+    assert_eq!(processed, 200);
+    let mut service = Service::open(c.clone()).unwrap();
+    let status = service.journal.status().unwrap();
+    assert_eq!(status["receipts"]["parsed"], 200);
+    assert_eq!(status["projections"], 200);
+    assert!(!stage(
+        &mut service,
+        c,
+        40,
+        1,
+        &email("SUBJ: Burst exercise", body())
+    ));
+    assert_eq!(service.journal.status().unwrap(), status);
 }

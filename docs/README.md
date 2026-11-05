@@ -20,6 +20,7 @@ Confirmed baseline: runtime-only airgap, CPU-only laptop target with no GPU, IMA
 | [Stored search templates and frontend contract](opensearch/search-contract.md) | Local CPU narrative embeddings, typed filters and keyword/semantic/hybrid requests |
 | [UI test mappings](opensearch/README.md) | Isolated lexical test index definitions; fixtures stay outside Git |
 | [Implementation plan](planning/implementation-plan.md) | Proposed architecture, work packages, dependencies, validation gates, and two-day sequencing |
+| [Settings, users, and OIDC plan](planning/settings-and-oidc.md) | Proposed shared settings, per-user timezone, Admin/Viewer roles, UDS/Keycloak integration, migration, and validation |
 | [Parser extension interface](planning/parser-extension-interface.md) | First-build priority: contributor contract, registration, isolation, and test harness |
 | [Sample-data location](review/json-structure/README.md) | Pointer to external fixtures; payloads are not stored in this Git folder |
 | [Decisions and questions](planning/decisions-and-questions.md) | Confirmed requirements and unresolved choices; no implied defaults |
@@ -32,3 +33,5 @@ The existing `.pdlc-docs/` files capture the earlier WHY/WHAT discussion. These 
 Email framing is confirmed: SMTP delivery, IMAP retrieval, body beginning with `MSGID`, and an email subject prefixed by `SUBJ:`. Core `subject` is the decoded display/search value; original header and transformation details go to audit. Existing body-only fixtures have null subjects.
 
 Detailed USMTF knowledge and manual-derived notes are kept outside Git at `../OPTASK_Messages/knowledge`; they are distributed with the external sample data. Do not recreate a knowledge corpus under this documentation folder.
+
+- [Settings, OIDC and hidden state](integration/settings-oidc.md): implementation contract, roles, configuration and migration.

@@ -1,3 +1,4 @@
+import { useDisplayTime } from "./display-time";
 import { useState } from "react";
 import { TbFilter, TbArrowsSort, TbChevronLeft, TbChevronRight, TbCheck } from "react-icons/tb";
 import { Popover } from "./popover";
@@ -19,6 +20,7 @@ function FilterForm({
   retry: () => void;
   onApply: (filters: MessageFilters) => void;
 }) {
+  const { zone } = useDisplayTime();
   const [draft, setDraft] = useState(initial);
   const types = options?.messageTypes ?? [];
   const senders = options?.originators ?? [];
@@ -76,7 +78,7 @@ function FilterForm({
         </select>
       </label>
       <label>
-        Issued from (Zulu)
+        Issued from ({zone === "UTC" ? "Zulu" : zone})
         <input
           className="input input-sm"
           type="date"
@@ -86,7 +88,7 @@ function FilterForm({
         />
       </label>
       <label>
-        Issued through (Zulu)
+        Issued through ({zone === "UTC" ? "Zulu" : zone})
         <input
           className="input input-sm"
           type="date"

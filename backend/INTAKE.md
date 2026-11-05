@@ -1,8 +1,8 @@
 # Initial mailbox test
 
-The worker retrieves SMTP-delivered email through IMAP, decodes the message body and subject, invokes the compiled OPTASK parser, and commits the result to a local SQLite custody journal. The application server continuously publishes the outbox to OpenSearch; `parsed` still means locally committed, not yet necessarily indexed. The provided loader can populate isolated local test indices for UI testing.
+The worker retrieves SMTP-delivered email through IMAP, decodes the message body and subject, invokes the compiled OPTASK parser, and persists the result in a hidden OpenSearch custody index. The application server continuously publishes the outbox to OpenSearch; `parsed` means durably staged, not yet necessarily indexed.
 
-All commands below run from the repository root. Supplied examples and runtime data stay outside Git. The host demo journal is `/tmp/parse-command-intake-demo/custody.sqlite`; choose persistent storage before relying on it beyond a local test. The container journal uses a named Docker volume.
+All commands below run from the repository root. Supplied examples and runtime data stay outside Git. Set `PARSE_COMMAND_OPENSEARCH_URL` for the host or container. Runtime custody uses `.parse-command-custody-v1`; raw mail and internal state remain outside the core search indices.
 
 ## Run on the host
 
@@ -11,6 +11,7 @@ docker compose -f demo/docker-compose.yml up -d --wait
 python3 demo/mail.py send ../OPTASK_Messages/*.txt
 cargo build --manifest-path backend/Cargo.toml --locked -p parse-command-intake
 export PARSE_COMMAND_IMAP_PASSWORD='ParseCommandDemoOnly123!'
+export PARSE_COMMAND_OPENSEARCH_URL=http://127.0.0.1:9200
 backend/target/debug/parse-command-intake once backend/config/demo-intake.json
 backend/target/debug/parse-command-intake status backend/config/demo-intake.json
 backend/target/debug/parse-command-intake receipts backend/config/demo-intake.json
@@ -19,7 +20,7 @@ backend/target/debug/parse-command-intake watch backend/config/demo-intake.json
 
 `once` drains staged jobs, examines one bounded UID range and processes staged work again. Repeat it to drain a large backlog; `watch` does this continuously. `status` returns counts, cursor epochs and pending audit work without connecting to the mailbox. `receipts` streams receipt IDs, UIDs, timestamps, states, diagnostics, body/revision links, subjects and original-email hashes/byte counts. `export` streams core message NDJSON. These explicit data-export commands may contain message metadata; routine watch logs contain diagnostic codes only.
 
-The configured password environment variable is read on each poll. Credentials are not written to the journal or logs. The checked-in password and numeric limits are exclusively for the local demo; they are not production capacity recommendations. Configuration is strict JSON and all resource limits are explicit. On Unix, the journal requires a private directory (0700) and database (0600); it creates them securely when absent.
+The configured password environment variable is read on each poll. Credentials are not written to the journal or logs. The checked-in password and numeric limits are exclusively for the local demo; they are not production capacity recommendations. Configuration is strict JSON and all resource limits are explicit. The hidden-index envelope is strict, payloads are unindexed, and writes use optimistic concurrency.
 
 ## Run with Compose
 
@@ -36,15 +37,14 @@ docker compose logs --tail 50 server
 The service is `server`, the container is `parse-command-server`, and its image is
 `parse-command-server:local`. The crate and CLI retain `parse-command-intake`.
 The server joins the external demo mail network and the application's network and publishes no
-ports. It retains the nonroot user, read-only root filesystem, persistent custody
-volume and explicit memory/CPU/log limits. Runtime performs no package/model
+ports. It retains the nonroot user, read-only root filesystem and explicit memory/CPU/log limits. Runtime performs no package/model
 downloads or external HTTP requests. Export/load the built server image before
 offline deployment. Do not remove custody to resolve a processing error.
 
 The standalone `backend/compose.intake.yaml` remains available as an alternative
 `server` service for the standalone demo mailbox. Do not run both against the
-same custody volume. See the [combined-stack guide](../docs/integration/combined-stack.md)
-for adopting an existing custody volume.
+same custody index. See the [combined-stack guide](../docs/integration/combined-stack.md)
+and the [state migration guide](../docs/integration/settings-oidc.md) before adopting existing data.
 
 ## Custody and restart behavior
 
@@ -52,45 +52,40 @@ Receipt identity is `(account_id, mailbox, UIDVALIDITY, UID)`, independent of In
 
 The display subject comes from the most recently received email according to the server’s IMAP INTERNALDATE, with the local durable receipt sequence breaking ties. The untrusted email Date header does not choose it. Older mail rediscovered after UIDVALIDITY changes cannot replace a newer subject. Differences in decoded subjects retain `subject_conflict`, including after later equal-subject deliveries. The original subjects remain in receipt history.
 
-Raw RFC email bytes, their hash, receipt metadata and scan-cursor advancement commit in the same SQLite transaction. Parsing occurs while a job remains `staged`; the worker never persists a temporary processing state that could strand a job. Core projection, audit outbox entries and terminal receipt state commit together. A crash before that commit leaves a staged job for replay; committed jobs are not parsed again during normal restart. Transactions use SQLite WAL and FULL synchronous mode. This provides process-restart recovery within SQLite/filesystem guarantees, not host-loss replication or a power-loss certification.
+Raw RFC email bytes and their hash are durably acknowledged before the mailbox cursor advances. A lost write response leaves the cursor behind, so replay verifies the stable receipt identity and original hash. Parsing keeps the job staged until the projection and receipt updates complete; separate writes are replayable rather than a cross-document transaction. Publication jobs keep attempt history and pending work until each Bulk item is confirmed. A single-writer server lease prevents concurrent workers. OpenSearch outages stop acceptance and cause retry without advancing custody. This provides process-restart recovery within OpenSearch's request-durable translog guarantees; the single-node profile is not host-loss replication.
 
 | State | Meaning |
 | --- | --- |
 | `staged` | Full email bytes retained; processing pending |
-| `parsed` | Canonical core and audit work committed locally |
+| `parsed` | Canonical core and audit work staged in hidden custody |
 | `duplicate` | Separate email retained; existing body/revision projection reused and latest subject applied |
 | `unsupported` | Full email retained; no applicable parser profile |
 | `quarantined` | Full email retained with MIME/parser/attempt diagnostic |
 | `oversized_upstream` | Limit recorded; full source remains only upstream and is not claimed accepted/processed |
 | `vanished_upstream` | UID disappeared during retrieval; source was not accepted |
 
-Polling uses read-only EXAMINE, bounded UID ranges and BODY.PEEK. It does not depend on unread flags, mark messages Seen, delete mail, or expunge. Size limits apply before body fetch, and literal/response/wire/command-deadline limits constrain the protocol reader. A full journal stops further intake and leaves staged work intact. Watch mode retries infrastructure failures with capped backoff. Cooperative shutdown finishes/rolls back the current transaction; domain parsing and network reads remain bounded.
+Polling uses read-only EXAMINE, bounded UID ranges and BODY.PEEK. It does not depend on unread flags, mark messages Seen, delete mail, or expunge. Size limits apply before body fetch, and literal/response/wire/command-deadline limits constrain the protocol reader. A full journal stops further intake and leaves staged work intact. Watch mode retries infrastructure failures with capped backoff. Cooperative shutdown finishes bounded steps; incomplete steps replay; domain parsing and network reads remain bounded.
 
-Accepted data is not automatically purged. Retained-byte, receipt-count and database-page limits produce backpressure instead. WAL/checkpoint space requires disk headroom beyond the configured main-database cap. Audit retention, cleanup/replay policy and host-failure backups remain deployment decisions. Back up a live journal with SQLite's backup API, or stop the worker and checkpoint it first; copying only the live `.sqlite` file can omit committed WAL data.
+Accepted custody data is not automatically purged. Retained serialized-byte and receipt-count limits produce backpressure. These are not physical disk/translog caps; monitor disk headroom separately. Snapshot the OpenSearch state together with message/audit indices. The read-only SQLite importer and rollback procedure are in the [state migration guide](../docs/integration/settings-oidc.md).
 
-An account ID is bound to its configured endpoint, username, mailbox and parser revision. Changing those against an existing journal fails clearly. Reprocessing under a new revision requires an explicit migration/replay workflow; do not edit SQL states or silently reuse the old revision. The two demo configs intentionally use independent host/container journals.
+An account ID is bound to its configured endpoint, username, mailbox and parser revision. Changing those against an existing journal fails clearly. Reprocessing under a new revision requires an explicit migration/replay workflow; do not edit custody states or silently reuse the old revision. Configure a separate hidden custody index for independent tests.
 
 ## MIME and geographic contract
 
-The decoder bounds header bytes/counts, part count, nesting and decoded body bytes. It handles base64, quoted-printable and unencoded UTF-8/ASCII text/plain, including bounded multipart mixed/alternative/related wrappers. Exactly one eligible inline plain-text body is required; attachments and HTML are not executed or interpreted as orders. Ambiguous/malformed email is retained for review. Decoded source whitespace and line endings remain unchanged. Subject decoding and one leading `SUBJ:` removal are separate from body-based parser dispatch. Both local custody time and IMAP server receipt time are retained separately. Original headers and selected-part byte provenance accompany the receipt audit event; full original email remains in SQLite custody.
+The decoder bounds header bytes/counts, part count, nesting and decoded body bytes. It handles base64, quoted-printable and unencoded UTF-8/ASCII text/plain, including bounded multipart mixed/alternative/related wrappers. Exactly one eligible inline plain-text body is required; attachments and HTML are not executed or interpreted as orders. Ambiguous/malformed email is retained for review. Decoded source whitespace and line endings remain unchanged. Subject decoding and one leading `SUBJ:` removal are separate from body-based parser dispatch. Both local custody time and IMAP server receipt time are retained separately. Original headers and selected-part byte provenance accompany the receipt audit event; full original email remains in hidden OpenSearch custody.
 
 ICD 1.1.0 adds optional `locations` with `geo_point` and GeoJSON `geo_shape` mappings. Supported coordinate forms produce points, channel endpoint lines, and closed area polygons. Circle centers retain their radius without invented polygon vertices. WGS84 is the approved default only when no datum is declared; explicit different/unknown datums and unresolved locations retain review states without map geometry. Geometry does not imply tasking or local C2 responsibility. Detailed tokens, spans and rules remain in audit.
 
 ## Populate the local UI test indices
 
-```sh
-docker compose up -d --wait
-python3 backend/tools/load_intake_test.py /tmp/parse-command-intake-demo/custody.sqlite
-```
-
-The stdlib-only loader checks the local cluster, uses isolated `parse-command-intake-test-messages-v1` and `parse-command-intake-test-audit-v1` indices, sends bounded Bulk batches, and checks every response item. Rerunning uses stable document IDs. It does not change the runtime outbox state or masquerade as a continuous writer. Test indices have no expiry because the supplied historical examples would already be expired under production issue-time retention. No search embedding/model is needed for this intake/spatial test.
+The application server continuously publishes queued records and validates each Bulk item. Use the demo sender for new test traffic. `backend/tools/load_intake_test.py` is retained only as a legacy read-only SQLite fixture loader; it is not part of runtime intake or the current persistence architecture.
 
 ## Production boundary
 
 The intended mailbox is enclave-local on-premises Exchange protected by PKI. The current `plaintext_demo` transport is deliberately restricted to loopback or the demo `mailserver` container name. It is not a production Exchange adapter. Verified TLS/PKI, the exact approved authentication mechanism, production limits and recovery objectives require validation before enabling that endpoint. No cloud mail or token-service dependency is introduced. The root application server now includes continuous OpenSearch publication and
 the UI API; see the [combined-stack runbook](../docs/integration/combined-stack.md).
 
-## Initial verification evidence
+## Historical initial verification evidence (SQLite prototype)
 
 Verified locally on 2026-11-04: the fourteen external example emails produced fourteen distinct core projections; an additional same-body email with a changed subject remained a separate duplicate receipt, updated the display subject and retained the conflict flag. The transport probe was quarantined independently. An abrupt SIGKILL/restart retained all sixteen receipt records, fourteen projections and 558 pending audit events without duplication.
 

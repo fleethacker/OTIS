@@ -1,4 +1,5 @@
 import { readJson } from "./source-data";
+import { sessionFetch } from "./session-access";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 export function AuditEvidence({ source }: { source: string }) {
@@ -7,7 +8,7 @@ export function AuditEvidence({ source }: { source: string }) {
     queryKey: ["parse-command-evidence", source],
     enabled: open,
     queryFn: async ({ signal }) => {
-      const response = await fetch("/api/v1/messages/evidence", {
+      const response = await sessionFetch("/api/v1/messages/evidence", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },

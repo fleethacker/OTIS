@@ -1,3 +1,4 @@
+import { SettingsContext, type SettingsReply } from "./settings-data";
 import { expect, test } from "bun:test";
 import { create } from "@bufbuild/protobuf";
 import { fireEvent, waitFor, within } from "@testing-library/react";
@@ -11,6 +12,19 @@ import { MessageReader } from "./message-reader";
 import { acknowledgementDefaults, referenceDtg } from "./acknowledgement-format";
 import { formatPreparation, type PreparationFields } from "./preparation-format";
 
+const configured: SettingsReply = {
+  revision: "1:1",
+  settings: {
+    version: 1,
+    shipName: "",
+    unitName: "",
+    commandIds: [],
+    outgoingCommand: "FLEETHACKER",
+    actionAuthority: "FLEETHACKER",
+    defaultTimezone: "UTC",
+    ai: null,
+  },
+};
 const message = (issued_at: string | null = "2026-11-04T12:34:30Z") =>
   create(MessageRecordSchema, {
     sourceMessageId: "synthetic-ack@r1",
@@ -23,7 +37,11 @@ const message = (issued_at: string | null = "2026-11-04T12:34:30Z") =>
     }),
   });
 test("acknowledgement defaults use source identity and reference time, never receipt time", () => {
-  const fields = acknowledgementDefaults(message());
+  const fields = acknowledgementDefaults(message(), {
+    outgoing: configured.settings.outgoingCommand,
+    authority: configured.settings.actionAuthority,
+  });
+  expect(acknowledgementDefaults(message()).outgoing).toBe("");
   expect(fields.outgoing).toBe("FLEETHACKER");
   expect(fields.authority).toBe("FLEETHACKER");
   expect(fields.originator).toBe("EXERCISE GROUP");
@@ -58,9 +76,11 @@ test("one-dropdown modal generates an unsent draft, handles retry and keeps ackn
     });
   });
   const view = renderWithProviders(
-    <TransportProvider transport={transport}>
-      <MessageReader message={message()} />
-    </TransportProvider>
+    <SettingsContext.Provider value={{ shared: configured, timezone: "UTC" }}>
+      <TransportProvider transport={transport}>
+        <MessageReader message={message()} />
+      </TransportProvider>
+    </SettingsContext.Provider>
   );
   await waitFor(() => expect(view.getByText("Not acknowledged")).toBeTruthy());
   const trigger = view.getByRole("button", { name: "Send Acknowledgement" });
@@ -103,9 +123,11 @@ test("missing reference time blocks generation without fabricating receipt or cu
     });
   });
   const view = renderWithProviders(
-    <TransportProvider transport={transport}>
-      <MessageReader message={message(null)} />
-    </TransportProvider>
+    <SettingsContext.Provider value={{ shared: configured, timezone: "UTC" }}>
+      <TransportProvider transport={transport}>
+        <MessageReader message={message(null)} />
+      </TransportProvider>
+    </SettingsContext.Provider>
   );
   await waitFor(() => expect(view.getByText("Not acknowledged")).toBeTruthy());
   fireEvent.click(view.getByRole("button", { name: "Send Acknowledgement" }));

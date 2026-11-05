@@ -16,7 +16,7 @@ standalone intake deployment in `compose.intake.yaml` remains supported.
 | `parse-command-optask` | Profile-specific OPTASK interpretation with rule provenance and external sample regression coverage |
 | `examples/reference-parser` | Independent synthetic contributor crate exercised through the host; no production enablement |
 
-This milestone provides a synchronous library host and OPTASK contribution. The [intake worker](INTAKE.md) adds read-only IMAP polling, MIME framing, SQLite custody and durable outbox staging. Continuous OpenSearch delivery, passage construction, embeddings and HTTP remain subsequent adapters. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed accepted email remains in the custody journal with an explicit state.
+This milestone provides a synchronous library host and OPTASK contribution. The [intake worker](INTAKE.md) adds read-only IMAP polling, MIME framing, hidden OpenSearch custody and durable outbox staging. The Rust application server supplies continuous OpenSearch delivery, passage construction, embeddings and HTTP. A successful parse returns an in-memory result, not a persistence acknowledgement. Unsupported or failed accepted email remains in the custody journal with an explicit state.
 
 ## Build and verify
 
@@ -92,4 +92,6 @@ Compiled contributors are trusted code with process authority. Cooperative cance
 
 ## Application server
 
-`parse-command-server` combines durable intake, continuous batched OpenSearch publication, typed read APIs, generated ConnectRPC services and owner-scoped private SQLite state. The parser SDK remains transport independent. See the [combined stack](../docs/integration/combined-stack.md) and [application API](../docs/integration/rust-application-api.md). Building the server requires Rust 1.97.1 in the pinned Docker build; the parser foundation retains its declared minimum. The root build context supplies the original application proto files and canonical index definitions.
+`parse-command-server` combines durable intake, continuous batched OpenSearch publication, typed read APIs, generated ConnectRPC services and owner-scoped private state in hidden OpenSearch indices. The parser SDK remains transport independent. See the [combined stack](../docs/integration/combined-stack.md) and [application API](../docs/integration/rust-application-api.md). Building the server requires Rust 1.97.1 in the pinned Docker build; the parser foundation retains its declared minimum. The root build context supplies the original application proto files and canonical index definitions.
+
+Settings, native OIDC, hidden-state migration and verification are documented in [settings-oidc.md](../docs/integration/settings-oidc.md).

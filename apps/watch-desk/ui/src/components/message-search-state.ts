@@ -1,3 +1,4 @@
+import moment from "moment-timezone";
 import type { MessageSort, SourceRequest } from "./source-data";
 
 export interface MessageFilters {
@@ -14,17 +15,22 @@ export function messageFilters(params: URLSearchParams): MessageFilters {
     throughDate: params.get("throughDate") ?? "",
   };
 }
-function dateStart(value: string): number | undefined {
+function dateStart(value: string, zone: string): number | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return;
   }
-  const at = Date.parse(`${value}T00:00:00Z`);
-  return Number.isFinite(at) && new Date(at).toISOString().slice(0, 10) === value ? at : undefined;
+  const at = moment.tz(value, "YYYY-MM-DD", true, zone);
+  return at.isValid() && at.format("YYYY-MM-DD") === value ? +at : undefined;
 }
-export function messageSearchState(params: URLSearchParams, query: string, pageToken?: string) {
+export function messageSearchState(
+  params: URLSearchParams,
+  query: string,
+  pageToken?: string,
+  zone = "UTC"
+) {
   const fields = messageFilters(params);
-  const from = fields.fromDate === "" ? undefined : dateStart(fields.fromDate);
-  const through = fields.throughDate === "" ? undefined : dateStart(fields.throughDate);
+  const from = fields.fromDate === "" ? undefined : dateStart(fields.fromDate, zone);
+  const through = fields.throughDate === "" ? undefined : dateStart(fields.throughDate, zone);
   let error: string | undefined;
   if (
     (fields.fromDate !== "" && from === undefined) ||
@@ -53,7 +59,7 @@ export function messageSearchState(params: URLSearchParams, query: string, pageT
     filters.issuedFrom = new Date(from).toISOString();
   }
   if (through !== undefined && error === undefined) {
-    filters.issuedTo = new Date(through + 86400000).toISOString();
+    filters.issuedTo = moment.tz(through, zone).add(1, "day").toISOString();
   }
   const request: SourceRequest = {
     query,

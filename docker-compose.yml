@@ -14,15 +14,15 @@ services:
       PARSE_COMMAND_AUTH_MODE: local_demo
       PARSE_COMMAND_DEMO_AUTO_ROLE: "${ARK_MOCK_AUTH_AS:-user}"
       PARSE_COMMAND_OPENSEARCH_URL: http://opensearch:9200
-      PARSE_COMMAND_PRIVATE_DB: /var/lib/parse-command-private/ui.sqlite
-      PARSE_COMMAND_LEGACY_DB: "${PARSE_COMMAND_LEGACY_DB:-}"
+      PARSE_COMMAND_STATE_INDEX: .parse-command-state-v1
+      PARSE_COMMAND_CUSTODY_INDEX: .parse-command-custody-v1
+      PARSE_COMMAND_PUBLIC_URL: "${PARSE_COMMAND_PUBLIC_URL:-http://127.0.0.1:8080}"
+      PARSE_COMMAND_REQUIRE_STATE_MIGRATION: "${PARSE_COMMAND_REQUIRE_STATE_MIGRATION:-false}"
       PARSE_COMMAND_ALLOW_FIXTURES: "true"
     mem_limit: 256m
     pids_limit: 128
     volumes:
       - ./backend/config/demo-compose-intake.json:/etc/parse-command/config.json:ro
-      - private-state:/var/lib/parse-command-private
-      - watch-desk-data:/legacy:ro
     networks: !override
       - demo-mail
       - application

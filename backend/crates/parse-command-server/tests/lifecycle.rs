@@ -1,45 +1,41 @@
 use parse_command_server::lifecycle;
-use rusqlite::Connection;
+use parse_command_state::Record;
 use serde_json::json;
-#[test]
-fn custody_timeline_retains_failures_after_recovery_and_scopes_to_exact_body_revision() {
-    let path = std::env::temp_dir().join(format!(
-        "lifecycle-{}-{}.sqlite",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let db = Connection::open(&path).unwrap();
-    db.execute_batch("CREATE TABLE receipts(id TEXT,body_id TEXT,revision TEXT);CREATE TABLE custody_events(sequence INTEGER PRIMARY KEY,receipt_id TEXT,state TEXT,code TEXT,at TEXT);CREATE TABLE publication_jobs(kind TEXT,id TEXT,source TEXT,state TEXT,published_at TEXT);
-    INSERT INTO receipts VALUES('one','body','r1'),('two','other','r1'),('old','body','r0');
-    INSERT INTO custody_events VALUES(8,'one','staged',NULL,'2026-11-04T12:00:00Z'),(9,'one','retrying','journal_io','2026-11-04T12:00:01Z'),(10,'one','parsed',NULL,'2026-11-04T12:00:01Z'),(4,'two','quarantined','other_error','2026-11-04T12:00:01Z'),(5,'old','quarantined','old_error','2026-11-04T12:00:01Z');
-    INSERT INTO publication_jobs VALUES('message','body:r1','{\"id\":\"body\",\"revision\":\"r1\"}','published','2026-11-04T12:00:04Z');").unwrap();
-    lifecycle::initialize(&db).unwrap();
-    lifecycle::publication_failure(
-        &db,
-        "message",
-        &json!({"id":"body","revision":"r1"}).to_string(),
-        "publication_item_failed",
-    )
-    .unwrap();
-    let result = lifecycle::read(&path, "body", "r1").unwrap();
-    let entries = result["entries"].as_array().unwrap();
-    assert_eq!(entries.len(), 5);
-    assert_eq!(entries[0]["milestone"], "ingested");
-    assert_eq!(entries[1]["milestone"], "ingest_failed");
-    assert_eq!(entries[1]["detail"], "journal_io");
-    assert!(entries.iter().any(|e| e["milestone"] == "indexed"));
-    assert!(
-        entries
-            .iter()
-            .any(|e| e["detail"] == "Message indexing failed")
+mod support;
+#[tokio::test]
+#[ignore = "requires isolated OpenSearch test indices"]
+async fn lifecycle_preserves_failure_recovery_exact_revision_and_pending_ack() {
+    let store = support::store().await;
+    for (i, state, source) in [
+        (1, "staged", "body@r1"),
+        (2, "retrying", "body@r1"),
+        (3, "parsed", "body@r1"),
+        (4, "quarantined", "other@r1"),
+        (5, "quarantined", "body@r0"),
+    ] {
+        let mut row = Record::new(
+            "custody_event",
+            &i.to_string(),
+            json!({"at":format!("2026-11-04T12:00:0{i}Z"),"code":"source failure"}),
+        );
+        row.source = source.into();
+        row.state = state.into();
+        row.order = i;
+        store.put(&row, None).await.unwrap();
+    }
+    let mut job = Record::new(
+        "publication",
+        "message:body:r1",
+        json!({"published_at":"2026-11-04T12:00:06Z"}),
     );
-    assert!(!result.to_string().contains("other_error"));
-    assert!(!result.to_string().contains("old_error"));
+    job.state = "published".into();
+    store.put(&job, None).await.unwrap();
+    store.refresh().await.unwrap();
+    let result = lifecycle::read(&store, "body", "r1").await.unwrap();
+    let entries = result["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 4);
+    assert_eq!(entries[1]["milestone"], "ingest_failed");
+    assert_eq!(entries[3]["milestone"], "indexed");
     assert!(!result.to_string().contains("acknowledgement_sent"));
-    assert_eq!(result["limited"], false);
-    drop(db);
-    std::fs::remove_file(path).unwrap();
+    support::cleanup(&store).await;
 }

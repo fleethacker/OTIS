@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { TbLogout } from "react-icons/tb";
+import { TbLogout, TbAdjustmentsHorizontal } from "react-icons/tb";
+import { Link } from "react-router-dom";
 import { useIdentity } from "../hooks/useIdentity";
 
 /**
@@ -23,6 +24,19 @@ import { useIdentity } from "../hooks/useIdentity";
 export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
   const { username, email, role, isLoading } = useIdentity();
   const [open, setOpen] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
+  async function logout() {
+    setLogoutFailed(false);
+    try {
+      const response = await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
+      if (!response.ok) {
+        throw new Error("Sign-out failed");
+      }
+      window.location.replace("/calendar");
+    } catch {
+      setLogoutFailed(true);
+    }
+  }
   // Held so Escape can return focus to the trigger (a11y: focus must not be
   // lost to <body> when the menu closes).
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -125,18 +139,22 @@ export function UserMenu({ openUp = false }: { openUp?: boolean } = {}) {
           <div className="px-4 py-3 border-b border-base-300">
             <div className="font-semibold text-sm text-base-content">{username}</div>
             {email !== "" && <div className="text-xs text-bc-muted mt-0.5">{email}</div>}
-            {role !== "" && <div className="text-xs text-bc-muted">Role: {role}</div>}
+            {role !== "" && (
+              <div className="text-xs text-bc-muted">{role === "admin" ? "Admin" : "Viewer"}</div>
+            )}
           </div>
+          {logoutFailed && <p role="alert">Sign-out failed. Retry.</p>}
           <ul className="menu menu-sm gap-0 px-1 py-1">
+            {role !== "admin" && (
+              <li>
+                <Link to="/settings" role="menuitem" onClick={() => setOpen(false)}>
+                  <TbAdjustmentsHorizontal />
+                  Preferences
+                </Link>
+              </li>
+            )}
             <li>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpen(false);
-                  window.location.replace("/logout");
-                }}
-              >
+              <button type="button" role="menuitem" onClick={() => void logout()}>
                 <TbLogout />
                 Sign out
               </button>

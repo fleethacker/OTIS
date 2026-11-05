@@ -112,6 +112,7 @@ impl Service {
         Ok(accepted)
     }
     pub fn process(&mut self, cancelled: &AtomicBool) -> Result<usize> {
+        self.journal.begin_cycle()?;
         let mut done = 0;
         for _ in 0..self.config.jobs_per_cycle {
             if cancelled.load(Ordering::Relaxed) {

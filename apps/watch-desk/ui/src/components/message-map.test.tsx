@@ -26,19 +26,19 @@ const message = (entries: unknown[] = locations, key = "internal-source-hidden")
 
 test("map disclosure is absent for missing, named-only and invalid coordinates", () => {
   const view = renderWithProviders(<MessageMap message={create(MessageRecordSchema)} />);
-  expect(view.queryByRole("button", { name: "Map" })).toBeNull();
+  expect(view.queryByRole("button", { name: "Chart" })).toBeNull();
   view.rerender(<MessageMap message={message([
     { label: "Exercise harbour", status: "unresolved", datum: "WGS84" },
     source("Invalid latitude", { point: { lon: -45, lat: 95 } }),
   ])} />);
-  expect(view.queryByRole("button", { name: "Map" })).toBeNull();
+  expect(view.queryByRole("button", { name: "Chart" })).toBeNull();
   view.rerender(<MessageMap message={create(MessageRecordSchema, { structuredPayloadJson: "broken json" })} />);
-  expect(view.queryByRole("region", { name: "Message map" })).toBeNull();
+  expect(view.queryByRole("region", { name: "Message chart" })).toBeNull();
 });
 
 test("map opens from a collapsed disclosure and renders all supported geometry with local context", () => {
   const view = renderWithProviders(<MessageMap message={message()} />);
-  const toggle = view.getByRole("button", { name: "Map" });
+  const toggle = view.getByRole("button", { name: "Chart" });
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   expect(view.queryByRole("group", { name: "Message coordinates and shapes" })).toBeNull();
   const panel = view.container.querySelector(`[id="${toggle.getAttribute("aria-controls")}"]`);
@@ -63,7 +63,7 @@ test("map opens from a collapsed disclosure and renders all supported geometry w
 
 test("zoom, keyboard pan and fit change the plotted view and restore the message extent", () => {
   const view = renderWithProviders(<MessageMap message={message()} />);
-  fireEvent.click(view.getByRole("button", { name: "Map" }));
+  fireEvent.click(view.getByRole("button", { name: "Chart" }));
   const route = view.getByRole("img", { name: "Exercise route" });
   const original = route.getAttribute("d");
   fireEvent.click(view.getByRole("button", { name: "Zoom in" }));
@@ -82,10 +82,10 @@ test("zoom, keyboard pan and fit change the plotted view and restore the message
 
 test("changing the selected message starts its map collapsed", () => {
   const view = renderWithProviders(<MessageMap message={message()} />);
-  fireEvent.click(view.getByRole("button", { name: "Map" }));
-  expect(view.getByRole("button", { name: "Map" }).getAttribute("aria-expanded")).toBe("true");
+  fireEvent.click(view.getByRole("button", { name: "Chart" }));
+  expect(view.getByRole("button", { name: "Chart" }).getAttribute("aria-expanded")).toBe("true");
   view.rerender(<MessageMap message={message(locations, "different-internal-source")} />);
-  expect(view.getByRole("button", { name: "Map" }).getAttribute("aria-expanded")).toBe("false");
+  expect(view.getByRole("button", { name: "Chart" }).getAttribute("aria-expanded")).toBe("false");
   expect(view.queryByRole("group", { name: "Message coordinates and shapes" })).toBeNull();
 });
 
@@ -94,7 +94,7 @@ test("source labels remain escaped and available to keyboard users", () => {
   const view = renderWithProviders(<MessageMap message={message([
     source(label, { type: "position", point: { lon: -45, lat: 30 } }),
   ])} />);
-  fireEvent.click(view.getByRole("button", { name: "Map" }));
+  fireEvent.click(view.getByRole("button", { name: "Chart" }));
   const point = view.getByRole("img", { name: label });
   expect(point.getAttribute("tabindex")).toBe("0");
   fireEvent.focus(point);
@@ -104,10 +104,10 @@ test("source labels remain escaped and available to keyboard users", () => {
 
 test("the disclosure precedes the reader tabs and remains available on each tab", () => {
   const view = renderWithProviders(<MessageReader message={message()} />);
-  const disclosure = view.getByRole("region", { name: "Message map" });
+  const disclosure = view.getByRole("region", { name: "Message chart" });
   const tabs = view.getByRole("tablist", { name: "Message views" });
   expect(disclosure.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  fireEvent.click(view.getByRole("button", { name: "Map" }));
+  fireEvent.click(view.getByRole("button", { name: "Chart" }));
   fireEvent.click(view.getByRole("tab", { name: "Raw message" }));
   expect(view.getByRole("group", { name: "Message coordinates and shapes" })).toBeTruthy();
   fireEvent.click(view.getByRole("tab", { name: "Lifecycle" }));

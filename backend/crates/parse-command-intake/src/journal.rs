@@ -50,7 +50,9 @@ impl Journal {
           CREATE TABLE IF NOT EXISTS cursors(account_id TEXT NOT NULL, mailbox TEXT NOT NULL, validity INTEGER NOT NULL, uid INTEGER NOT NULL, PRIMARY KEY(account_id,mailbox,validity));
           CREATE TABLE IF NOT EXISTS receipts(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,account_id TEXT NOT NULL,mailbox TEXT NOT NULL,validity INTEGER NOT NULL,uid INTEGER NOT NULL,size INTEGER NOT NULL,raw BLOB,raw_hash TEXT,received_at TEXT NOT NULL,state TEXT NOT NULL,code TEXT,attempts INTEGER NOT NULL DEFAULT 0,body_id TEXT,revision TEXT,subject TEXT,metadata TEXT,UNIQUE(account_id,mailbox,validity,uid));
           CREATE INDEX IF NOT EXISTS receipt_state ON receipts(state,sequence);
+          CREATE INDEX IF NOT EXISTS receipt_body ON receipts(body_id,revision);
           CREATE TABLE IF NOT EXISTS custody_events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,receipt_id TEXT NOT NULL REFERENCES receipts(id),state TEXT NOT NULL,code TEXT,at TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS custody_receipt ON custody_events(receipt_id,sequence);
           CREATE TABLE IF NOT EXISTS projections(message_id TEXT NOT NULL,revision TEXT NOT NULL,core TEXT NOT NULL,selected_sequence INTEGER NOT NULL,subject_conflict INTEGER NOT NULL,delivery_state TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(message_id,revision));
           CREATE TABLE IF NOT EXISTS audit_outbox(id TEXT PRIMARY KEY,message_id TEXT NOT NULL,revision TEXT NOT NULL,receipt_id TEXT NOT NULL REFERENCES receipts(id),document TEXT NOT NULL,delivery_state TEXT NOT NULL DEFAULT 'pending');
           COMMIT;")?;
@@ -213,6 +215,20 @@ impl Journal {
         self.db.execute(
             "UPDATE receipts SET attempts=max(attempts-1,0) WHERE id=? AND state='staged'",
             [id],
+        )?;
+        Ok(())
+    }
+    pub fn identify_body(&self, id: &str, body: &str, revision: &str) -> Result<()> {
+        self.db.execute(
+            "UPDATE receipts SET body_id=?,revision=? WHERE id=? AND state='staged'",
+            params![message_id(body), revision, id],
+        )?;
+        Ok(())
+    }
+    pub fn record_retry(&self, id: &str, code: &str) -> Result<()> {
+        self.db.execute(
+            "INSERT INTO custody_events(receipt_id,state,code,at) VALUES(?,'retrying',?,?)",
+            params![id, code, crate::now()?],
         )?;
         Ok(())
     }

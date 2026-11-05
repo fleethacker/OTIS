@@ -27,6 +27,19 @@ export function acknowledgementDefaults(message: MessageRecord): PreparationFiel
       ? issue.replace(/:\d\dZ$/, ":00Z")
       : "";
   const sets = sourceSets(payload) ?? [];
+  const msgid = sets.find((set) => set.set_id === "MSGID");
+  const serialPosition =
+    payload?.source_profile === "observed-optask-extensions-v1"
+      ? 5
+      : payload?.source_profile === "usmtf-2003-subset-v1"
+        ? 3
+        : undefined;
+  const sourceSerial =
+    text("serial") ||
+    (serialPosition === undefined
+      ? ""
+      : (msgid?.fields.find((field) => field.position === serialPosition)?.value ?? ""));
+  const serial = sourceSerial.replace(/\s+/g, " ").trim();
   const contexts = sets.filter((set) => set.set_id === "EXER" || set.set_id === "OPER");
   const context = contexts.length === 1 ? contexts[0] : undefined;
   return {
@@ -35,7 +48,7 @@ export function acknowledgementDefaults(message: MessageRecord): PreparationFiel
     letter: "A",
     type: text("type"),
     originator: text("originator"),
-    serial: text("serial"),
+    serial: serial === "-" ? "" : serial,
     dtg: referenceDtg(minuteIssue),
     contextKind: context?.set_id ?? "",
     context: context?.fields[0]?.value.trim() ?? "",

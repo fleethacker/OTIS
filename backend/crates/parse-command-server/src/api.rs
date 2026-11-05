@@ -432,6 +432,26 @@ impl App {
         }
         let mut record = presentation::message(&core, &*self.store()?, true, raw, received)?;
         let mut payload = core.clone();
+        let journal_path = self.config.intake.journal.clone();
+        let message_id = id.to_owned();
+        let message_revision = revision.to_owned();
+        let history = tokio::task::spawn_blocking(move || {
+            crate::lifecycle::read(&journal_path, &message_id, &message_revision)
+        })
+        .await;
+        match history {
+            Ok(Ok(history)) => {
+                record["lifecycleEntries"] = history["entries"].clone();
+                payload["lifecycle_state"] = json!("available");
+                payload["lifecycle_limited"] = history["limited"].clone();
+            }
+            _ => {
+                payload["lifecycle_state"] = json!("unavailable");
+            }
+        }
+        if let Some(issue) = core["issued_at"].as_str() {
+            record["lifecycleEntries"].as_array_mut().ok_or_else(Error::unavailable)?.insert(0,json!({"id":"issued","milestone":"issued","recordedAt":timestamp(issue)?,"detail":"","provenance":"source"}));
+        }
         if let Some(source) = raw {
             let (profile, sets) = presentation::source_sets(&audits, source)?;
             payload["source_profile"] = json!(profile);

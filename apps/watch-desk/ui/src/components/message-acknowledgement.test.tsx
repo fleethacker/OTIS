@@ -32,6 +32,12 @@ test("acknowledgement defaults use source identity and reference time, never rec
   expect(fields.confirmed).toBe(false);
   expect(acknowledgementDefaults(message(null)).dtg).toBe("");
   expect(referenceDtg("2026-02-30T12:00:00Z")).toBe("");
+  const fromSet = message();
+  fromSet.structuredPayloadJson = JSON.stringify({
+    source_profile: "observed-optask-extensions-v1",
+    sets: [{ set_id: "MSGID", fields: [{ position: 5, value: " PC-C001\n " }], rows: [] }],
+  });
+  expect(acknowledgementDefaults(fromSet).serial).toBe("PC-C001");
 });
 test("one-dropdown modal generates an unsent draft, handles retry and keeps acknowledgement status accurate", async () => {
   let saved = "";

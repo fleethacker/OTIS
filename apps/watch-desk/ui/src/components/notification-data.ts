@@ -1,95 +1,121 @@
-import type { MessageRecord } from "../gen/app/v1/models_pb";
-import { instant } from "./calendar-time";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { readJson } from "./source-data";
 
 export interface DeskNotification {
-  key: string;
-  type: "Daily reminder" | "Action item";
-  title: string;
+  id: number;
+  version: number;
+  kind: "traffic" | "failed" | "recovered";
   context: string;
-  message?: string;
-  fictional?: boolean;
+  messageKey: string;
+  at: string;
+  detail: string;
+  resolvedAt: string | null;
+  count: number;
+  unread: boolean;
 }
-export const utcDay = () => new Date().toISOString().slice(0, 10);
+export interface NotificationMember {
+  messageKey: string;
+  subject: string;
+  context: string;
+  at: string;
+  version: number;
+}
+export interface NotificationPage {
+  items: DeskNotification[];
+  unread: number;
+  watermark: number;
+  nextBefore: number | null;
+  catchingUp: boolean;
+}
+interface MemberPage {
+  items: NotificationMember[];
+  nextBefore: number | null;
+}
+export async function notificationRequest<T>(
+  operation: string,
+  body: object,
+  signal?: AbortSignal
+) {
+  const response = await fetch(`/api/v1/notifications/${operation}`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  return (await readJson(response)) as unknown as T;
+}
+export function useNotifications(identity: string) {
+  return useInfiniteQuery({
+    queryKey: ["notifications", identity, "list"],
+    initialPageParam: null as number | null,
+    queryFn: ({ pageParam, signal }) =>
+      notificationRequest<NotificationPage>("list", { before: pageParam }, signal),
+    getNextPageParam: (last) => last.nextBefore ?? undefined,
+    staleTime: 10_000,
+    gcTime: 60_000,
+    retry: false,
+    refetchInterval: (query) => (query.state.data?.pages[0]?.catchingUp === true ? 1000 : 30_000),
+    refetchIntervalInBackground: false,
+  });
+}
+export function useNotificationMembers(identity: string, id?: number) {
+  return useInfiniteQuery({
+    queryKey: ["notifications", identity, "members", id],
+    initialPageParam: null as number | null,
+    queryFn: ({ pageParam, signal }) =>
+      notificationRequest<MemberPage>("members", { id, before: pageParam }, signal),
+    getNextPageParam: (last) => last.nextBefore ?? undefined,
+    enabled: id !== undefined,
+    staleTime: 10_000,
+    gcTime: 60_000,
+    retry: false,
+  });
+}
+export function useReadNotification(identity: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (selection: { id: number; version: number } | { through: number }) =>
+      notificationRequest("read", selection),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["notifications", identity] }),
+  });
+}
+export function notificationTitle(item: DeskNotification): string {
+  if (item.kind === "failed") {
+    return "Message ingestion failed";
+  }
+  if (item.kind === "recovered") {
+    return "Message ingestion recovered";
+  }
+  return item.count === 1 ? "New message received" : `${item.count} new messages received`;
+}
+export function notificationTime(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return "Time unavailable";
+  }
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")} ${get("month").toUpperCase()} ${get("year")} ${get("hour")}${get("minute")}Z`;
+}
 
-// Canonicalize relevant content, not response time or source ordering.
-function canonical(value: unknown): string {
-  if (typeof value === "bigint") {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(canonical).sort().join(",")}]`;
-  }
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value)
-      .filter(([k]) => k !== "$typeName")
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}:${canonical(v)}`)
-      .join(",")}}`;
-  }
-  return value === undefined ? "" : JSON.stringify(value);
-}
-export function notifications(messages: MessageRecord[], day: string): DeskNotification[] {
-  const items: DeskNotification[] = [
-    {
-      key: `daily:${day}`,
-      type: "Daily reminder",
-      title: "Review today's UTC schedule",
-      context: `${day} · Calendar`,
-    },
-  ];
-  for (const m of messages) {
-    const reasons: string[] = [];
-    const relevant = m.events.filter((e) => {
-      const start = instant(e.startAt),
-        end = instant(e.endAt);
-      const unresolved =
-        e.scheduleStatus !== "confirmed" ||
-        !Number.isFinite(start) ||
-        !Number.isFinite(end) ||
-        end <= start;
-      if (e.isRevised || e.revisions.length > 0) {
-        reasons.push(`${e.title}: Revised schedule — review changes`);
+export function notificationItems(pages: NotificationPage[] = []): DeskNotification[] {
+  const result = new Map<number, DeskNotification>();
+  for (const page of pages) {
+    for (const item of page.items) {
+      const previous = result.get(item.id);
+      if (previous === undefined || item.version > previous.version) {
+        result.set(item.id, item);
       }
-      if (unresolved) {
-        reasons.push(`${e.title}: Needs review — ${e.reviewReason ?? "schedule times unresolved"}`);
-      }
-      return unresolved || e.isRevised || e.revisions.length > 0;
-    });
-    if (m.processingStatus === "needs_review") {
-      reasons.push("Message record needs review");
     }
-    if (reasons.length === 0) {
-      continue;
-    }
-    items.push({
-      key: `source:${m.sourceMessageId}:${canonical({ status: m.processingStatus, events: relevant })}`,
-      type: "Action item",
-      title: m.subject ?? m.sourceMessageId,
-      context: [...new Set(reasons)].sort().join("; "),
-      message: m.sourceMessageId,
-      fictional: m.provenance === "fictional",
-    });
   }
-  return [...new Map(items.map((item) => [item.key, item])).values()];
-}
-
-export function readNotificationState(identity: string): { keys: string[]; failed: boolean } {
-  try {
-    const raw = localStorage.getItem(`watch-desk:notifications:v1:${identity}`);
-    const value: unknown = raw !== null ? JSON.parse(raw) : [];
-    if (!Array.isArray(value) || !value.every((k) => typeof k === "string")) {
-      return { keys: [], failed: true };
-    }
-    return { keys: value, failed: false };
-  } catch {
-    return { keys: [], failed: true };
-  }
-}
-export function saveNotificationState(identity: string, keys: string[]): boolean {
-  try {
-    localStorage.setItem(`watch-desk:notifications:v1:${identity}`, JSON.stringify(keys));
-    return true;
-  } catch {
-    return false;
-  }
+  return [...result.values()].sort((a, b) => b.version - a.version);
 }

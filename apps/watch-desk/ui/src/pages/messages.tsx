@@ -53,6 +53,9 @@ export default function Messages() {
       setPageToken(undefined);
     }
     const next = new URLSearchParams(params);
+    if (key === "record") {
+      next.delete("tab");
+    }
     if (value) {
       next.set(key, value);
     } else {
@@ -182,7 +185,10 @@ export default function Messages() {
                     </button>
                   </div>
                 ) : selected ? (
-                  <MessageReader key={selected.sourceMessageId} message={selected} />
+                  <MessageReader
+                    key={`${selected.sourceMessageId}:${params.get("tab") ?? ""}`}
+                    message={selected}
+                  />
                 ) : record ? (
                   <section className="reader-empty">
                     <h2>Message record not found</h2>

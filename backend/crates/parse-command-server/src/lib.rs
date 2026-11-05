@@ -4,6 +4,8 @@ pub mod proto {
 }
 pub mod config;
 pub mod error;
+pub mod lifecycle;
+pub mod notifications;
 pub mod pagination;
 pub mod preparation;
 pub mod presentation;

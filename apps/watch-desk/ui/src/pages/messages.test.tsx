@@ -78,10 +78,10 @@ test("reader tabs preserve keyboard focus and associated panels", () => {
   tabs[0].focus();
   for (const [key, index] of [
     ["ArrowRight", 1],
-    ["ArrowRight", 0],
+    ["ArrowRight", 2],
     ["ArrowLeft", 1],
     ["Home", 0],
-    ["End", 1],
+    ["End", 2],
   ] as const) {
     fireEvent.keyDown(document.activeElement!, { key });
     expect(tabs[index].getAttribute("aria-selected")).toBe("true");
@@ -212,4 +212,11 @@ test("message search opens a compact reader on selection and closes back to full
     view.unmount();
     client.clear();
   }
+});
+
+test("notification links open the requested lifecycle tab", () => {
+  const view = renderWithProviders(<MessageReader message={create(MessageRecordSchema)} />, {
+    route: "/messages?record=example&tab=lifecycle",
+  });
+  expect(view.getByRole("tab", { name: "Lifecycle" }).getAttribute("aria-selected")).toBe("true");
 });

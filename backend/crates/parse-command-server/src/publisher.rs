@@ -55,6 +55,13 @@ impl Publisher {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|_| Error::unavailable())?;
+        crate::lifecycle::initialize(&db)?;
+        // Backfill only actual, still-active published records, using their recorded time.
+        db.execute_batch("INSERT INTO publication_events(message_id,revision,stage,at,code,job_id)
+            SELECT p.message_id,p.revision,'message',j.published_at,'publication_succeeded',p.message_id
+            FROM projections p JOIN publication_jobs j ON j.kind='message' AND j.id=p.message_id||':'||p.revision
+            WHERE j.state='published' AND j.published_at IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM publication_events e WHERE e.message_id=p.message_id AND e.revision=p.revision AND e.stage='message' AND e.code='publication_succeeded') ORDER BY j.published_at;")?;
         Ok(Self {
             db,
             client,
@@ -352,24 +359,47 @@ impl Publisher {
             payload.push_str(&line);
             selected.push(row);
         }
-        let response = self
-            .client
-            .post(format!("{}/_bulk?refresh=wait_for", self.config.search))
-            .header("Content-Type", "application/x-ndjson")
-            .body(payload)
-            .send()
-            .map_err(|_| Error::unavailable())?;
-        if !response.status().is_success() {
-            return Err(Error::unavailable());
-        }
-        let mut bytes = Vec::new();
-        response
-            .take(MAX_RESPONSE as u64 + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_RESPONSE {
-            return Err(Error::unavailable());
-        }
-        let result: Value = serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())?;
+        let bulk = (|| -> Result<Value> {
+            let response = self
+                .client
+                .post(format!("{}/_bulk?refresh=wait_for", self.config.search))
+                .header("Content-Type", "application/x-ndjson")
+                .body(payload)
+                .send()
+                .map_err(|_| Error::unavailable())?;
+            if !response.status().is_success() {
+                return Err(Error::unavailable());
+            }
+            let mut bytes = Vec::new();
+            response
+                .take(MAX_RESPONSE as u64 + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() > MAX_RESPONSE {
+                return Err(Error::unavailable());
+            }
+            let result: Value = serde_json::from_slice(&bytes).map_err(|_| Error::unavailable())?;
+            if !result["items"]
+                .as_array()
+                .is_some_and(|v| v.len() == selected.len())
+            {
+                return Err(Error::unavailable());
+            }
+            Ok(result)
+        })();
+        let result = match bulk {
+            Ok(value) => value,
+            Err(error) => {
+                for (kind, _, _, source, _, _) in &selected {
+                    crate::lifecycle::publication_failure(
+                        &self.db,
+                        kind,
+                        source,
+                        "publication_unavailable",
+                    )?;
+                }
+                return Err(error);
+            }
+        };
         let items = result["items"]
             .as_array()
             .filter(|v| v.len() == selected.len())
@@ -410,7 +440,19 @@ impl Publisher {
             }
             if success {
                 let tx = self.db.transaction()?;
-                let updated=tx.execute("UPDATE publication_jobs SET state='published',published_at=?,last_error=NULL WHERE kind=? AND id=? AND checksum=?",params![now(),kind,id,checksum])?;
+                let published_at = now();
+                let updated=tx.execute("UPDATE publication_jobs SET state='published',published_at=?,last_error=NULL WHERE kind=? AND id=? AND checksum=?",params![published_at,kind,id,checksum])?;
+                if updated > 0 {
+                    let doc: Value =
+                        serde_json::from_str(source).map_err(|_| Error::unavailable())?;
+                    let message_id = if kind == "message" {
+                        doc["id"].as_str()
+                    } else {
+                        doc["message_id"].as_str()
+                    };
+                    // A message publication or recovery is a recorded event; routine passage/audit successes need no notification.
+                    tx.execute("INSERT INTO publication_events(message_id,revision,stage,at,code,job_id) SELECT ?,?,?,?,'publication_succeeded',? WHERE ?='message' OR (SELECT code FROM publication_events WHERE message_id=? AND revision=? AND stage=? AND job_id=? ORDER BY sequence DESC LIMIT 1)!='publication_succeeded'",params![message_id,doc["revision"].as_str(),kind,published_at,doc["id"].as_str(),kind,message_id,doc["revision"].as_str(),kind,doc["id"].as_str()])?;
+                }
                 if updated > 0 && kind == "message" {
                     let doc: Value =
                         serde_json::from_str(source).map_err(|_| Error::unavailable())?;
@@ -438,6 +480,12 @@ impl Publisher {
                 }
                 tx.commit()?;
             } else {
+                crate::lifecycle::publication_failure(
+                    &self.db,
+                    kind,
+                    source,
+                    "publication_item_failed",
+                )?;
                 let delay = (1i64 << (*attempts).min(6)).min(60);
                 self.db.execute("UPDATE publication_jobs SET attempts=attempts+1,next_attempt=unixepoch()+?,last_error='publication_item_failed' WHERE kind=? AND id=? AND checksum=?",params![delay,kind,id,checksum])?;
             }

@@ -1,17 +1,18 @@
 import { useId, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { DraftEditor } from "./draft-editor";
 import { StructuredMessage } from "./structured-message";
 import { messageTitle } from "./structured-message-format";
+import { MessageLifecycle } from "./message-lifecycle";
 import { MessageAcknowledgement } from "./message-acknowledgement";
 import type { MessageRecord } from "../gen/app/v1/models_pb";
 
 export function MessageReader({ message }: { message: MessageRecord }) {
-  const [tab, setTab] = useState("parsed");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get("tab") === "lifecycle" ? "lifecycle" : "parsed");
   const id = useId();
-  const views = ["parsed", "raw"];
-  const needsReview =
-    message.processingStatus === "needs_review" ||
-    message.events.some((event) => event.scheduleStatus === "needs_review");
+  const views = ["parsed", "raw", "lifecycle"];
+  const needsReview = message.processingStatus === "needs_review";
   return (
     <DraftEditor source={message.sourceMessageId}>
       <article className="message-reader" aria-label="Selected message">
@@ -19,6 +20,7 @@ export function MessageReader({ message }: { message: MessageRecord }) {
           <h2>{messageTitle(message)}</h2>
           <div className="message-reader-status">
             {needsReview && <span className="status-pill status-pill-review">needs review</span>}
+            {message.processingStatus === "parsed" && <span className="status-pill">Parsed</span>}
             <MessageAcknowledgement message={message} />
           </div>
         </header>
@@ -53,7 +55,7 @@ export function MessageReader({ message }: { message: MessageRecord }) {
                   document.getElementById(`${id}-${views[next]}`)?.focus();
                 }}
               >
-                {["Parsed Message", "Raw message"][index]}
+                {["Parsed Message", "Raw message", "Lifecycle"][index]}
               </button>
             ))}
           </div>
@@ -67,6 +69,8 @@ export function MessageReader({ message }: { message: MessageRecord }) {
               <section aria-label="Parsed Message">
                 <StructuredMessage message={message} />
               </section>
+            ) : tab === "lifecycle" ? (
+              <MessageLifecycle message={message} />
             ) : (
               <section aria-label="Raw message">
                 {message.rawText ? (

@@ -162,6 +162,10 @@ fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "/api/v1/messages/{operation}",
                 post(parse_command_server::api::read),
             )
+            .route(
+                "/api/v1/notifications/{operation}",
+                post(parse_command_server::notifications::handle),
+            )
             .route("/__ark/mock-whoami", get(web::whoami))
             .route("/__ark/mock-roles", get(web::roles))
             .route("/__ark/mock-login", get(web::login_page).post(web::login))

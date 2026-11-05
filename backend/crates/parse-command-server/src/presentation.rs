@@ -74,6 +74,17 @@ pub fn message(
     let key = format!("{}@{}", text(core, "id"), text(core, "revision"));
     let id = private.id(&key)?;
     let mut result = json!({"id":id.to_string(),"sourceMessageId":key,"rawText":raw.unwrap_or(""),"processingStatus":"needs_review","provenance":"upstream","events":[],"lifecycleEntries":[]});
+    // Canonical publication follows successful scanning and schema validation.
+    // Semantic uncertainty (partial dates, named areas, inferred profiles) is not
+    // a failed parse. Specific record interpretation errors still require review.
+    result["processingStatus"] = json!(if core["review_flags"]
+        .as_array()
+        .is_some_and(|flags| flags.iter().any(|v| v == "record_review"))
+    {
+        "needs_review"
+    } else {
+        "parsed"
+    });
     if let Some(subject) = core["subject"].as_str() {
         result["subject"] = json!(subject);
     }

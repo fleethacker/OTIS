@@ -1,6 +1,7 @@
 import "../route-registry";
 import { expect, spyOn, test } from "bun:test";
 import { waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderWithProviders } from "../test-utils/render";
 import Calendar from "../pages/calendar";
 import { messageSearchState } from "./message-search-state";
@@ -15,7 +16,8 @@ test("Calendar keeps one hybrid search request and reports the executed mode as 
       if (operation !== "timeline") throw new Error("Calendar must not introduce a second search request");
       return Response.json({ messages: [], meta: { executedMode, timelineItems: [], reviewItems: [] } });
     });
-    const view = renderWithProviders(<Calendar />, { route: "/calendar?date=2026-11-05&q=communications" });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = renderWithProviders(<QueryClientProvider client={client}><Calendar /></QueryClientProvider>, { route: "/calendar?date=2026-11-05&q=communications" });
     try {
       await waitFor(() => expect(view.getByText(new RegExp(`Executed search: ${executedMode ?? "not reported by server"}`))).toBeTruthy());
       const mode = view.getByText(/Executed search:/);
@@ -24,7 +26,7 @@ test("Calendar keeps one hybrid search request and reports the executed mode as 
       expect(view.queryByRole("link", { name: /Find related/ })).toBeNull();
       expect(requests.find((r) => r.operation === "timeline")?.body).toMatchObject({ query: "communications", mode: "hybrid" });
       expect(requests.some((r) => r.operation === "search")).toBe(false);
-    } finally { view.unmount(); fetch.mockRestore(); }
+    } finally { view.unmount(); client.clear(); fetch.mockRestore(); }
   }
   expect(messageSearchState(new URLSearchParams("mode=keyword"), "radio rehearsal").request.mode).toBe("hybrid");
 });

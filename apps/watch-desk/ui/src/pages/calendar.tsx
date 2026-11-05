@@ -4,6 +4,7 @@ import moment from "moment-timezone";
 import type { RouteMeta } from "../route-registry";
 import { useSource, useDebounced } from "../components/source-data";
 import { DayTimeline } from "../components/day-timeline";
+import { CalendarReview } from "../components/calendar-review";
 import {
   utcDate,
   monthBounds,
@@ -52,6 +53,7 @@ export default function Calendar() {
       : {},
   });
   const messages = result.data?.messages ?? [];
+  const refreshing = result.isPending || result.isFetching || query !== debounced;
   const canonical = new URLSearchParams(params);
   canonical.set("date", date);
   canonical.set("view", view);
@@ -133,7 +135,7 @@ export default function Calendar() {
           />
         </label>
       </section>
-      {(result.isPending || result.isFetching) && <p role="status">Loading schedule…</p>}
+      {refreshing && <p role="status">Loading schedule…</p>}
       {result.isError && (
         <div className="alert" role="alert">
           Calendar could not be loaded. {result.error.message}
@@ -146,8 +148,10 @@ export default function Calendar() {
         className={`timeline-section ${date === today ? "is-today" : ""}`}
         aria-labelledby="schedule-heading"
       >
-        {result.data?.meta.windowLimited === true && !result.isFetching && !result.isError && (
-          <p role="status">Result limit reached. Narrow the range or search.</p>
+        {result.data?.meta.windowLimited === true && !refreshing && !result.isError && (
+          <p className="calendar-result-limit" role="status">
+            Partial source results. Narrow the range or search; counts cover returned records only.
+          </p>
         )}
         <div className="timeline-toolbar">
           <h2 id="schedule-heading">
@@ -164,10 +168,10 @@ export default function Calendar() {
           </h2>
         </div>
         <DayTimeline
-          messages={result.isError || result.isFetching ? [] : messages}
+          messages={result.isError || refreshing ? [] : messages}
           sourceItems={
             dataset === "canonical"
-              ? result.isError || result.isFetching
+              ? result.isError || refreshing
                 ? []
                 : (result.data?.meta.timelineItems ?? [])
               : undefined
@@ -188,6 +192,20 @@ export default function Calendar() {
           }}
         />
       </section>
+      {dataset === "canonical" && result.data && !refreshing && !result.isError && (
+        <CalendarReview
+          items={result.data.meta.reviewItems}
+          limited={result.data.meta.windowLimited === true}
+          filtered={ships !== undefined || query.trim() !== ""}
+          returnTo={returnTo}
+          onShowAll={() => {
+            const next = new URLSearchParams(canonical);
+            next.delete("ships");
+            next.delete("q");
+            setParams(next);
+          }}
+        />
+      )}
     </div>
   );
 }

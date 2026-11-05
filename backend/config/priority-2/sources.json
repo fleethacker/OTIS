@@ -1,0 +1,23 @@
+[
+  {
+    "name": "amendment",
+    "file": "amendment.txt",
+    "sourceKey": "sha256:fca90b907a8366b75d546065dbfd1badc6de5f16807a6dc261c91cf0ef2d9039@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:original",
+    "factId": "a1"
+  },
+  {
+    "name": "cancellation",
+    "file": "cancellation.txt",
+    "sourceKey": "sha256:6f539fcbc4257198a70608a6508e94e7871da286f78513ab8ffe887f3057fb53@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:original",
+    "factId": null
+  },
+  {
+    "name": "conflicting-amendment",
+    "file": "conflicting-amendment.txt",
+    "sourceKey": "sha256:ef355813228d04b41259f08f7721b9b9794ba8222f6941d3a1f3a99779b5efa7@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:original",
+    "factId": "a1"
+  }
+]

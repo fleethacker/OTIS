@@ -33,6 +33,9 @@ pub fn router(app: Arc<App>) -> axum::Router {
             "/api/v1/settings/{operation}",
             post(crate::settings::handle),
         )
+        .route("/api/v1/work/{operation}", post(crate::work::handle))
+        .route("/api/v1/anchor/{operation}", post(crate::anchor::handle))
+        .route("/api/v1/planning/{operation}", post(crate::pb4t::handle))
         .route("/api/v1/source/status", get(crate::api::status))
         .route("/api/v1/messages/{operation}", post(crate::api::read))
         .route(

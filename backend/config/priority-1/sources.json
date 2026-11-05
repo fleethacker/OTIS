@@ -1,0 +1,30 @@
+[
+  {
+    "name": "original",
+    "file": "original.txt",
+    "sourceKey": "sha256:be1a29426ef93494dd36cb7e02375af787906c4638d053dac73dabcfdcb15515@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:original",
+    "factId": "a1"
+  },
+  {
+    "name": "unknown-deadline",
+    "file": "unknown-deadline.txt",
+    "sourceKey": "sha256:64a9e1346b4563ac914dde34e217819e8239e42a9e51692bb02cd0439312b678@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:unknown-deadline",
+    "factId": "a1"
+  },
+  {
+    "name": "unassigned",
+    "file": "unassigned.txt",
+    "sourceKey": "sha256:7f2a116b76a98dbb96fab62a39a55465dc9a4e349a51c08a70db3f9f9df1cd1f@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:unassigned",
+    "factId": "a1"
+  },
+  {
+    "name": "unrelated",
+    "file": "unrelated.txt",
+    "sourceKey": "sha256:86409b0bb9735f2a8b8d877196336221a2bb36f5aeba75ab32eea1f79c464073@priority-1-demo-v1",
+    "logicalEventId": "meridian-2026-11-10:unrelated",
+    "factId": null
+  }
+]

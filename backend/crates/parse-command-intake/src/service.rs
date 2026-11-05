@@ -141,10 +141,11 @@ impl Service {
                 .identify_body(&job.receipt_id, &email.body, &self.config.revision)?;
             let at =
                 UtcTimestamp::new(&job.received_at).map_err(|_| IntakeError("receipt_time"))?;
+            let command_ids = self.config.command_ids();
             let context = ParseContext {
                 revision: &self.config.revision,
                 recorded_at: &at,
-                command_ids: &[],
+                command_ids: &command_ids,
                 security_override: None,
                 reference_time: None,
                 budget: &budget,

@@ -564,3 +564,45 @@ fn missing_year_uses_intake_year_and_named_locations_are_valid_without_map_geome
     .unwrap();
     assert!(no_month.core.get().activities[0].at.is_none());
 }
+
+#[test]
+fn priority_one_scenario_has_real_source_evidence_and_known_and_unresolved_windows() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/priority-1");
+    let sources: Vec<Value> =
+        serde_json::from_slice(&std::fs::read(root.join("sources.json")).unwrap()).unwrap();
+    for source in sources {
+        let body = std::fs::read_to_string(root.join(source["file"].as_str().unwrap())).unwrap();
+        let parsed = run(&body, None).unwrap();
+        let core = serde_json::to_value(parsed.core.get()).unwrap();
+        assert_eq!(
+            source["sourceKey"]
+                .as_str()
+                .unwrap()
+                .split('@')
+                .next()
+                .unwrap(),
+            core["id"]
+        );
+        assert_eq!(core["status"], "partial");
+        assert!(
+            parsed
+                .audit
+                .iter()
+                .any(|entry| entry.get().kind == "source_preserved")
+        );
+        if source["name"] == "unrelated" {
+            assert!(parsed.core.get().activities.is_empty());
+        } else {
+            assert_eq!(core["activities"][0]["type"], "communications_plan_window");
+            assert_eq!(core["activities"][0]["id"], "a1");
+            if source["name"] == "original" {
+                assert_eq!(core["activities"][0]["start_at"], "2026-11-10T09:00:00Z");
+                assert_eq!(core["activities"][0]["end_at"], "2026-11-10T09:45:00Z");
+                assert_eq!(core["contacts"][0]["unit"], "EXTERNAL UNIT");
+            } else if source["name"] == "unknown-deadline" {
+                assert!(core["activities"][0]["start_at"].is_null());
+                assert!(core["activities"][0]["end_at"].is_null());
+            }
+        }
+    }
+}

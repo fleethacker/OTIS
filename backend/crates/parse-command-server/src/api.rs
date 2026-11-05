@@ -85,9 +85,32 @@ impl App {
         self.search.canonical(id, revision).await?;
         Ok(())
     }
+    /// Exact linked-source access for shared workflow mutations and evidence reads.
+    pub async fn scope_for_owner(&self, key: &str, owner: &str) -> Result<()> {
+        let effective = crate::station::effective_scope(self.store()?, owner).await?;
+        if key.starts_with("legacy:") {
+            if !effective.unrestricted() {
+                return Err(Error::new("not_found", "Source is outside current access"));
+            }
+            return self.scope(key).await;
+        }
+        let (id, revision) = split_key(key)?;
+        let core = self.search.canonical(id, revision).await?;
+        if !effective.matches(&core)? {
+            return Err(Error::new("not_found", "Source is outside current access"));
+        }
+        Ok(())
+    }
     pub async fn execute(&self, op: &str, request: ReadRequest, owner: &str) -> Result<Value> {
-        let filters = request.filters.validate()?;
+        let mut filters = request.filters.validate()?;
+        let effective = crate::station::effective_scope(self.store()?, owner).await?;
         if request.dataset == Dataset::Legacy {
+            if !effective.unrestricted() {
+                return Err(Error::new(
+                    "permission_denied",
+                    "Legacy fixtures cannot satisfy the selected source scope",
+                ));
+            }
             if !self.config.allow_fixtures {
                 return Err(Error::config("Legacy fixture mode is disabled"));
             }
@@ -124,10 +147,27 @@ impl App {
                 json!({"dataset":"legacy","executedMode":"fixture","limit":100}),
             ));
         }
+        filters
+            .as_array_mut()
+            .ok_or_else(Error::unavailable)?
+            .extend(effective.search_filters()?);
+        if matches!(op, "detail" | "evidence") {
+            self.scope_for_owner(
+                request
+                    .key
+                    .as_deref()
+                    .ok_or_else(|| Error::invalid("message key is required"))?,
+                owner,
+            )
+            .await?;
+        }
         match op {
-            "list" => self.list(request, filters, owner).await,
+            "list" => self.list(request, filters, owner, &effective).await,
             "options" => self.options(filters).await,
-            "search" => self.search_messages(request, filters, owner).await,
+            "search" => {
+                self.search_messages(request, filters, owner, &effective)
+                    .await
+            }
             "detail" => {
                 self.detail(
                     request
@@ -137,7 +177,7 @@ impl App {
                 )
                 .await
             }
-            "timeline" => self.timeline(request, filters, owner).await,
+            "timeline" => self.timeline(request, filters, owner, &effective).await,
             "evidence" => self.evidence_request(request).await,
             _ => Err(Error::new("not_found", "Unknown read operation")),
         }
@@ -168,7 +208,13 @@ impl App {
             json!({"filterOptions":{"messageTypes":values("types"),"originators":values("originators")}}),
         ))
     }
-    async fn list(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
+    async fn list(
+        &self,
+        request: ReadRequest,
+        filters: Value,
+        owner: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
         let fingerprint = read_fingerprint("browse", owner, &request, &filters);
         let (id, page, mut state) = if let Some(value) = &request.page_token {
             let (id, page) = pagination::split_token(value)?;
@@ -249,6 +295,9 @@ impl App {
             let store = self.store()?;
             for hit in hits.iter().take(PAGE_SIZE) {
                 let core = &hit["_source"];
+                if !effective.matches(core)? || !request.filters.matches(core)? {
+                    return Err(Error::unavailable());
+                }
                 headers.insert(
                     format!("{}@{}", text(core, "id"), text(core, "revision")),
                     presentation::message_header(core),
@@ -267,6 +316,7 @@ impl App {
         request: ReadRequest,
         filters: Value,
         owner: &str,
+        effective: &crate::station::ResolvedScope,
     ) -> Result<Value> {
         if request.query.trim().is_empty() {
             return Err(Error::invalid("Use message browsing for an empty query"));
@@ -345,6 +395,7 @@ impl App {
             if doc["found"] != true
                 || doc["_source"]["id"] != *id
                 || doc["_source"]["revision"] != *revision
+                || !effective.matches(&doc["_source"])?
                 || !request.filters.matches(&doc["_source"])?
             {
                 stale += 1;
@@ -545,7 +596,13 @@ impl App {
         }
         Ok(json!({"messageKey":key,"records":audits,"retrievedAt":now(),"state":"available"}))
     }
-    async fn timeline(&self, request: ReadRequest, filters: Value, owner: &str) -> Result<Value> {
+    async fn timeline(
+        &self,
+        request: ReadRequest,
+        filters: Value,
+        owner: &str,
+        effective: &crate::station::ResolvedScope,
+    ) -> Result<Value> {
         let from = timestamp(
             request
                 .from
@@ -571,6 +628,7 @@ impl App {
         }
         let mut filters = filters;
         let mut search_limited = false;
+        let mut matched_keys = None;
         if !request.query.trim().is_empty() {
             let search_request = ReadRequest {
                 query: request.query.clone(),
@@ -579,12 +637,20 @@ impl App {
                 ..ReadRequest::default()
             };
             let results = self
-                .search_messages(search_request, filters.clone(), owner)
+                .search_messages(search_request, filters.clone(), owner, effective)
                 .await?;
             search_limited = results["meta"]["windowLimited"] == true
                 || results["messages"]
                     .as_array()
                     .is_some_and(|v| v.len() >= 20);
+            matched_keys = Some(
+                results["messages"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|v| v["sourceMessageId"].as_str().map(str::to_owned))
+                    .collect::<std::collections::BTreeSet<_>>(),
+            );
             let pairs = results["messages"]
                 .as_array()
                 .into_iter()
@@ -623,12 +689,30 @@ impl App {
             let store = self.store()?;
             for hit in hits.iter().take(100) {
                 let core = &hit["_source"];
+                if !effective.matches(core)? || !request.filters.matches(core)? {
+                    return Err(Error::unavailable());
+                }
                 let (mut dated, mut unresolved) = presentation::timeline(core, &from, &to)?;
                 items.append(&mut dated);
                 review.append(&mut unresolved);
                 messages.push(presentation::message(core, store, false, None, None).await?);
             }
         }
+        let current_events = crate::anchor_timeline::overlay(
+            self,
+            owner,
+            effective,
+            &request,
+            matched_keys.as_ref(),
+            crate::anchor_timeline::Rows {
+                from: &from,
+                to: &to,
+                messages: &mut messages,
+                items: &mut items,
+                review: &mut review,
+            },
+        )
+        .await?;
         if items.len() + review.len() > 2048 {
             return Err(Error::new(
                 "resource_exhausted",
@@ -638,7 +722,7 @@ impl App {
         Ok(envelope(
             messages,
             "Resolved source times are displayed as extracted facts requiring review, not operational confirmation",
-            json!({"dataset":"canonical","timelineItems":items,"reviewItems":review,"from":from,"to":to,"windowLimited":hits.len()>100||search_limited,"messageLimit":100}),
+            json!({"dataset":"canonical","timelineItems":items,"reviewItems":review,"currentEvents":current_events,"from":from,"to":to,"windowLimited":hits.len()>100||search_limited,"messageLimit":100}),
         ))
     }
     pub async fn source_status(&self) -> Result<Value> {
@@ -752,7 +836,7 @@ impl Filters {
         }
         Ok(json!(filters))
     }
-    fn matches(&self, core: &Value) -> Result<bool> {
+    pub(crate) fn matches(&self, core: &Value) -> Result<bool> {
         self.validate()?;
         let commands = core["command_ids"].as_array();
         if self.no_commands {

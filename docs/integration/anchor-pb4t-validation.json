@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-05",
+  "initialMain": "aabfacb8403df000937e4ad4e0d49d466525e791",
+  "integrationBase": "665d36ed8c467a5d4fc95ee961d6e6ce551aa285",
+  "rust": {
+    "passed": 119,
+    "failed": 0,
+    "ignored": 48
+  },
+  "liveWorkflowAndNotificationTests": 14,
+  "sourceRoutingTests": 4,
+  "ui": {
+    "passed": 147,
+    "failed": 0,
+    "postLayoutCalendarChecks": 28,
+    "postMonthTitleChecks": 23,
+    "postRebasePassed": 147,
+    "postRebaseBrowser": "passed"
+  },
+  "clippy": "passed",
+  "rustFormat": "passed",
+  "generatedTypes": "passed",
+  "uiTypecheck": "passed",
+  "uiLint": "passed",
+  "uiBuild": "passed",
+  "go": "passed",
+  "combinedHttpChecks": 46,
+  "browserFlows": 5,
+  "browserErrors": 0,
+  "narrowMonthOverflow": "passed",
+  "finalCancellationChecks": 20,
+  "finalPermissionChecks": 11,
+  "finalRestartChecks": 14,
+  "arkManagedChecks": {
+    "status": "unverified",
+    "reason": "Compatible Ark CLI absent"
+  },
+  "scope": "Fictional Meridian explicit amendment/cancellation and P-01 two-event planning subset"
+}

@@ -37,7 +37,7 @@ import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
 
 interface ScheduleEntry {
-  message: MessageRecord;
+  message: MessageRecord | null;
   event: ExtractedEvent;
   start: Date;
   end: Date;
@@ -48,6 +48,15 @@ interface ScheduleEntry {
   point?: boolean;
   reviewRequired?: boolean;
   sourceType?: string;
+}
+export interface LocalCalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  unit: string;
+  href: string;
+  reviewRequired: boolean;
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -74,13 +83,14 @@ function sourceType(message: MessageRecord) {
   return typeof value === "string" ? value : undefined;
 }
 function eventKey(row: ScheduleEntry) {
-  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}`;
+  return `${row.message?.sourceMessageId ?? "local-plan"}#${row.event.sourceEventId ?? String(row.event.id)}`;
 }
 function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const { format: utc } = useDisplayTime();
   const disclose = useContext(WeekDisclosure);
   const information = [
     row.title,
+    row.message === null ? "Local training plan — separately authored" : undefined,
     row.sourceType,
     row.point === true
       ? `Point: ${utc(row.event.startAt)}`
@@ -116,7 +126,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
       className="calendar-event-card"
       data-calendar-event={eventKey(row)}
       to={row.href}
-      aria-label={`${row.title}, source record`}
+      aria-label={`${row.title}, ${row.message === null ? "local plan" : "source record"}`}
       title={information}
     >
       {content}
@@ -127,6 +137,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
 export function DayTimeline({
   messages,
   sourceItems,
+  localEvents = [],
   from,
   to,
   interval,
@@ -139,6 +150,7 @@ export function DayTimeline({
 }: {
   messages: MessageRecord[];
   sourceItems?: TimelineItem[];
+  localEvents?: LocalCalendarEvent[];
   from: number;
   to: number;
   interval: number;
@@ -244,6 +256,37 @@ export function DayTimeline({
             ];
           })
           .sort((a, b) => +a.start - +b.start);
+  for (const local of localEvents) {
+    const start = Date.parse(local.start);
+    const end = Date.parse(local.end);
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      end <= start ||
+      start >= to ||
+      end <= from
+    ) {
+      continue;
+    }
+    rows.push({
+      message: null,
+      event: create(ExtractedEventSchema, {
+        sourceEventId: local.id,
+        title: local.title,
+        unit: local.unit,
+        startAt: timestampFromDate(new Date(start)),
+        endAt: timestampFromDate(new Date(end)),
+      }),
+      start: new Date(start),
+      end: new Date(end),
+      title: local.title,
+      href: local.href,
+      before: start < from,
+      after: end > to,
+      reviewRequired: local.reviewRequired,
+    });
+  }
+  rows.sort((a, b) => +a.start - +b.start);
   const minimumHeight = (row: ScheduleEntry) => measurements.titles.get(eventKey(row)) ?? 40;
   const columns = Math.max(
     1,
@@ -413,7 +456,7 @@ export function DayTimeline({
               {showIndex ? (
                 <ul>
                   {rows.map((row) => (
-                    <li key={String(row.event.id)}>
+                    <li key={eventKey(row)}>
                       <AppButton
                         variant="ghost"
                         onClick={() => {
@@ -459,7 +502,9 @@ export function DayTimeline({
                       </p>
                     ))}
                     <Link className="btn btn-primary" to={selected.href}>
-                      Source record · {selected.message.sourceMessageId}
+                      {selected.message === null
+                        ? "Local plan and decision history"
+                        : `Source record · ${selected.message.sourceMessageId}`}
                     </Link>
                   </>
                 )

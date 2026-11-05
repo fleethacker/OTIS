@@ -1,9 +1,8 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ConnectQueryProvider } from "@defense-unicorns/ark-ui";
 import { useIdentity } from "./hooks/useIdentity";
 import { routes } from "./route-registry";
 import { AppLayout } from "./components/app-layout";
-import { sessionInterceptor } from "./components/session-access";
+import { SessionQueryProvider } from "./components/session-queries";
 
 /**
  * App is the single mount point — it wires:
@@ -49,8 +48,8 @@ function AppContent() {
 
 export function App() {
   return (
-    <ConnectQueryProvider baseUrl="/" interceptors={[sessionInterceptor]}>
+    <SessionQueryProvider>
       <AppContent />
-    </ConnectQueryProvider>
+    </SessionQueryProvider>
   );
 }

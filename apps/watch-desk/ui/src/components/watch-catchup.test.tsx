@@ -157,7 +157,8 @@ test("standalone recurrences show the rule's times and panel times display to th
   const row: WatchChange = { ...base, id: "fictional-r", title: "Fictional recurring", messageKey: `sha256:${"d".repeat(64)}@fictional-r1`,
     issuedAt: "2026-11-05T15:25:07.250Z", recordedAt: "2026-11-05T15:26:41.009Z",
     addedEvents: [recurring("r1", "FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0"), recurring("r2", "FREQ=DAILY"), recurring("r3", "FREQ=WEEKLY;BYDAY=MO"),
-      recurring("r4", "FREQ=DAILY;BYHOUR=8"), recurring("r5")] };
+      recurring("r4", "FREQ=DAILY;BYHOUR=8"), recurring("r5"),
+      { factId: "c1", title: "crypto changeover", kind: "unresolved", commandIds: ["demo-meridian"], recurring: true, recurrence: { rule: "FREQ=DAILY;BYHOUR=13;BYMINUTE=30" } }] };
   const requests: Record<string, unknown>[] = [];
   const fetch = spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
     const body = JSON.parse(String(init?.body)); requests.push(body); return Response.json(page([row], body));
@@ -171,7 +172,7 @@ test("standalone recurrences show the rule's times and panel times display to th
     const lines = [...view.container.querySelectorAll(".turnover-addition")].map((p) => p.textContent!.replace(/\s+/g, " ").trim());
     expect(lines.map((line) => line.split(" · ").slice(0, 2).join(" · "))).toEqual([
       "Adds communications check · 0800Z, 2000Z daily", "Adds communications check · daily", "Adds communications check · recurring",
-      "Adds communications check · daily", "Adds communications check · recurring"]);
+      "Adds communications check · daily", "Adds communications check · recurring", "Adds crypto changeover · 1330Z daily"]);
     expect(view.container.textContent).not.toContain("(time not set)");
     expect(view.container.querySelector(".turnover-addition span")?.getAttribute("title")).toBe("FREQ=DAILY;BYHOUR=8,20;BYMINUTE=0");
     // Minutes on screen, full precision in tooltips.

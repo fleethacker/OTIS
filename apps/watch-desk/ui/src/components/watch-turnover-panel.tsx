@@ -37,9 +37,9 @@ function AddedEventLine({ event, commands }: { event: AddedEvent; commands: Comm
   const clock = (value: string) => formatSinceUTC(Date.parse(value)).split(" ").slice(-1)[0];
   const recurrence = typeof event.recurrence === "object" ? event.recurrence : undefined;
   const recurring = event.recurring || event.recurrence;
-  // A standalone recurrence has no single time: show the rule's times of day, never an inferred one.
-  const standalone = event.kind === "recurring" && !at;
-  const times = standalone ? recurrenceTimes(recurrence?.rule) : [];
+  // Without a single time, show the rule's own times of day, never an inferred one.
+  const times = at ? [] : recurrenceTimes(recurrence?.rule);
+  const standalone = !at && (event.kind === "recurring" || times.length > 0);
   const cadence = recurrenceCadence(recurrence?.rule);
   return <p className="turnover-addition">
     Adds {at ? <time dateTime={at} title={at}>{clock(at)}{event.end && Number.isFinite(Date.parse(event.end)) ? `–${clock(event.end)}` : ""} </time> : standalone ? "" : "(time not set) "}

@@ -429,6 +429,10 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .calendar-event-card .optask-icon { flex: none; width: 14px; height: 14px; }
 .calendar-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Day resources share the existing time grid; columns, not the page, may overflow. */
+.ship-calendar-resources .rbc-time-header .rbc-header { overflow-wrap: anywhere; white-space: normal; min-height: 28px; }
+.ship-calendar-resources .rbc-time-header-content { min-width: 0; }
+
 /* Wheel zoom changes the time scale inside the fixed calendar viewport. */
 .calendar-scroll[data-time-zoom] .rbc-time-content { overflow-y: auto; overscroll-behavior: contain; }
 .calendar-scroll[data-time-zoom] .ship-calendar .rbc-timeslot-group { min-height: var(--calendar-slot-height); flex: 1 0 var(--calendar-slot-height); }

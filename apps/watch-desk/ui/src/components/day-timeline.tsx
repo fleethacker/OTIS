@@ -34,6 +34,7 @@ import { structuredPayload } from "./structured-message-format";
 import { CalendarAccessibility } from "./calendar-accessibility";
 import { useCalendarZoom } from "./calendar-zoom";
 import { calendarLanes, useCalendarMeasurements } from "./calendar-layout";
+import { inShipColumns, shipResources, type ShipResource } from "./calendar-resources";
 
 interface ScheduleEntry {
   message: MessageRecord;
@@ -49,6 +50,7 @@ interface ScheduleEntry {
   sourceType?: string;
   commandIds?: string[];
   commands: Command[];
+  resourceId?: string;
 }
 const WeekDisclosure = createContext<((row: ScheduleEntry) => void) | null>(null);
 
@@ -75,7 +77,7 @@ function sourceType(message: MessageRecord) {
   return typeof value === "string" ? value : undefined;
 }
 function eventKey(row: ScheduleEntry) {
-  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}`;
+  return `${row.message.sourceMessageId}#${row.event.sourceEventId ?? String(row.event.id)}${row.resourceId ? `:${row.resourceId}` : ""}`;
 }
 function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   const { format: utc } = useDisplayTime();
@@ -126,7 +128,7 @@ function EventContent({ event: row }: EventProps<ScheduleEntry>) {
   );
   return (
     <div className="calendar-event-copy">
-      <CommandChips ids={row.commandIds} commands={row.commands} />
+      {row.resourceId === undefined && <CommandChips ids={row.commandIds} commands={row.commands} />}
       {target}
     </div>
   );
@@ -145,6 +147,8 @@ export function DayTimeline({
   onDay,
   expanded = false,
   commands = [],
+  shipLayout = "combined",
+  selectedShips,
 }: {
   messages: MessageRecord[];
   sourceItems?: TimelineItem[];
@@ -158,12 +162,14 @@ export function DayTimeline({
   onDay?: (date: string) => void;
   expanded?: boolean;
   commands?: Command[];
+  shipLayout?: "combined" | "side";
+  selectedShips?: Set<string>;
 }) {
   const navigate = useNavigate();
   const { zone, mode, label, format } = useDisplayTime();
   const dialog = useRef<HTMLDialogElement>(null);
   const calendarRoot = useRef<HTMLDivElement>(null);
-  useCalendarZoom(calendarRoot, view, interval, `${from}:${to}`);
+  useCalendarZoom(calendarRoot, view, interval, `${from}:${to}:${shipLayout}:${JSON.stringify(selectedShips ? [...selectedShips] : null)}`);
   const measurements = useCalendarMeasurements(calendarRoot);
   const [selected, setSelected] = useState<ScheduleEntry | null>(null);
   const [showIndex, setShowIndex] = useState(false);
@@ -257,20 +263,18 @@ export function DayTimeline({
             ];
           })
           .sort((a, b) => +a.start - +b.start);
+  const side = view === "day" && shipLayout === "side";
+  const resources = shipResources(commands, rows, selectedShips);
+  const displayed = side ? inShipColumns(rows, resources) : rows;
   const minimumHeight = (row: ScheduleEntry) => measurements.titles.get(eventKey(row)) ?? 40;
-  const columns = Math.max(
-    1,
-    ...calendarLanes(
-      rows.map((row) => ({
-        event: row,
-        top: Math.max(from, +row.start),
-        height: Math.max(
-          +row.end - Math.max(from, +row.start),
-          (minimumHeight(row) / measurements.height) * 86400000
-        ),
-      }))
-    ).map((row) => row.columns)
-  );
+  const laneGroups = side ? resources.map((r) => displayed.filter((row) => row.resourceId === r.id)) : [rows];
+  const columns = Math.max(1, ...laneGroups.flatMap((group) => calendarLanes(
+    group.map((row) => ({
+      event: row,
+      top: Math.max(from, +row.start),
+      height: Math.max(+row.end - Math.max(from, +row.start), (minimumHeight(row) / measurements.height) * 86400000),
+    }))
+  ).map((row) => row.columns)));
   const layout: DayLayoutFunction<ScheduleEntry> = ({ events, slotMetrics }) => {
     // The library's public hook types slotMetrics as any; narrow it at this boundary.
     const metrics = slotMetrics as {
@@ -296,6 +300,9 @@ export function DayTimeline({
     }));
   };
   const midnight = civilHour(civilDate(new Date(from), zone), 0, zone);
+  if (side && resources.length === 0) {
+    return <p className="calendar-result-limit">No valid ship calendars selected. Choose a ship or Unassigned.</p>;
+  }
   return (
     <>
       <div
@@ -304,7 +311,7 @@ export function DayTimeline({
           view === "month"
             ? undefined
             : ({
-                "--calendar-grid-min-width": `${52 + (view === "week" ? 7 : 1) * columns * 128}px`,
+                "--calendar-grid-min-width": `${52 + (side ? resources.length : view === "week" ? 7 : 1) * Math.max(side ? 220 : 128, columns * 128)}px`,
               } as CSSProperties)
         }
         className={`calendar-scroll ${view === "week" ? `week-scroll ${expanded ? "week-expanded" : "week-fit"}` : ""}`}
@@ -314,15 +321,19 @@ export function DayTimeline({
       >
         <WeekDisclosure.Provider value={view === "week" ? disclose : null}>
           <CalendarAccessibility>
-            <Calendar<ScheduleEntry>
-              className={`ship-calendar ${view === "week" ? "ship-calendar-week" : ""}`}
+            <Calendar<ScheduleEntry, ShipResource>
+              className={`ship-calendar ${view === "week" ? "ship-calendar-week" : ""}${side ? " ship-calendar-resources" : ""}`}
               key={`${zone}-${from}-${to}`}
               localizer={localizer}
               date={new Date(midnight)}
               view={view}
               views={["day", "week", "month"]}
               toolbar={false}
-              events={rows}
+              events={displayed}
+              resources={side ? resources : undefined}
+              resourceIdAccessor="id"
+              resourceTitleAccessor="title"
+              resourceAccessor="resourceId"
               onNavigate={(date) => onDay?.(civilDate(date, zone))}
               onView={() => {
                 /* View is owned by the URL controls. */
@@ -361,7 +372,7 @@ export function DayTimeline({
                 ]
                   .filter(Boolean)
                   .join(" "),
-                style: { borderLeft: `5px solid ${commandColor(commandKeys(row.commandIds)[0], commands)}` },
+                style: { borderLeft: `5px solid ${commandColor(row.resourceId ?? commandKeys(row.commandIds)[0], commands)}` },
               })}
               formats={{
                 timeGutterFormat: (date) =>
@@ -377,6 +388,7 @@ export function DayTimeline({
               components={{
                 eventWrapper: SourceEventWrapper,
                 event: EventContent,
+                resourceHeader: ({ resource }) => <span title={resource?.name}>{resource?.title}</span>,
                 // Public 1.20 hook; @types 1.16 predates it. Suppress a retained
                 // indicator when changing to a window that excludes the real now.
                 ...{

@@ -196,6 +196,8 @@ export default function Calendar() {
         </div>
         <DayTimeline
           commands={roster.isError ? [] : roster.data?.commands}
+          shipLayout={params.get("shipLayout") === "side" ? "side" : "combined"}
+          selectedShips={ships}
           messages={result.isError || refreshing ? [] : messages}
           sourceItems={
             dataset === "canonical"

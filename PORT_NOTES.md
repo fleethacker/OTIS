@@ -111,3 +111,24 @@ Restored the original title-only assertion changed in P2, and added the sibling-
 assertion to the new command test. Parker's reported failing assertions remain intact.
 Files: `day-timeline.tsx`, `calendar-layout.ts`, `command-roster.test.tsx`,
 `pages/calendar.test.tsx`, `index.css`. Static diff check only; container rerun pending.
+
+## P3 — Side-by-side Day
+
+- **Files:** UI `components/{calendar-resources,calendar-resources.test,day-timeline}`,
+  `pages/calendar.tsx`, `index.css`.
+- **Contract:** UI-only `shipLayout=combined|side`; existing `ships` JSON and Week's
+  `layout=expanded` are unchanged. Side is applied only to Day. Source links retain
+  the whole Calendar URL. No server or permission changes (view state only).
+- **Behavior:** RBC resources render selected named ships plus Unassigned; empty
+  selection stays empty. Shared facts are copied for presentation only into each
+  explicitly assigned visible ship, never inferred from unit. Combined/Month/Week
+  remain deduplicated. Parker's lane algorithm runs per resource; 220px minimum
+  columns scroll inside the calendar. Header labels replace repeated ship chips in
+  Side; title controls retain the P2 follow-up contract, icons and exact-time hover.
+- **Tests:** shared point duplication/deduplication, unchanged source objects,
+  empty/invalid selection, Unassigned despite a reported unit, independent collision
+  lanes, exact source/return URLs and Week ignoring `shipLayout=side`.
+- **Validation:** static diff review only; Claude owns typecheck, UI suite and
+  desktop/mobile/zoom/collision screenshots. No builds/tests run locally.
+- **TODO / Parker:** confirm minimum column width and review placement; no resource
+  layout is added to Week. No source timestamps/durations or counts are fabricated.

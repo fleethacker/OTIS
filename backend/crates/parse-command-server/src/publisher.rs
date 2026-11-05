@@ -799,7 +799,7 @@ fn templates(model: Option<&str>) -> Vec<(String, String)> {
     templates.push(("parse-command-message-options-v1".into(),json!({"size":0,"timeout":"5s","track_total_hits":false,"query":filters,"aggs":{"types":{"terms":{"field":"type","size":32,"order":{"_key":"asc"}}},"originators":{"terms":{"field":"originator","size":256,"order":{"_key":"asc"}}}}}).to_string()));
     // Recurrences include unsupported/unanchored rules for review in every view;
     // their occurrences are bounded in Rust, never by issue/receipt time.
-    templates.push(("parse-command-timeline-v1".into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","should":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}},{"nested":{"path":"recurrences","query":{"match_all":{}}}}],"minimum_should_match":1}},"sort":["id","revision"]}).to_string()));
+    templates.push((TIMELINE_TEMPLATE.into(),json!({"size":101,"timeout":"5s","track_total_hits":false,"query":{"bool":{"filter":"__FILTERS__","should":[{"nested":{"path":"activities","query":{"bool":{"should":[{"range":{"activities.start_at":{"lt":"__TO__"}}},{"bool":{"must_not":{"exists":{"field":"activities.start_at"}}}}],"minimum_should_match":1}}}},{"nested":{"path":"recurrences","query":{"match_all":{}}}}],"minimum_should_match":1}},"sort":["id","revision"]}).to_string()));
     templates.push(("parse-command-evidence-list-v1".into(),json!({"size":65,"timeout":"5s","query":{"bool":{"filter":"__FILTERS__"}},"sort":["id"],"search_after":"__AFTER__"}).to_string()));
     templates.push(("parse-command-source-status-v1".into(),json!({"size":0,"track_total_hits":true,"aggs":{"embedding_states":{"terms":{"field":"embedding_status","size":3}}}}).to_string()));
     templates
@@ -845,7 +845,10 @@ mod recurrence_tests {
     }
     #[test]
     fn timeline_keeps_recurrence_only_and_unanchored_candidates_with_the_same_filters_and_bound() {
-        let (_,template)=templates(None).into_iter().find(|(name,_)| name=="parse-command-timeline-v1").unwrap();
+        assert_eq!(TIMELINE_TEMPLATE, "parse-command-timeline-v2");
+        let published = templates(None);
+        assert!(published.iter().all(|(name, _)| name != "parse-command-timeline-v1"));
+        let (_,template)=published.into_iter().find(|(name,_)| name==TIMELINE_TEMPLATE).unwrap();
         let value:Value=serde_json::from_str(&template.replace("{{#toJson}}filters{{/toJson}}","[]").replace("{{to}}","2026-11-06T00:00:00Z")).unwrap();
         assert_eq!(value["size"],101);
         assert_eq!(value["query"]["bool"]["filter"],json!([]));

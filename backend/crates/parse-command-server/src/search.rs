@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use std::time::Duration;
 pub const MESSAGES: &str = "parse-command-messages-v1";
 pub const MESSAGE_ALIAS: &str = "parse-command-messages";
+pub const TIMELINE_TEMPLATE: &str = "parse-command-timeline-v2";
 pub const PASSAGES: &str = "parse-command-search-passages-minilm-v1";
 pub const AUDIT: &str = "parse-command-intake-test-audit-v1";
 pub const INGEST: &str = "parse-command-embed-minilm-v1";

@@ -110,7 +110,7 @@ Rust installs and calls these versioned templates after cluster health preflight
 | --- | --- |
 | `parse-command-messages-list-v1` | Filtered PIT browsing; metadata only |
 | `parse-command-message-detail-v1` | Exact message/revision lookup |
-| `parse-command-timeline-v1` | Bounded activity retrieval for the UTC window |
+| `parse-command-timeline-v2` | Bounded activity and recurrence candidates for the UTC window |
 | `parse-command-evidence-list-v1` | Revision/fact/kind-filtered audit paging |
 | `parse-command-source-status-v1` | Embedding-state aggregation |
 | `parse-command-passages-keyword-v2` | BM25 narrative/subject search |
@@ -121,6 +121,10 @@ The server supplies validated template parameters, not browser-provided DSL.
 `publisher.rs::templates` owns their source. Older v1 passage templates remain
 available to existing test tools; the application uses v2's larger candidate
 window. The existing local ingest pipeline/model pins remain unchanged.
+
+The recurrence-aware timeline uses v2. This server does not publish or replace
+`parse-command-timeline-v1`, so older application instances can keep using v1
+on the same cluster without overwriting the recurrence query.
 
 ## Timeline semantics
 

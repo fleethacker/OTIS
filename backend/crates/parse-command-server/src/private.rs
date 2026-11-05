@@ -59,10 +59,11 @@ impl Private {
         self.state
             .reserve("demo_sessions", &key, expires, 256)
             .await?;
+        let pin = crate::watch::session_pin(&self.state, &identity.owner).await?;
         let mut row = Record::new(
             "demo_session",
             &key,
-            json!({"role":role,"user_epoch":user.record.payload["epoch"]}),
+            json!({"role":role,"user_epoch":user.record.payload["epoch"],"watch_since":pin}),
         );
         row.owner = identity.owner;
         row.expires = expires;

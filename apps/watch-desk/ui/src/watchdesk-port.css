@@ -38,10 +38,19 @@
 .ships-sidebar :is(button, input):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .command-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; vertical-align: baseline; }
 .command-chip { color: white; font-size: 10px; font-weight: 600; line-height: 1.4; padding: 0 3px; border-radius: 2px; overflow-wrap: anywhere; }
+/* The page scrolls; an open catch-up panel never shrinks the calendar below its normal height. */
+#root:has(.calendar-page.calendar-with-ships) { height: auto; min-height: 100dvh; }
+main:has(.calendar-page.calendar-with-ships) { flex: 1 0 auto; }
+.calendar-page.calendar-with-ships { height: auto; }
+.calendar-with-ships .calendar-main .timeline-section { flex: none; }
+.calendar-page.calendar-with-ships .calendar-scroll { flex: none; height: clamp(460px, calc(100dvh - 380px), 780px); min-height: 420px; }
+.calendar-page.calendar-with-ships .calendar-scroll .ship-calendar { min-height: 420px; }
+.calendar-with-ships > .ships-sidebar { align-self: start; position: sticky; top: 8px; max-height: calc(100dvh - 16px); }
 @media (max-width: 900px) {
   .calendar-page.calendar-with-ships,
   .calendar-page.calendar-with-ships:has(.ships-sidebar[data-expanded="false"]) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
   .ships-content { max-height: 30vh; }
+  .calendar-with-ships > .ships-sidebar { position: static; max-height: 30vh; }
   .ships-sidebar[data-expanded="false"] .ships-header { justify-content: flex-start; margin-bottom: 0; }
 }
 @media (hover: none) { .ship-choice .ship-only { opacity: 1; } }
@@ -99,6 +108,14 @@
 .calendar-with-ships .ship-calendar .rbc-event .calendar-event-copy .calendar-event-card { position: static; height: auto; }
 
 /* Watch fields and message suggestions inside the shared Settings form. */
+.settings-content .settings-command-list { grid-column: 1 / -1; display: grid; gap: 5px; font-size: 12px; }
+.settings-content .settings-command-choices { max-height: 200px; overflow: auto; border: 1px solid var(--color-border-strong); border-radius: var(--radius-field); padding: 8px; background: var(--color-base-100); }
+.settings-content .settings-command-choices label { display: flex; align-items: center; gap: 8px; padding: 4px; }
+.settings-content .settings-command-choices input { width: auto; flex: none; }
+.settings-content .settings-command-choices small { display: block; color: var(--color-bc-muted); overflow-wrap: anywhere; }
+.settings-content .context-suggestion-dismiss { background: var(--color-base-100); color: var(--color-base-content); border: 1px solid var(--color-border-strong); }
+.settings-content .context-suggestion-dismiss:hover:not(:disabled) { background: var(--color-base-300); }
+.settings-content .context-suggestion-dismiss:disabled { color: var(--color-bc-muted); cursor: not-allowed; }
 /* Disabled fields stay legible on both theme surfaces, including Safari text fill. */
 .settings-content fieldset:disabled :is(.input, .select),
 .settings-content :is(.input, .select):disabled {
@@ -135,8 +152,9 @@
 /* P5: source-owned turnover, independent of scheduled date/search and existing inbox. */
 .watch-turnover { flex: none; margin-bottom: 10px; background: var(--color-base-100); border: 1px solid var(--color-base-300); font-size: 12px; }
 .watch-turnover summary { cursor: pointer; padding: 8px 12px; font-weight: 600; }
-.turnover-content { max-height: 32vh; overflow: auto; padding: 0 12px 12px; overflow-wrap: anywhere; }
-.turnover-content p { margin: 8px 0; }
+.turnover-content { padding: 0 12px 12px; overflow-wrap: anywhere; }
+.turnover-groups { max-height: 50vh; overflow: auto; }
+.turnover-content p { margin: 6px 0; }
 .turnover-boundary { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .turnover-boundary label { display: grid; gap: 4px; }
 .turnover-boundary input { font-variant-numeric: tabular-nums; width: min(290px, 100%); }
@@ -147,3 +165,39 @@
 .turnover-content h3 { font-weight: 600; margin-top: 12px; }
 .turnover-hidden { padding-left: 8px; }
 .turnover-content [role="alert"] { color: var(--color-error); }
+/* Per-person catch-up uses existing theme tokens; review is not notification read state. */
+.watch-turnover .turnover-since { font-size: 14px; font-weight: 600; }
+.watch-turnover .turnover-note { color: var(--color-bc-muted); margin: 2px 0; }
+.turnover-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 6px 0 8px; }
+.turnover-head .turnover-since { margin: 0; }
+.turnover-actions { margin-left: auto; order: 2; }
+.turnover-change { order: 1; }
+.turnover-change > summary { display: inline; padding: 0; cursor: pointer; font-weight: 400; color: var(--color-primary); text-decoration: underline; text-underline-offset: 3px; }
+.turnover-change[open] { order: 3; flex-basis: 100%; }
+.turnover-change[open] > summary { display: block; margin-bottom: 6px; }
+.turnover-row-heading, .turnover-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.turnover-source { flex: 1 1 180px; min-width: 0; }
+.turnover-reviewed-control { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.turnover-reviewed .turnover-source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-turnover .btn { border: 1px solid var(--color-border-strong); background: var(--color-base-100); color: var(--color-base-content); min-height: 32px; height: auto; white-space: normal; }
+.watch-turnover .btn-primary { border-color: var(--color-primary); background: var(--color-primary); color: var(--color-primary-content); }
+.watch-turnover .btn:hover:not(:disabled) { box-shadow: inset 0 0 0 1px currentColor; }
+.watch-turnover .btn:disabled { color: var(--color-bc-muted); background: var(--color-base-200); border-color: var(--color-base-300); cursor: not-allowed; }
+.watch-turnover .turnover-calendar-link { text-decoration: none; font-size: 12px; }
+.watch-turnover input.input { background: var(--color-base-100); border-color: var(--color-border-strong); color: var(--color-base-content); max-width: 100%; }
+.turnover-addition { font-weight: 500; }
+.notification-panel .notification-catchup-link { display: block; padding: 8px 12px; border-bottom: 1px solid var(--color-base-300); color: var(--color-primary); text-decoration: underline; }
+.calendar-new-marker { align-self: flex-start; flex: none; display: inline-block; font-size: 10px; line-height: 14px; padding: 0 3px; border-radius: 2px; background: var(--color-base-100); color: var(--color-primary); font-weight: 650; }
+.calendar-with-ships .ship-calendar .rbc-event.calendar-catchup-focus { outline: 3px solid var(--color-info); outline-offset: -3px; box-shadow: 0 0 0 2px var(--color-base-100); }
+@media (max-width: 600px) {
+  .turnover-boundary label { width: 100%; min-width: 0; }
+  .turnover-boundary input { width: 100%; }
+  .turnover-reviewed .turnover-source { flex-basis: 100%; }
+}
+/* Demo-only catch-up reset in Settings > Preferences. */
+.settings-content .settings-demo-reset { display: grid; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-border-strong); }
+.settings-content .settings-demo-reset h3 { margin: 0; font-size: 14px; }
+.settings-content .settings-demo-reset fieldset { display: grid; gap: 6px; border: 0; padding: 0; margin: 0; }
+.settings-content .settings-demo-reset :is(label, .settings-demo-time) { display: flex; align-items: center; gap: 8px; }
+.settings-content .settings-demo-reset input[type="radio"] { width: auto; flex: none; }
+.settings-content .settings-demo-reset small { color: var(--color-bc-muted); font-size: 12px; }

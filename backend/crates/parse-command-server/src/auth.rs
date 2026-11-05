@@ -544,10 +544,15 @@ impl Auth {
             key,
             &json!({"refresh":refresh_token,"id_token":id_token.to_string()}),
         )?;
+        // The pinned Since last watch boundary survives token refresh.
+        let pin = match previous.map(|p| &p.payload[crate::watch::PIN]) {
+            Some(pin) if pin.is_object() => pin.clone(),
+            _ => crate::watch::session_pin(&self.store, &owner).await?,
+        };
         let mut row = Record::new(
             "oidc_session",
             key,
-            json!({"username":username,"email":email,"role":role,"groups":groups,"nonce":nonce,"valid_until":valid_until,"tokens":encrypted,"user_epoch":user.record.payload["epoch"]}),
+            json!({"username":username,"email":email,"role":role,"groups":groups,"nonce":nonce,"valid_until":valid_until,"tokens":encrypted,"user_epoch":user.record.payload["epoch"],"watch_since":pin}),
         );
         row.owner = owner;
         row.expires = expires;

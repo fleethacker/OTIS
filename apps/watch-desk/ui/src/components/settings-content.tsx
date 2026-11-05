@@ -13,6 +13,7 @@ import {
 import { commandName, useCommands } from "./command-roster";
 import { UNASSIGNED } from "./ship-calendars";
 import { WatchSuggestions } from "./watch-suggestions";
+import { DemoReset } from "./watch-demo-reset";
 /** Comma- or space-separated Zulu times, normalized to the stored ascending list. */
 export function parseTurnovers(text: string): string[] {
   const values = text.split(/[\s,]+/).map((v) => v.trim().toUpperCase()).filter(Boolean);
@@ -170,6 +171,7 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
           </form>
         </>
       )}
+      {tab === "preferences" && roster.data?.assignmentEnabled === true && <DemoReset />}
       {tab === "command" && (
         <form
           onSubmit={(e) => {
@@ -179,7 +181,29 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
         >
           <fieldset disabled={!admin || pending}>
             <label>
-              Ship
+              Own ship
+              <SelectInput
+                className="select-sm"
+                value={form.commandIds[0] ?? ""}
+                onChange={(e) =>
+                  update(
+                    "commandIds",
+                    e.target.value
+                      ? [e.target.value, ...form.commandIds.filter((v) => v !== e.target.value)]
+                      : form.commandIds
+                  )
+                }
+              >
+                {form.commandIds.length === 0 && <option value="">Not set</option>}
+                {[...new Set([...form.commandIds, ...(options.data?.commands ?? [])])].map((v) => (
+                  <option key={v} value={v}>
+                    {commandName(`unit:${v}`, roster.data?.commands ?? [])}
+                  </option>
+                ))}
+              </SelectInput>
+            </label>
+            <label>
+              Ship display name
               <TextInput
                 className="input-sm"
                 maxLength={120}
@@ -214,46 +238,19 @@ export function SettingsContent({ active = true }: { active?: boolean }) {
                 onChange={(e) => update("actionAuthority", e.target.value.toUpperCase())}
               />
             </label>
-            <label>
-              Calendar commands
-              <SelectInput
-                className="select-sm settings-commands"
-                multiple
-                value={form.commandIds}
-                onChange={(e) =>
-                  update(
-                    "commandIds",
-                    [...e.target.selectedOptions].map((v) => v.value)
-                  )
-                }
-              >
-                {[...new Set([...(options.data?.commands ?? []), ...form.commandIds])].map((v) => (
-                  <option key={v}>{v}</option>
+            <div className="settings-command-list" role="group" aria-label="Calendar commands">
+              <span>Calendar commands</span>
+              <div className="settings-command-choices">
+                {[...new Set([...(options.data?.commands ?? []), ...form.commandIds])].map((id) => (
+                  <label key={id}>
+                    <input type="checkbox" checked={form.commandIds.includes(id)} onChange={(e) =>
+                      update("commandIds", e.target.checked ? [...form.commandIds, id] : form.commandIds.filter((v) => v !== id))} />
+                    <span>{roster.data?.commands.find((command) => command.id === id)?.name ?? "Name unavailable"}{" "}<small>{id}</small></span>
+                  </label>
                 ))}
-              </SelectInput>
-            </label>
-            <label>
-              Own ship
-              <SelectInput
-                className="select-sm"
-                value={form.commandIds[0] ?? ""}
-                onChange={(e) =>
-                  update(
-                    "commandIds",
-                    e.target.value
-                      ? [e.target.value, ...form.commandIds.filter((v) => v !== e.target.value)]
-                      : form.commandIds
-                  )
-                }
-              >
-                {form.commandIds.length === 0 && <option value="">Not set</option>}
-                {[...new Set([...form.commandIds, ...(options.data?.commands ?? [])])].map((v) => (
-                  <option key={v} value={v}>
-                    {commandName(`unit:${v}`, roster.data?.commands ?? [])}
-                  </option>
-                ))}
-              </SelectInput>
-            </label>
+                {!options.data?.commands.length && form.commandIds.length === 0 && <small>No commands available.</small>}
+              </div>
+            </div>
             <label>
               Operation / exercise
               <TextInput

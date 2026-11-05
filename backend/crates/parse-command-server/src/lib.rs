@@ -3,6 +3,7 @@ pub mod proto {
     connectrpc::include_generated!();
 }
 pub mod auth;
+pub mod calendar;
 pub mod casualties;
 pub mod changes;
 pub mod commands;
@@ -20,6 +21,7 @@ pub mod publisher;
 pub mod recurrence;
 pub mod search;
 pub mod settings;
+pub mod watch;
 pub use error::{Error, Result};
 
 pub mod api;

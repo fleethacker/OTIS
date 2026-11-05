@@ -52,12 +52,12 @@ test("Admin gear opens settings without navigation and preserves edits across cl
     await act(async () => fireEvent.click(gear));
     const modal = within(view.getByRole("dialog", { name: "Settings" }));
     fireEvent.click(modal.getByRole("button", { name: "Command", exact: true }));
-    fireEvent.change(modal.getByLabelText("Ship"), { target: { value: "CHANGED SHIP" } });
+    fireEvent.change(modal.getByLabelText("Ship display name"), { target: { value: "CHANGED SHIP" } });
     await act(async () => fireEvent.click(modal.getByRole("button", { name: "Close settings" })));
     expect(view.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(gear);
     await act(async () => fireEvent.click(gear));
-    expect((modal.getByLabelText("Ship") as HTMLInputElement).value).toBe("CHANGED SHIP");
+    expect((modal.getByLabelText("Ship display name") as HTMLInputElement).value).toBe("CHANGED SHIP");
     expect(modal.getByText("Unsaved")).toBeTruthy();
     await act(async () => {
       fireEvent(

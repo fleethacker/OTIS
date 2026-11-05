@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mailbox calendar (demo stand-in)</title>
+  <link rel="stylesheet" href="calendar.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Mailbox calendar (demo stand-in)</h1>
+    <p class="banner">UNCLASSIFIED // FICTIONAL DEMO DATA</p>
+  </header>
+
+  <section class="toolbar" aria-label="Week navigation">
+    <button type="button" id="prev" aria-label="Previous week">&larr; Prev</button>
+    <button type="button" id="next" aria-label="Next week">Next &rarr;</button>
+    <button type="button" id="latest" title="Jump to the week of the most recent event">Latest event</button>
+    <span id="range" class="range" aria-live="polite"></span>
+    <span class="spacer"></span>
+    <span id="count" class="count"></span>
+    <span id="poll" class="poll"></span>
+  </section>
+
+  <p id="notice" class="notice" role="status" hidden></p>
+
+  <main>
+    <div id="scroller" class="scroller">
+      <div id="grid" class="grid"></div>
+    </div>
+    <p class="foot">All times UTC. Read-only view of the demo calendar; refreshes every 3 seconds.</p>
+  </main>
+
+  <script src="calendar.js"></script>
+</body>
+</html>

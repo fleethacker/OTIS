@@ -11,6 +11,35 @@ pub struct Config {
     pub listen: String,
     pub auto_role: Option<String>,
     pub allow_fixtures: bool,
+    pub demo_calendar: Option<DemoCalendar>,
+}
+
+// Deliberately not Debug: configuration includes a server-side credential.
+#[derive(Clone)]
+pub struct DemoCalendar {
+    pub url: reqwest::Url,
+    pub user: String,
+    pub password: String,
+}
+impl DemoCalendar {
+    pub fn from_values(flag: &str, endpoint: &str, user: &str, password: &str) -> Result<Option<Self>> {
+        // Calendar writes require the explicit environment opt-in, not fixture defaults.
+        if flag != "true" || endpoint.is_empty() {
+            return Ok(None);
+        }
+        let url = reqwest::Url::parse(endpoint).map_err(|_| Error::config("Invalid demo calendar configuration"))?;
+        if url.scheme() != "http"
+            || !matches!(url.host_str(), Some("calendar" | "localhost" | "127.0.0.1"))
+            || !url.username().is_empty() || url.password().is_some()
+            || url.query().is_some() || url.fragment().is_some()
+            || user.is_empty() || user.len() > 64
+            || !user.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))
+            || url.path() != format!("/{user}/otis/") || password.is_empty()
+        {
+            return Err(Error::config("Invalid demo calendar configuration"));
+        }
+        Ok(Some(Self { url, user: user.into(), password: password.into() }))
+    }
 }
 fn demo_flag(value: &str, configured: bool) -> Result<bool> {
     match value {
@@ -85,6 +114,12 @@ impl Config {
             auto_role: (auth.mode == "local_demo" && !auto.is_empty()).then_some(auto),
             auth,
             allow_fixtures: get("PARSE_COMMAND_ALLOW_FIXTURES", "false") == "true",
+            demo_calendar: DemoCalendar::from_values(
+                &get("PARSE_COMMAND_WATCHDESK_DEMO", ""),
+                &get("PARSE_COMMAND_DEMO_CALENDAR_URL", ""),
+                &get("PARSE_COMMAND_DEMO_CALENDAR_USER", ""),
+                &get("PARSE_COMMAND_DEMO_CALENDAR_PASSWORD", ""),
+            )?,
         })
     }
 }
@@ -200,6 +235,21 @@ mod tests {
                 )
                 .is_ok()
             );
+        }
+    }
+
+    #[test]
+    fn calendar_requires_explicit_flag_url_and_local_credentials() {
+        let password = std::process::id().to_string();
+        let url = "http://calendar:5232/sailor/otis/";
+        for flag in ["", "false"] {
+            assert!(DemoCalendar::from_values(flag, url, "sailor", &password).unwrap().is_none());
+        }
+        assert!(DemoCalendar::from_values("true", "", "sailor", &password).unwrap().is_none());
+        assert!(DemoCalendar::from_values("true", url, "sailor", &password).unwrap().is_some());
+        assert!(DemoCalendar::from_values("true", url, "sailor", "").is_err());
+        for invalid in ["http://example.com/sailor/otis/", "http://calendar:5232/other/otis/", "http://calendar:5232/sailor/otis/?query", "http://calendar:5232/sailor/otis/#fragment"] {
+            assert!(DemoCalendar::from_values("true", invalid, "sailor", &password).is_err());
         }
     }
 

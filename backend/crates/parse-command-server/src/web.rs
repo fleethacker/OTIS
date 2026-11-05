@@ -59,6 +59,7 @@ pub async fn whoami(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<J
 }
 pub async fn session(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Json<Value>> {
     let identity = app.headers_identity(&headers).await?;
+    let (since, basis) = crate::watch::since(&app, &headers, &identity.owner).await?;
     let (expires, session_expires) = if app.config.auth.mode == "oidc" {
         let (access, session) = app.auth.deadlines(cookie(&headers)).await?;
         (Some(access), session)
@@ -66,7 +67,7 @@ pub async fn session(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<
         (None, None)
     };
     Ok(Json(
-        json!({"identity":identity,"scope":crate::private::token_hash(&format!("{}\0{}",identity.owner,identity.role)),"expiresAt":expires,"sessionExpiresAt":session_expires,"mode":app.config.auth.mode}),
+        json!({"identity":identity,"scope":crate::private::token_hash(&format!("{}\0{}",identity.owner,identity.role)),"expiresAt":expires,"sessionExpiresAt":session_expires,"mode":app.config.auth.mode,"since":since,"basis":basis}),
     ))
 }
 pub async fn renew(State(app): State<Arc<App>>, headers: HeaderMap) -> Result<Json<Value>> {

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Sourced by the official nginx entrypoint (*.envsh) before the templates in
+# /etc/nginx/templates are rendered. Builds CALENDAR_BASIC_AUTH, the Basic
+# credential nginx adds to proxied calendar requests, so the browser never
+# receives it.
+#
+# CALENDAR_USER defaults to sailor. CALENDAR_PASSWORD, if unset, is read from
+# the calendar users file (/run/calendar/users) mounted read-only by Compose.
+
+: "${CALENDAR_USER:=sailor}"
+if [ -z "${CALENDAR_PASSWORD:-}" ] && [ -r /run/calendar/users ]; then
+    CALENDAR_PASSWORD=$(sed -n "s/^${CALENDAR_USER}://p" /run/calendar/users | head -n 1)
+fi
+if [ -z "${CALENDAR_PASSWORD:-}" ]; then
+    echo "16-basic-auth.envsh: no password for ${CALENDAR_USER}; set CALENDAR_PASSWORD" >&2
+    return 1 2>/dev/null || exit 1
+fi
+CALENDAR_BASIC_AUTH=$(printf '%s:%s' "$CALENDAR_USER" "$CALENDAR_PASSWORD" | base64 -w0)
+export CALENDAR_BASIC_AUTH

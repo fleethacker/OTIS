@@ -31,7 +31,7 @@ export function calendarPreferencesFromParams(params: URLSearchParams, current: 
     shipLayout: params.get("shipLayout") === "side" ? "side" : "combined",
     layout: params.get("layout") === "expanded" ? "expanded" : "fit",
     ships: params.get("ships"),
-    ...(choice !== null && (choice === "auto" || isoBoundary(choice) !== undefined)
+    ...(choice !== null && (choice === "auto" || choice === "session" || isoBoundary(choice) !== undefined)
       ? { turnoverChoice: choice, turnoverOpen: !closed } : {}),
   };
 }

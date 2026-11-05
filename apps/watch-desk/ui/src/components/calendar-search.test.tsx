@@ -22,6 +22,10 @@ test("Calendar keeps one hybrid search request and reports the executed mode as 
       await waitFor(() => expect(view.getByText(new RegExp(`Executed search: ${executedMode ?? "not reported by server"}`))).toBeTruthy());
       const mode = view.getByText(/Executed search:/);
       expect(mode.closest('[role="status"], [aria-live]')).toBeNull();
+      const outlook = view.getByRole("button", { name: "Sync to Outlook" });
+      expect(outlook.closest(".timeline-toolbar")).not.toBeNull();
+      expect(outlook.closest(".calendar-controls")).toBeNull();
+      expect(view.getByLabelText("UTC date").closest(".calendar-controls")).not.toBeNull();
       expect(view.queryByRole("combobox", { name: "Search mode" })).toBeNull();
       expect(view.queryByRole("link", { name: /Find related/ })).toBeNull();
       expect(requests.find((r) => r.operation === "timeline")?.body).toMatchObject({ query: "communications", mode: "hybrid" });

@@ -61,6 +61,59 @@ services:
       retries: 12
       start_period: 30s
 
+  # Stand-in for the mailbox calendar (CalDAV). Reachable on the compose network
+  # as calendar:5232; owner user sailor; collection /sailor/otis/. Demo-only
+  # credential lives in ./calendar/users.
+  calendar:
+    image: docker.io/tomsquest/docker-radicale:3.5.4.0
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    volumes:
+      - ./calendar/config:/config/config:ro
+      - ./calendar/users:/config/users:ro
+      - calendar-data:/data
+    networks:
+      - mail
+    healthcheck:
+      # Any HTTP answer (401 without credentials) proves the server is up.
+      test: ["CMD-SHELL", "wget -S -q -O /dev/null http://127.0.0.1:5232/ 2>&1 | grep -q 'HTTP/1.[01] [1-5]'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+  # Read-only calendar viewer: http://127.0.0.1:1580/
+  calendar-viewer:
+    image: nginx:1.28.0-alpine
+    restart: unless-stopped
+    read_only: true
+    depends_on:
+      calendar:
+        condition: service_healthy
+    environment:
+      CALENDAR_USER: sailor
+      # CALENDAR_PASSWORD is read from the mounted users file unless set here.
+    ports:
+      - "127.0.0.1:1580:80"
+    volumes:
+      - ./calendar-viewer/html:/usr/share/nginx/html:ro
+      - ./calendar-viewer/templates:/etc/nginx/templates:ro
+      - ./calendar-viewer/docker-entrypoint.d/16-basic-auth.envsh:/docker-entrypoint.d/16-basic-auth.envsh:ro
+      - ./calendar/users:/run/calendar/users:ro
+    tmpfs:
+      - /etc/nginx/conf.d
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    networks:
+      - mail
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
 networks:
   mail:
     driver: bridge
@@ -70,3 +123,4 @@ volumes:
   mail-data:
   mail-state:
   mail-logs:
+  calendar-data:

@@ -45,15 +45,20 @@ pub fn auth_config() -> auth::Config {
     }
 }
 pub async fn app() -> Arc<App> {
+    app_with_demo(false).await
+}
+/// `demo` is the Watch Desk demo flag (`PARSE_COMMAND_WATCHDESK_DEMO`).
+pub async fn app_with_demo(demo: bool) -> Arc<App> {
     let state = store().await;
     parse_command_server::settings::bootstrap(&state)
         .await
         .unwrap();
-    let intake = parse_command_intake::config::Config::load(std::path::Path::new(concat!(
+    let mut intake = parse_command_intake::config::Config::load(std::path::Path::new(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../config/demo-compose-intake.json"
     )))
     .unwrap();
+    intake.demo_fixture_assignments = demo;
     let config = Config {
         intake,
         search: std::env::var("PARSE_COMMAND_TEST_OPENSEARCH_URL").unwrap(),
@@ -64,6 +69,45 @@ pub async fn app() -> Arc<App> {
         listen: "127.0.0.1:0".into(),
         auto_role: Some("viewer".into()),
         allow_fixtures: false,
+        demo_calendar: None,
+    };
+    Arc::new(App {
+        search: Search::new(config.search.clone()).unwrap(),
+        auth: auth::Auth::new(config.auth.clone(), state.clone()).unwrap(),
+        config,
+        private: Private::new(state.clone()),
+        custody: state,
+        notification_sync: Arc::new(tokio::sync::Mutex::new(())),
+        status: Status {
+            ready: Arc::new(AtomicBool::new(false)),
+            model: Arc::new(AtomicBool::new(false)),
+        },
+        inference: Arc::new(tokio::sync::Semaphore::new(1)),
+    })
+}
+/// App whose state endpoints are unreachable: only checks that fail before any
+/// state read can pass.
+pub fn offline_app(demo: bool) -> Arc<App> {
+    let mut intake = parse_command_intake::config::Config::load(std::path::Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../config/demo-compose-intake.json"
+    )))
+    .unwrap();
+    assert!(!intake.demo_fixture_assignments);
+    intake.demo_fixture_assignments = demo;
+    let state =
+        parse_command_state::Store::new("http://127.0.0.1:9", ".parse-command-offline").unwrap();
+    let config = Config {
+        intake,
+        search: "http://127.0.0.1:9".into(),
+        state_index: state.index().into(),
+        auth: auth_config(),
+        tokenizer: "unused".into(),
+        tokenizer_hash: String::new(),
+        listen: "127.0.0.1:0".into(),
+        auto_role: None,
+        allow_fixtures: false,
+        demo_calendar: None,
     };
     Arc::new(App {
         search: Search::new(config.search.clone()).unwrap(),

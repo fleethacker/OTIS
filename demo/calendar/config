@@ -1,0 +1,31 @@
+# Radicale configuration for the demo "mailbox calendar" stand-in.
+#
+# LOCAL DEMO ONLY. This server stands in for an Exchange-style mailbox
+# calendar. The credential in ./users is fictional and public (like
+# config/postfix-accounts.cf); never reuse it anywhere real. Plain HTTP,
+# plaintext htpasswd, and no TLS are deliberate for a loopback-only demo.
+
+[server]
+hosts = 0.0.0.0:5232
+
+[auth]
+type = htpasswd
+htpasswd_filename = /config/users
+# Plain keeps the file readable and lets the viewer proxy reuse the same
+# demo credential. The image also ships bcrypt, which a real deployment would use.
+htpasswd_encryption = plain
+# Seconds of delay after a failed login.
+delay = 1
+
+[rights]
+# A user may read and write only collections under their own /<user>/ path.
+type = owner_only
+
+[storage]
+filesystem_folder = /data/collections
+
+[web]
+type = none
+
+[logging]
+level = info

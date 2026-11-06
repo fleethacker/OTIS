@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="light dark">
 <title>OTIS · Keeping the Watch</title>
-<meta name="description" content="OTIS — Operational Tasking Integration System. A judge briefing on turning naval message traffic into a source-linked watch picture. Keeping the Watch.">
+<meta name="description" content="OTIS helps the Sailor on watch turn supported naval messages into searchable tasking and a consolidated schedule. Find what is due, check the time, and return to the original order.">
 <meta name="theme-color" content="#061e2a">
 <meta property="og:type" content="website">
 <meta property="og:title" content="OTIS · Keeping the Watch">
-<meta property="og:description" content="Operational Tasking Integration System. From naval message traffic to a source-linked watch picture.">
+<meta property="og:description" content="You have the watch. OTIS brings supported naval message traffic into searchable tasking and one schedule, with the original order close at hand.">
 <meta property="og:url" content="https://fleethacker.github.io/OTIS/">
 <meta property="og:image" content="https://fleethacker.github.io/OTIS/assets/otis-logo.png">
 <meta property="og:image:alt" content="OTIS sea otter emblem — Keeping the Watch">
@@ -18,6 +18,15 @@
 <link rel="canonical" href="https://fleethacker.github.io/OTIS/">
 <link rel="icon" type="image/png" sizes="64x64" href="assets/otis-favicon.png">
 <link rel="apple-touch-icon" href="assets/otis-logo.png">
+<script>
+(() => {
+ let savedTheme;
+ try { savedTheme=localStorage.getItem('otis-theme'); } catch {}
+ const theme=savedTheme==='light'||savedTheme==='dark'?savedTheme:(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+ document.documentElement.dataset.theme=theme;
+ document.querySelector('meta[name="theme-color"]').setAttribute('content',theme==='dark'?'#081b25':'#f5f0df');
+})();
+</script>
 <style>
 :root{--paper:#f5f0df;--white:#fff;--ink:#092331;--muted:#4c606a;--rule:#d8d4c4;--teal:#796126;--dark:#061e2a;--deep:#081b25;--dark-text:#f5f0df;--dark-muted:#acbfc4;--dark-rule:#304a54;--mint:#e5cc88;--aqua:#a8d7eb;--amber:#efc988;--header:79px;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-synthesis:none;color:var(--ink);background:var(--paper)}
 *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:calc(var(--header) + 22px)}body{margin:0;font-size:16px;line-height:1.5}h1,h2,h3,p{margin:0}button,input{font:inherit}button,a{-webkit-tap-highlight-color:transparent;touch-action:manipulation}button{cursor:pointer}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--teal);outline-offset:5px}button:disabled{opacity:.5;cursor:default}[hidden]{display:none!important}a{color:inherit}.wrap{max-width:1392px;margin:0 auto;padding:0 5%}.masthead{position:sticky;top:0;z-index:20;background:#f5f0dff5;backdrop-filter:blur(16px);border-bottom:1px solid var(--rule)}.masthead-inner{min-height:79px;display:flex;align-items:center;justify-content:space-between;gap:25px}.brand{display:flex;align-items:center;gap:12px;color:var(--ink);text-decoration:none;font-size:20px;font-weight:750;letter-spacing:.16em;white-space:nowrap}.brand-logo{display:block;width:46px;height:46px;object-fit:contain;flex-shrink:0}.masthead-controls{display:flex;align-items:center;gap:22px}.section-links{display:flex;gap:22px}.section-links a{font-size:12px;text-decoration:none;color:var(--muted)}.section-links a:hover{color:var(--teal)}.control{background:none;border:1px solid var(--rule);color:var(--ink);border-radius:100px;padding:9px 14px;font-size:11px;line-height:1.4;white-space:nowrap}.control:hover{border-color:var(--teal)}.control[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}.motion-button{display:inline-flex;align-items:center;gap:7px}.motion-symbol{width:8px;height:10px;border-left:2px solid currentColor;border-right:2px solid currentColor;display:inline-block}.motion-button[aria-pressed=false] .motion-symbol{width:0;height:0;border:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:7px solid currentColor}.masthead-progress{height:2px;position:absolute;left:0;bottom:-1px;width:100%;pointer-events:none}.masthead-progress div{height:2px;background:var(--teal);transform:scaleX(0);transform-origin:left}
@@ -34,11 +43,70 @@ dialog{color:var(--ink);background:var(--paper);border:1px solid var(--rule);bor
 @media(pointer:coarse){.control,.source-action{min-height:44px}.text-button,.footer-tools button{min-height:44px;display:inline-flex;align-items:center}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}.packet{display:none!important}}
 @media print{:root{--paper:#fff;--ink:#092331;--muted:#435b64;--rule:#bdc9cd}html{scroll-behavior:auto;scroll-padding-top:0}body{font-size:11px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.wrap{padding:0;max-width:none}.masthead{position:static;border-bottom:1px solid var(--rule);background:#fff}.masthead-inner{min-height:50px}.masthead-controls,.hero-cta,.text-button,.source-action,.graphic-timer,.judge-head-right,.judge-tabs,.criterion-detail,.judge-foot,.footer-tools,.tour-status{display:none!important}.brand-logo{width:36px;height:36px}.otis-identity{gap:12px;margin-bottom:16px}.otis-emblem{width:72px;height:72px}.otis-name{font-size:23px}.otis-expansion{font-size:10px;margin-top:3px}.otis-motto{font-size:8px;margin-top:5px}.hero{padding:22px 0}.hero-topline{margin-bottom:15px}.hero-grid{grid-template-columns:1fr 1fr;gap:27px}h1{font-size:39px}.hero-subline{font-size:14px}.mission-pair{display:block;margin-top:15px}.mission-block{display:block;margin-top:12px;padding-top:10px}.mission-block h2{font-size:8px;margin-bottom:5px}.mission-block p{font-size:10px}.mission-graphic{padding:14px;box-shadow:none}.diagram-grid,.graphic-labels{grid-template-columns:1fr 18px 1.1fr;gap:5px}.source-token strong{font-size:8px}.source-token small{font-size:7px}.source-token,.wire{min-height:58px}.board-row{min-height:66px}.board-row strong{font-size:9px}.board-row small{font-size:7px}.source-token[aria-pressed=true]{transform:none}.graphic-footer{font-size:7px}.proof-strip{font-size:9px;margin-top:15px;padding-top:12px}.proof-items{gap:15px}.judge-section{background:white;color:var(--ink);padding:21px 0;border-top:1px solid var(--rule);break-inside:avoid}.judge-section:before{display:none}.judge-head .eyebrow{color:var(--teal);font-size:8px}.judge-head h2{font-size:24px}.print-criteria{display:block!important;margin-top:13px}.print-criteria article{padding:9px 0;border-top:1px solid var(--rule);break-inside:avoid}.print-criteria h3{font-size:12px;font-weight:600}.print-criteria p{font-size:10px;color:var(--muted);margin-top:4px}.bottom-strip{padding:18px 0;gap:30px;grid-template-columns:1fr 1fr}.bottom-strip h2{font-size:16px}.bottom-strip p{font-size:10px}.bottom-strip .eyebrow{font-size:8px}.footer{font-size:8px;padding:10px 0}dialog{display:none!important}.packet{display:none}.source-token,.board-row{transition:none}}
+.capabilities{padding-top:42px;padding-bottom:44px;border-top:1px solid var(--rule)}
+.capability-intro{display:grid;grid-template-columns:1fr 1fr;gap:54px;align-items:end;margin-bottom:27px}
+.capability-intro .eyebrow{color:var(--teal);margin-bottom:12px}
+.capability-intro h2{font-size:clamp(30px,3vw,43px);line-height:1.12;font-weight:600;letter-spacing:-.04em}
+.capability-intro>p{max-width:480px;font-size:15px;line-height:1.7;color:var(--muted)}
+.capability-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:28px;list-style:none;margin:0;padding:0}
+.capability-grid li{border-top:1px solid var(--rule);padding:22px 0 24px;break-inside:avoid}
+.capability-number{display:block;font-size:10px;font-weight:650;letter-spacing:.12em;color:var(--teal);margin-bottom:13px;font-variant-numeric:tabular-nums}
+.capability-grid h3{font-size:17px;line-height:1.35;font-weight:600;letter-spacing:-.02em;margin-bottom:9px}
+.capability-grid p{font-size:13px;line-height:1.7;color:var(--muted)}
+.capability-scope{border-top:1px solid var(--rule);padding-top:18px;font-size:12px;line-height:1.7;color:var(--muted);max-width:880px}
+.capability-scope+.capability-scope{margin-top:17px}
+.capability-scope strong{color:var(--ink);font-weight:600}
+@media(max-width:1100px){.capability-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px}.capability-intro{gap:32px}}
+@media(max-width:800px){.capability-intro{grid-template-columns:1fr;gap:17px}.capability-intro>p{max-width:620px}.capabilities{padding-top:33px;padding-bottom:33px}}
+@media(max-width:540px){.capabilities.wrap{padding-top:30px;padding-bottom:30px}.capability-grid{grid-template-columns:1fr}.capability-grid li{padding:19px 0 21px}.capability-intro h2{font-size:31px}.capability-intro>p{font-size:14px}.capability-number{margin-bottom:8px}}
+@media print{.capabilities{padding:22px 0}.capability-intro{grid-template-columns:1fr 1fr;gap:27px;margin-bottom:15px}.capability-intro h2{font-size:24px}.capability-intro>p{font-size:10px}.capability-grid{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:27px}.capability-grid li{padding:12px 0}.capability-number{font-size:8px;margin-bottom:5px}.capability-grid h3{font-size:12px;margin-bottom:5px}.capability-grid p,.capability-scope{font-size:10px}}
+
+:root{color-scheme:light}
+.masthead-inner{display:grid;grid-template-columns:auto 1fr auto}
+.masthead-controls{justify-content:flex-end}
+.theme-toggle{display:inline-flex;align-items:center;gap:7px;justify-self:end;min-height:38px}
+.theme-toggle svg{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.theme-toggle .theme-sun{display:none}
+:root[data-theme="dark"] .theme-toggle .theme-moon{display:none}
+:root[data-theme="dark"] .theme-toggle .theme-sun{display:block}
+@media screen{
+ :root[data-theme="dark"]{color-scheme:dark;--paper:#081b25;--ink:#f5f0df;--muted:#b0c1c8;--rule:#304650;--teal:#e5cc88}
+ :root[data-theme="dark"] .masthead{background:#081b25f5}
+ :root[data-theme="dark"] .source-text{background:#102e3a}
+ :root[data-theme="dark"] .selected-gate{background:#142f39}
+ :root[data-theme="dark"] .primary-link span{color:var(--paper)}
+ :root[data-theme="dark"] .judge-section .control[aria-pressed="true"]{background:#1c3b46}
+}
+@media(max-width:950px){
+ .masthead-inner{grid-template-columns:1fr auto;gap:12px;padding-top:12px;padding-bottom:12px}
+ .brand{grid-column:1;grid-row:1}
+ .theme-toggle{grid-column:2;grid-row:1}
+ .masthead-controls{grid-column:1/-1;grid-row:2;width:100%;justify-content:flex-end}
+ .section-links{margin-right:auto}
+}
+@media(pointer:coarse){.theme-toggle{min-height:44px}}
+@media print{.theme-toggle{display:none!important}.masthead-inner{display:flex;padding-top:0;padding-bottom:0}}
+
+.demo-section{padding-top:40px;padding-bottom:40px;border-top:1px solid var(--rule)}
+.demo-head{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:24px}
+.demo-head .eyebrow{color:var(--teal);margin-bottom:12px}
+.demo-head h2{font-size:clamp(30px,3vw,43px);line-height:1.12;font-weight:600;letter-spacing:-.04em}
+.demo-head>p{font-size:14px;color:var(--muted);line-height:1.7}
+.demo-recording{margin:0}
+.demo-frame{overflow:hidden;border:1px solid var(--rule);border-radius:15px;background:var(--dark);box-shadow:0 14px 35px #0c243014}
+.demo-frame video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-height:75vh;object-fit:contain;background:var(--dark);color:var(--dark-text);color-scheme:dark}
+.demo-frame video:focus-visible{outline:3px solid var(--mint);outline-offset:-4px}
+.demo-recording figcaption{display:flex;justify-content:space-between;gap:20px;padding-top:13px;font-size:12px;color:var(--muted)}
+.demo-recording figcaption a{color:var(--teal);text-underline-offset:4px}
+.demo-error{margin-top:12px;color:var(--muted);font-size:13px;line-height:1.7}
+@media(max-width:800px){.demo-head{display:block}.demo-head>p{margin-top:12px}}
+@media(max-width:540px){.demo-section.wrap{padding-top:30px;padding-bottom:30px}.demo-frame{border-radius:9px}.demo-head h2{font-size:31px}.demo-recording figcaption{font-size:11px}}
+@media print{.demo-section{padding:20px 0;break-inside:avoid}.demo-head{margin-bottom:10px}.demo-head h2{font-size:24px}.demo-head>p{font-size:10px}.demo-frame,.demo-error{display:none!important}.demo-recording figcaption{font-size:10px}}
 </style>
 </head>
 <body>
 <header class="masthead" id="masthead">
- <div class="wrap masthead-inner"><a class="brand" href="#mission" aria-label="OTIS, back to mission"><img class="brand-logo" src="assets/otis-logo.png" alt="" width="46" height="46">OTIS</a><div class="masthead-controls"><nav class="section-links" aria-label="Slick sheet sections"><a href="#mission">Mission</a><a href="#solution">Solution</a><a href="#criteria">Judge view</a></nav><button class="control motion-button" id="motion-toggle" aria-pressed="true" type="button"><span class="motion-symbol" aria-hidden="true"></span><span id="motion-label">Pause motion</span></button><button class="control" id="tour-toggle" type="button" aria-pressed="false">Guided scroll</button></div></div>
+ <div class="wrap masthead-inner"><a class="brand" href="#mission" aria-label="OTIS, back to the watch"><img class="brand-logo" src="assets/otis-logo.png" alt="" width="46" height="46">OTIS</a><div class="masthead-controls"><nav class="section-links" aria-label="Briefing sections"><a href="#mission">The watch</a><a href="#demo">Demo</a><a href="#capabilities">Capabilities</a><a href="#criteria">Judge view</a></nav><button class="control motion-button" id="motion-toggle" aria-pressed="true" type="button"><span class="motion-symbol" aria-hidden="true"></span><span id="motion-label">Pause motion</span></button><button class="control" id="tour-toggle" type="button" aria-pressed="false">Guided scroll</button></div><button class="control theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/></svg><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg><span id="theme-label">Dark mode</span></button></div>
  <div class="masthead-progress" aria-hidden="true"><div id="read-progress"></div></div>
 </header>
 <main>
@@ -47,13 +115,13 @@ dialog{color:var(--ink);background:var(--paper);border:1px solid var(--rule);bor
  <div class="hero-grid">
   <div class="hero-copy">
    <div class="otis-identity"><img class="otis-emblem" src="assets/otis-logo.png" alt="OTIS watchstanding sea otter emblem" width="108" height="108"><div><p class="otis-name">OTIS</p><p class="otis-expansion">Operational Tasking Integration System</p><p class="otis-motto">Keeping the Watch</p></div></div>
-   <h1 id="mission-title">Message traffic.<br><em>Mission clarity.</em></h1>
-   <p class="hero-subline">The order is in the message.<br>The watch needs a plan.</p>
+   <h1 id="mission-title">I have the watch.<br><em>You have the mission.</em></h1>
+   <p class="hero-subline">Know what’s due next.<br>Find the order behind it.</p>
    <div class="mission-pair">
-    <div class="mission-block"><h2>The mission<br>problem</h2><p>Dense operational orders make watchstanders reconstruct <strong>what matters, when to act, and where to verify it</strong>—across hundreds of lines of text.</p></div>
-    <div class="mission-block solution"><h2>Our<br>solution</h2><p>OTIS turns supported naval messages into a <strong>consolidated UTC watch picture</strong>, with local search and a direct path back to the source.</p></div>
+    <div class="mission-block"><h2>On your<br>watch</h2><p>A crypto changeover in one message. A report deadline in another. You read, cross-check, and copy the times into a schedule—then new traffic arrives. <strong>You’re responsible for getting the next action right.</strong></p></div>
+    <div class="mission-block solution"><h2>With<br>OTIS</h2><p>OTIS turns supported naval messages into <strong>searchable tasking and one consolidated schedule</strong>, helping you find what matters to your command and trace it back to the source.</p></div>
    </div>
-   <div class="hero-cta"><a class="primary-link" href="#criteria">See the mission value <span aria-hidden="true">↘</span></a><button class="text-button" type="button" id="pitch-open">The 30-second pitch</button></div>
+   <div class="hero-cta"><a class="primary-link" href="#demo">Watch demo <span aria-hidden="true">↘</span></a><button class="text-button" type="button" id="pitch-open">The 30-second pitch</button></div>
   </div>
   <div class="mission-graphic" id="solution" aria-label="Synthetic illustration of message facts becoming a reviewable watch timeline">
    <div class="graphic-head"><span class="eyebrow">From incoming order to next action</span><span class="scenario-tag">SYNTHETIC ILLUSTRATION</span></div>
@@ -77,11 +145,42 @@ dialog{color:var(--ink);background:var(--paper);border:1px solid var(--rule);bor
    <div class="graphic-timer" aria-hidden="true"><span id="workflow-progress"></span></div>
   </div>
  </div>
- <div class="proof-strip"><div class="proof-items"><span><i class="proof-dot" aria-hidden="true"></i><strong>14</strong> tested OPTASK types</span><span><i class="proof-dot" aria-hidden="true"></i>Local CPU search</span><span><i class="proof-dot" aria-hidden="true"></i>Source-linked review</span></div><button class="text-button" type="button" data-evidence>Evidence &amp; scope ↗</button></div>
+ <div class="proof-strip"><div class="proof-items"><span><i class="proof-dot" aria-hidden="true"></i><strong>14</strong> tested OPTASK types</span><span><i class="proof-dot" aria-hidden="true"></i>Zulu or local time</span><span><i class="proof-dot" aria-hidden="true"></i>Local search · Original sources</span></div><button class="text-button" type="button" data-evidence>Evidence &amp; scope ↗</button></div>
+</section>
+<section class="demo-section wrap" id="demo" aria-labelledby="demo-title">
+ <div class="demo-head"><div><div class="eyebrow">Watch the demo</div><h2 id="demo-title">See OTIS in action.</h2></div><p>The team’s recorded demonstration.</p></div>
+ <figure class="demo-recording">
+  <div class="demo-frame">
+   <video id="demo-video" controls playsinline preload="metadata" aria-label="OTIS demonstration video" aria-describedby="demo-caption">
+    <source src="https://github.com/user-attachments/assets/dbff970d-6c2c-439f-afee-a96526ad0685" type="video/mp4">
+    Your browser does not support embedded video. <a href="https://github.com/user-attachments/assets/dbff970d-6c2c-439f-afee-a96526ad0685" target="_blank" rel="noopener noreferrer">Open the OTIS demonstration</a>.
+   </video>
+  </div>
+  <figcaption id="demo-caption"><span>OTIS demo recording</span><a href="https://github.com/user-attachments/assets/dbff970d-6c2c-439f-afee-a96526ad0685" target="_blank" rel="noopener noreferrer">Open video ↗</a></figcaption>
+  <p class="demo-error" id="demo-error" role="status" hidden>The video could not load here. Use “Open video” to watch the recording.</p>
+ </figure>
+</section>
+<section class="capabilities wrap" id="capabilities" aria-labelledby="capabilities-title">
+ <div class="capability-intro">
+  <div><div class="eyebrow">What OTIS does for the Sailor</div><h2 id="capabilities-title">Take over the watch.<br>Get to the tasking.</h2></div>
+  <p>Catch up on traffic since turnover. Focus on the ships you’re watching. Check the next event, open the order behind it, and prepare an acknowledgement—all in the same watch desk.</p>
+ </div>
+ <ol class="capability-grid">
+  <li><span class="capability-number" aria-hidden="true">01 / INCOMING TRAFFIC</span><h3>Bring the tasking into view.</h3><p>OTIS monitors a configured inbox and extracts activities, frequency plans, crypto changeovers, reporting requirements, locations, and contacts from supported OPTASK layouts.</p></li>
+  <li><span class="capability-number" aria-hidden="true">02 / WATCH TURNOVER</span><h3>Catch up since the last watch.</h3><p>Review published messages issued since a selected UTC watch boundary. Filter by ship, see sent and received times separately, and open each message’s processing history.</p></li>
+  <li><span class="capability-number" aria-hidden="true">03 / YOUR WATCH PICTURE</span><h3>Focus on the ships you’re watching.</h3><p>Select ships and compare their day schedules side by side, or browse a week or month. See timed activities and supported recurring changeovers in Zulu or your selected time zone.</p></li>
+  <li><span class="capability-number" aria-hidden="true">04 / FIND A MESSAGE</span><h3>Search beyond the exact wording.</h3><p>One search combines keywords and meaning. Narrow message results by type, sender, and issue date, then open the message you need.</p></li>
+  <li><span class="capability-number" aria-hidden="true">05 / CHECK THE ORDER</span><h3>Go back to what the message says.</h3><p>Open a schedule item’s source message. Switch between labeled USMTF fields, the original text, and the recorded intake and processing history.</p></li>
+  <li><span class="capability-number" aria-hidden="true">06 / MESSAGE LOCATIONS</span><h3>See the locations on a map.</h3><p>When a message contains usable coordinates, view its points and supported shapes on a map. Pan and zoom using bundled map data.</p></li>
+  <li><span class="capability-number" aria-hidden="true">07 / ACKNOWLEDGEMENT</span><h3>Prepare the response for review.</h3><p>Choose an acknowledgement type and generate a formatted AKNLDG draft using the source message and configured command details. Save it privately or copy it; the draft remains unsent.</p></li>
+  <li><span class="capability-number" aria-hidden="true">08 / TRAFFIC STATUS</span><h3>Know when traffic needs attention.</h3><p>In-app notifications flag new messages, intake and publication failures, and recovery. Open the related message when available, and keep track of what you’ve read.</p></li>
+ </ol>
+ <p class="capability-scope"><strong>Built to run locally.</strong> OTIS retains accepted source emails, avoids duplicate message entries, and retries interrupted work. The application, search, and maps run locally without a GPU; disconnected use requires prepared runtime assets and the configured local services.</p>
+ <p class="capability-scope"><strong>The order stays the reference.</strong> Coverage is based on tested OPTASK layouts. Check the original message when timing is incomplete, and confirm command applicability before acting. “Since last watch” lists traffic by issue time; it does not identify amendments or cancellations.</p>
 </section>
 <section class="judge-section" id="criteria" aria-labelledby="criteria-title">
  <div class="wrap">
-  <div class="judge-head"><div><div class="eyebrow">The judging lens / Operational value first</div><h2 id="criteria-title">Less time reconstructing orders.<br>More attention on execution.</h2></div><div class="judge-head-right"><p>Select a criterion. Explore the case.</p><button class="control" id="cycle-toggle" type="button" aria-pressed="true">Pause auto-cycle</button></div></div>
+  <div class="judge-head"><div><div class="eyebrow">The judging lens / Start with the Sailor</div><h2 id="criteria-title">Less time piecing together traffic.<br>More time for the watch.</h2></div><div class="judge-head-right"><p>Select a criterion. Explore the case.</p><button class="control" id="cycle-toggle" type="button" aria-pressed="true">Pause auto-cycle</button></div></div>
   <div class="judge-tabs" role="group" aria-label="Judging criteria and rubric weights">
    <button class="judge-tab" data-criterion="impact" type="button" aria-pressed="true"><strong>30<span>%</span></strong><span class="criterion-name">Warfighting &amp;<br>Deckplate Impact</span><span class="tab-time" aria-hidden="true"></span></button>
    <button class="judge-tab" data-criterion="speed" type="button" aria-pressed="false"><strong>20<span>%</span></strong><span class="criterion-name">Speed<br>to Fleet</span><span class="tab-time" aria-hidden="true"></span></button>
@@ -89,37 +188,53 @@ dialog{color:var(--ink);background:var(--paper);border:1px solid var(--rule);bor
    <button class="judge-tab" data-criterion="barriers" type="button" aria-pressed="false"><strong>15<span>%</span></strong><span class="criterion-name">Barrier<br>Removal</span><span class="tab-time" aria-hidden="true"></span></button>
    <button class="judge-tab" data-criterion="judges" type="button" aria-pressed="false"><strong>15<span>%</span></strong><span class="criterion-name">Judges’<br>Discretion</span><span class="tab-time" aria-hidden="true"></span></button>
   </div>
-  <div class="criterion-detail" id="criterion-detail"><div class="criterion-copy"><h3 id="criterion-title">Return attention to the watch.</h3><p id="criterion-body">Bring timed obligations into one view so watchstanders can find, verify, and coordinate the next action.</p></div><div class="criterion-proof"><div class="eyebrow">Evidence behind the approach</div><p id="criterion-proof">An integrated UTC timeline, local search and revision-linked source evidence connect the watch picture to the originating order.</p><button id="criterion-evidence" type="button">Evidence &amp; next validation step ↗</button></div></div>
+  <div class="criterion-detail" id="criterion-detail"><div class="criterion-copy"><h3 id="criterion-title">Help the Sailor find the next obligation.</h3><p id="criterion-body">Bring the changeover, the report deadline, and the next scheduled activity into one view, with the order behind each item close at hand.</p></div><div class="criterion-proof"><div class="eyebrow">Evidence behind the approach</div><p id="criterion-proof">Ship-filtered schedules, combined keyword and semantic search, and links to original messages support the Sailor’s review.</p><button id="criterion-evidence" type="button">Evidence &amp; next validation step ↗</button></div></div>
   <div class="judge-foot"><span class="auto-indicator"><i aria-hidden="true"></i><span id="cycle-status">Auto-cycling · 12 seconds per criterion</span></span><span>Rubric weights shown. Operational benefit to be measured in a watch-team pilot.</span></div>
   <div class="print-criteria" id="print-criteria"></div>
   <span id="selection-announcement" class="sr-only" role="status"></span>
  </div>
 </section>
-<section class="wrap" id="deliverable" aria-labelledby="deliverable-title"><div class="bottom-strip"><div><div class="eyebrow">What we deliver</div><h2 id="deliverable-title">A local, source-linked watch desk.</h2><p>Message intake. Structured extraction. A UTC timeline. Keyword and semantic search. Private, unsent draft preparation.</p><button class="text-button" id="requirements-open" type="button" style="margin-top:11px">Requirements &amp; current coverage ↗</button></div><div class="pilot"><div class="eyebrow">The next mission</div><h2>A focused watch-team pilot.</h2><p>Validate command-specific tasking and ownership. Measure time returned, obligation accuracy, and source-verification effort.</p></div></div></section>
+<section class="wrap" id="deliverable" aria-labelledby="deliverable-title"><div class="bottom-strip"><div><div class="eyebrow">Built by the Parse Command team</div><h2 id="deliverable-title">A watch desk built around the work.</h2><p>Follow a message from the inbox to extracted tasking, the schedule, the original source, and a private acknowledgement draft. Keep the review in the Sailor’s hands.</p><button class="text-button" id="requirements-open" type="button" style="margin-top:11px">Requirements &amp; current coverage ↗</button></div><div class="pilot"><div class="eyebrow">The next step</div><h2>Put it in front of a watch team.</h2><p>Have Sailors find a task, verify its timing, and check the source. Measure the effort, confirm command-specific responsibilities, and use what they find to improve OTIS.</p></div></div></section>
 </main>
 <footer class="wrap"><div class="footer"><span><strong>OTIS · Keeping the Watch</strong><br>Built by the Parse Command team / FleetHacker2026 · Judge briefing draft</span><div class="footer-tools"><button data-evidence type="button">Evidence &amp; readiness</button><button id="print" type="button">Print slick sheet</button><a href="#mission">Back to top ↑</a></div></div></footer>
 <div class="tour-status" id="tour-status" hidden><span id="tour-description">Guided scroll playing</span><button id="tour-pause" type="button">Pause</button></div>
-<dialog id="source-dialog" aria-labelledby="source-dialog-title"><div class="dialog-top"><div><div class="eyebrow">Synthetic illustration / not live traffic</div><h2 id="source-dialog-title">A direct path back to the order.</h2></div><button type="button" data-close>Close</button></div><p class="small" style="margin-bottom:17px">Fictional plain-language excerpt used to explain the workflow. This is not a standards-conformant USMTF fixture or a live parser result.</p><div class="source-text" id="source-excerpt"></div><p class="claim-status">The working application preserves source records and revision-linked audit evidence for human review. Missing dates and unresolved interpretations are not filled with guessed events.</p></dialog>
+<dialog id="source-dialog" aria-labelledby="source-dialog-title"><div class="dialog-top"><div><div class="eyebrow">Synthetic illustration / not live traffic</div><h2 id="source-dialog-title">A direct path back to the order.</h2></div><button type="button" data-close>Close</button></div><p class="small" style="margin-bottom:17px">Fictional plain-language excerpt used to explain the workflow. This is not a standards-conformant USMTF fixture or a live parser result.</p><div class="source-text" id="source-excerpt"></div><p class="claim-status">The working application links scheduled items to their source messages. The reader shows parsed fields, original text, and processing history. Incomplete timing requires checking the source; the calendar has no separate unresolved-time review list.</p></dialog>
 <dialog id="requirements-dialog" aria-labelledby="requirements-dialog-title"><div class="dialog-top"><div><div class="eyebrow">Challenge requirements / Current coverage</div><h2 id="requirements-dialog-title">The outcome—and the remaining work.</h2></div><button type="button" data-close>Close</button></div><p class="small">The required deliverable converts mock USMTF text into a synchronized 24-hour visual schedule, with command-relevant tasking and a coordinating C2 point of contact.</p><table class="requirements"><thead><tr><th scope="col">Challenge requirement</th><th scope="col">Current position</th><th scope="col">Operational meaning</th></tr></thead><tbody>
   <tr><td>Convert raw USMTF message text</td><td><span class="tag implemented">Implemented for tested profiles</span></td><td>Fourteen tested OPTASK message types feed a common extraction and review workflow.</td></tr>
   <tr><td>Extract frequencies, crypto windows and flight-quarters times</td><td><span class="tag next">Coverage is partial</span></td><td>Frequency plans, crypto changeover points and other explicit activities are covered. Flight quarters needs a representative fixture and SME validation.</td></tr>
   <tr><td>Surface tasking for the specified command</td><td><span class="tag next">Command resolution remains</span></td><td>Task records and command filters exist. Reliable command aliases and local applicability still need validated mapping.</td></tr>
-  <tr><td>Present a consolidated 24-hour schedule</td><td><span class="tag implemented">Implemented workflow</span></td><td>OTIS displays timed items in UTC and keeps unresolved timing available for review.</td></tr>
+  <tr><td>Present a consolidated 24-hour schedule</td><td><span class="tag implemented">Implemented workflow</span></td><td>Day, week, and month views support Zulu or a selected time zone, with ship filters and side-by-side day schedules. Unresolved timing is excluded from the plotted schedule; users must check the source message.</td></tr>
   <tr><td>Identify the coordinating C2 point of contact</td><td><span class="tag next">Source contacts extracted</span></td><td>Source POCs are preserved. Assigning the correct local CO / XO / OPS / CHENG role requires a command roster and validation.</td></tr>
-  <tr><td>Nice-to-haves: response drafts and conflict awareness</td><td><span class="tag">Draft / preparation workflow</span></td><td>Private, unsent preparation is available. Automated formatted response generation and existing-command-schedule conflict detection remain to be validated or added.</td></tr>
+  <tr><td>Nice-to-haves: response drafts and conflict awareness</td><td><span class="tag">Private acknowledgement drafts</span></td><td>Acknowledgement drafts can be generated and saved privately for review; SMTP response delivery is not implemented. Broader formatted operational responses and existing-command-schedule conflict detection remain to be validated or added.</td></tr>
  </tbody></table><p class="claim-status">Tested profiles establish example-based coverage. Flight quarters, command applicability and local officer ownership need representative inputs and domain validation.</p></dialog>
 <dialog id="evidence-dialog" aria-labelledby="evidence-dialog-title"><div class="dialog-top"><div><div class="eyebrow">Supporting detail</div><h2 id="evidence-dialog-title">What supports this briefing.</h2></div><button type="button" data-close>Close</button></div><p class="small">Briefing refined 05 Nov 2026. Prior validation is attributed to the project records below; application test suites were not rerun for this presentation. No source traffic is embedded.</p><div class="selected-gate" id="selected-gate" hidden><strong id="selected-gate-title"></strong><p id="selected-gate-copy"></p></div><ul class="source-list">
- <li><strong>Use case, required outcome and optional features</strong><code>README.md · .pdlc-docs/command-tasking-visibility/</code><p>Formatted message input; command-relevant tasking; frequency, crypto and flight-quarter timing; 24-hour visual schedule; coordinating POC. Draft responses and conflict awareness are nice-to-haves.</p></li>
+ <li><strong>Capabilities checked against the current interface</strong><code>README.md · apps/watch-desk/ui/src/pages/calendar.tsx · apps/watch-desk/ui/src/components/</code><p>The current interface includes ship-filtered schedules, watch turnover, combined keyword and semantic search, parsed/raw messages, lifecycle history, coordinate-based maps, private acknowledgement drafts, and notifications. The reader does not expose a detailed extraction-audit view; the calendar does not display a separate unresolved-time review list.</p></li>
+ <li><strong>Use case, required outcome and optional features</strong><code>.pdlc-docs/command-tasking-visibility/</code><p>Formatted message input; command-relevant tasking; frequency, crypto and flight-quarter timing; 24-hour visual schedule; coordinating POC. Draft responses and conflict awareness are nice-to-haves.</p></li>
  <li><strong>Fourteen tested OPTASK profiles / approved example facts</strong><code>README.md → Supported OPTASK messages · backend/README.md</code><p>13 periods, 27 frequencies, 25 activities and 8 contacts. Example/profile-specific regression coverage; not full USMTF edition compliance or a measured operational accuracy score.</p></li>
  <li><strong>Integrated application and end-to-end verification</strong><code>docs/integration/rust-integration-validation.md</code><p>Documented local React → Rust → OpenSearch workflow, email-to-search synthetic test, preserved private state, duplicate handling and restart behavior. Records 47 passing UI tests; compatible canonical Ark orchestration was unavailable.</p></li>
- <li><strong>Source traceability, time semantics and private preparation</strong><code>docs/integration/rust-application-api.md</code><p>Bounded list/search/detail/timeline/evidence reads. Explicit instants keep point semantics; missing dates stay unresolved. Private unsent drafts / preparation are tied to the exact message revision.</p></li>
+ <li><strong>Source traceability, time semantics and private preparation</strong><code>docs/integration/rust-application-api.md</code><p>The service retains extraction audit records and provides an evidence API; that detailed view is not connected to the current message reader. The reader exposes parsed source fields, raw text, and lifecycle history. Private unsent drafts remain tied to the message revision.</p></li>
  <li><strong>Local search and disconnected execution</strong><code>docs/integration/rust-integration-validation.md · backend/search/README.md</code><p>CPU-based local embeddings and combined keyword/semantic retrieval. Prior cold deployment/inference/retrieval checks ran with OpenSearch disconnected from its application network. Prepared assets and enforced enclave isolation are required.</p></li>
  <li><strong>Readiness and benefit boundaries</strong><code>backend/INTAKE.md · deploy/uds/VALIDATION.md · docs/integration/rust-integration-validation.md</code><p>Verified IMAP TLS, token validation and ARM64 UDS packaging have been added. Target-platform mailbox and identity acceptance, retention, full disconnected recovery and large-burst capacity still need validation. Command/C2 resolution and flight-quarters coverage need domain validation. Time saved, error reduction and fleet-wide scalability are not measured outcomes.</p></li>
  <li><strong>Judging weights</strong><p>Supplied screenshot: Warfighting &amp; Deckplate Impact 30%; Speed to Fleet 20%; Fleet Scalability 20%; Barrier Removal 15%; Judges’ Discretion 15%. The briefing claims no self-assigned scores.</p></li>
 </ul></dialog>
-<dialog id="pitch-dialog" aria-labelledby="pitch-dialog-title"><div class="dialog-top"><div><div class="eyebrow">Opening statement / about 30 seconds</div><h2 id="pitch-dialog-title">The mission, in one breath.</h2></div><button type="button" data-close>Close</button></div><p style="font-size:20px;line-height:1.65">“The order is in the message. The watch still needs a plan. OTIS, the Operational Tasking Integration System, turns supported naval message traffic into a consolidated UTC watch picture, with local search and a direct path back to the source. We have a working, integrated proof of concept across fourteen tested OPTASK message types. Our next step is a watch-team pilot to measure time returned and validate the command-specific workflow. Less time reconstructing orders; more attention on execution.”</p></dialog>
+<dialog id="pitch-dialog" aria-labelledby="pitch-dialog-title"><div class="dialog-top"><div><div class="eyebrow">Opening statement / about 30 seconds</div><h2 id="pitch-dialog-title">Start with the Sailor.</h2></div><button type="button" data-close>Close</button></div><p style="font-size:20px;line-height:1.65">“You have the watch. A crypto changeover is in one message, a report deadline in another, and more traffic is coming. OTIS turns supported naval messages into searchable tasking and one schedule. Find what’s due, check the time, and open the original order. It runs locally and keeps you in control of the review. We’ve tested fourteen OPTASK message types. Next, we want Sailors to use it on a watch-team pilot and measure the difference.”</p></dialog>
 <script>
 'use strict';
+const themeToggle=document.getElementById('theme-toggle');
+function applyTheme(theme){
+ document.documentElement.dataset.theme=theme;
+ const nextMode=theme==='dark'?'Light':'Dark';
+ document.getElementById('theme-label').textContent=nextMode+' mode';
+ themeToggle.setAttribute('aria-label','Switch to '+nextMode.toLowerCase()+' mode');
+ themeToggle.setAttribute('title','Switch to '+nextMode.toLowerCase()+' mode');
+ document.querySelector('meta[name="theme-color"]').setAttribute('content',theme==='dark'?'#081b25':'#f5f0df');
+}
+applyTheme(document.documentElement.dataset.theme==='dark'?'dark':'light');
+themeToggle.addEventListener('click',()=>{
+ const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
+ applyTheme(theme);
+ try { localStorage.setItem('otis-theme',theme); } catch {}
+});
 const motionPreference=window.matchMedia('(prefers-reduced-motion: reduce)');
 let motionEnabled=!motionPreference.matches;
 let criteriaPaused=false;
@@ -141,18 +256,18 @@ const criterionSeconds=12;
 const workflow=document.getElementById('solution');
 const criteriaSection=document.getElementById('criteria');
 const masthead=document.getElementById('masthead');
-const tourSteps=[{id:'mission',seconds:35},{id:'solution',seconds:25},{id:'criteria',seconds:65},{id:'deliverable',seconds:22}];
+const tourSteps=[{id:'mission',seconds:35,label:'The Sailor on watch'},{id:'solution',seconds:25,label:'Message → watch picture'},{id:'demo',seconds:25,label:'Watch the OTIS demo'},{id:'capabilities',seconds:50,label:'What OTIS does'},{id:'criteria',seconds:65,label:'The judging criteria'},{id:'deliverable',seconds:22,label:'Watch-team pilot'}];
 const events=[
  {id:'crypto',title:'0400Z · Crypto changeover',source:'EXERCISE / SYNTHETIC PRESENTATION EXCERPT\nShip: USS Meridian (fictional)\nMessage family: OPTASK COMMS\nEvent: Crypto changeover\nTime: 0400Z on the scenario date\n\nWatch action: Verify the originating communications order.\nStatus: Illustrative; not operationally validated.'},
  {id:'check',title:'0800–1000Z · Communications check',source:'EXERCISE / SYNTHETIC PRESENTATION EXCERPT\nShip: USS Meridian (fictional)\nMessage family: OPTASK COMMS\nEvent: Communications check\nWindow: 0800Z to 1000Z on the scenario date\n\nWatch action: Verify the associated frequency plan in the order.\nStatus: Illustrative; not operationally validated.'},
  {id:'ras',title:'1400Z · Replenishment rendezvous',source:'EXERCISE / SYNTHETIC PRESENTATION EXCERPT\nShip: USS Meridian (fictional)\nMessage family: OPTASK RAS\nEvent: Replenishment rendezvous\nTime: 1400Z on the scenario date\n\nWatch action: Review coordination details in the logistics order.\nStatus: Illustrative; not operationally validated.'}
 ];
 const criteria=[
- {id:'impact',name:'Warfighting & Deckplate Impact',weight:30,title:'Return attention to the watch.',body:'Bring timed obligations into one view so watchstanders can find, verify, and coordinate the next action.',proof:'An integrated UTC timeline, local search and revision-linked source evidence connect the watch picture to the originating order.',gate:'Measure time to identify relevant obligations, assemble the schedule, and verify the source. Hours saved and error reduction are not measured outcomes yet.'},
+ {id:'impact',name:'Warfighting & Deckplate Impact',weight:30,title:'Help the Sailor find the next obligation.',body:'Bring the changeover, the report deadline, and the next scheduled activity into one view, with the order behind each item close at hand.',proof:'Ship-filtered schedules, combined keyword and semantic search, and links to original messages support the Sailor’s review.',gate:'Measure time to identify relevant obligations, assemble the schedule, and verify the source. Hours saved and error reduction are not measured outcomes yet.'},
  {id:'speed',name:'Speed to Fleet',weight:20,title:'Bring the capability to the edge.',body:'A working local workflow, CPU-based search, and prepared runtime assets provide a concrete path to a shipboard pilot.',proof:'Local email-to-search verification and disconnected inference / retrieval checks are documented. ARM64 UDS packaging and identity / TLS integration support the next deployment stage.',gate:'Validate the target mailbox, identity boundary, disconnected workflow, hardware sizing and recovery on the deployment platform. UDS cluster acceptance remains open; no fleet fielding date or certification is claimed.'},
  {id:'scale',name:'Fleet Scalability',weight:20,title:'Expand coverage. Keep the watch desk.',body:'A shared parser contract lets teams add message profiles while retaining the same intake, search, and review experience.',proof:'Fourteen OPTASK types provide example-based starting coverage. Compiled parser contributors separate message interpretation from the rest of the application.',gate:'Validate each new message profile, command roster and operational domain. Fleet-wide adoption and large-burst capacity are not demonstrated outcomes.'},
- {id:'barriers',name:'Barrier Removal',weight:15,title:'Connect existing traffic to usable information.',body:'Keep formatted messages as the input. Reduce repeated searching and transcription between receiving the order and reviewing the schedule.',proof:'Local email intake connects structured facts to a UTC timeline, combined keyword / semantic search, source records and private preparation.',gate:'Measure review effort, manual re-entry and handoffs against the current workflow. Local C2 routing and command applicability need validated mappings.'},
- {id:'judges',name:'Judges’ Discretion',weight:15,title:'Automation the watchstander can inspect.',body:'A practical interface, visible uncertainty, source evidence and local search come together in one working application.',proof:'Bounded deterministic parsing, durable intake and revision-linked audit evidence support review. A local model powers semantic search; it does not parse the orders.',gate:'Validate usability with watchstanders. Show the working application’s message → timeline → source → private preparation path in the live demo.'}
+ {id:'barriers',name:'Barrier Removal',weight:15,title:'Spend less effort searching and copying.',body:'Start with the messages already arriving. Find the tasking, check the schedule, and prepare a private acknowledgement in the same application.',proof:'Inbox monitoring, keyword and semantic search, source review, and unsent acknowledgement drafts support the steps a Sailor takes after receiving an order.',gate:'Measure review effort, manual re-entry and handoffs against the current workflow. Local C2 routing and command applicability need validated mappings.'},
+ {id:'judges',name:'Judges’ Discretion',weight:15,title:'Automation the watchstander can inspect.',body:'Ship schedules, original messages, processing history, maps and local search come together in one working application.',proof:'The reader presents parsed source fields alongside access to the raw message and lifecycle history. A local model powers semantic search; explicit parser rules extract the tasking.',gate:'Validate usability with watchstanders. Show the working application’s message → timeline → source → private preparation path in the live demo.'}
 ];
 function showEvent(index,manual=false){
  eventIndex=index;eventElapsed=0;
@@ -203,7 +318,7 @@ function goTo(id){
 function beginTourStep(){
  tourElapsed=0;const step=tourSteps[tourIndex];goTo(step.id);
  if(step.id==='criteria'){criteriaPaused=false;showCriterion(0);}
- document.getElementById('tour-description').textContent='Guided scroll · '+['Mission problem & solution','Message → watch picture','The judging criteria','Deliverable & next step'][tourIndex];
+ document.getElementById('tour-description').textContent='Guided scroll · '+step.label;
 }
 document.getElementById('tour-toggle').addEventListener('click',()=>{
  if(tourRunning){stopTour();return;}
@@ -212,6 +327,12 @@ document.getElementById('tour-toggle').addEventListener('click',()=>{
  document.getElementById('tour-toggle').setAttribute('aria-pressed','true');
  document.getElementById('tour-status').hidden=false;updateControls();beginTourStep();
 });
+const demoVideo=document.getElementById('demo-video');
+demoVideo.addEventListener('play',()=>{
+ stopTour();motionEnabled=false;updateControls();
+});
+demoVideo.addEventListener('error',()=>{document.getElementById('demo-error').hidden=false;});
+demoVideo.querySelector('source').addEventListener('error',()=>{document.getElementById('demo-error').hidden=false;});
 document.getElementById('tour-pause').addEventListener('click',()=>stopTour());
 document.getElementById('motion-toggle').addEventListener('click',()=>{
  if(!motionEnabled||eventPaused){motionEnabled=true;eventPaused=false;criteriaPaused=false;}

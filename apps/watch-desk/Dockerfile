@@ -45,7 +45,7 @@ RUN bun --no-env-file --config=/src/ark/pipeline/bunfig.toml \
     --tsconfig-override=/src/ark/pipeline/tsconfig.json test \
     --preload ./ark/pipeline/test-setup.ts ./ui/src/
 
-FROM nginx:1.28.0-alpine AS runtime
+FROM nginx:1.30.6-alpine-slim@sha256:f65ed258206d1eb6c4eb6141111715a2cf94ac0a4ec9675fc2da186f7aadb163 AS runtime
 COPY --from=ui /src/ui/build /usr/share/nginx/html
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
 USER 65532:65532

@@ -1,0 +1,86 @@
+[
+  {
+    "pattern": "**/jackson-core-2.22.2.jar",
+    "count": 10,
+    "maven_path": "com/fasterxml/jackson/core/jackson-core/2.22.3/jackson-core-2.22.3.jar",
+    "sha256": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c"
+  },
+  {
+    "pattern": "**/jackson-databind-2.22.2.jar",
+    "count": 10,
+    "maven_path": "com/fasterxml/jackson/core/jackson-databind/2.22.3/jackson-databind-2.22.3.jar",
+    "sha256": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9"
+  },
+  {
+    "pattern": "**/jackson-core-3.2.2.jar",
+    "count": 1,
+    "maven_path": "tools/jackson/core/jackson-core/3.2.3/jackson-core-3.2.3.jar",
+    "sha256": "a0c17e7e665a5e95c82f5fb45c0fec2ae3dc556c80f0016452c9c84cd23f3817"
+  },
+  {
+    "pattern": "**/jackson-databind-3.2.2.jar",
+    "count": 11,
+    "maven_path": "tools/jackson/core/jackson-databind/3.2.3/jackson-databind-3.2.3.jar",
+    "sha256": "235b72436af983857e44efa42449f4f0a2c571e69d6c5d9dd1253ae7d192dcf2"
+  },
+  {
+    "pattern": "**/jline-builtins-3.21.0.jar",
+    "count": 1,
+    "maven_path": "org/jline/jline-builtins/3.30.15/jline-builtins-3.30.15.jar",
+    "sha256": "e67700beba6fbe9b2babb365aa3d32d8ee8ab79326aae01aee7288fddc66ae3e"
+  },
+  {
+    "pattern": "**/jline-reader-3.21.0.jar",
+    "count": 1,
+    "maven_path": "org/jline/jline-reader/3.30.15/jline-reader-3.30.15.jar",
+    "sha256": "f72f2ce167765b18a7604370963c1413b5bec923a97576b745fbce40a7034fbf"
+  },
+  {
+    "pattern": "**/jline-terminal-3.21.0.jar",
+    "count": 1,
+    "maven_path": "org/jline/jline-terminal/3.30.15/jline-terminal-3.30.15.jar",
+    "sha256": "eed027d1f63a870c8d0522c067959382ad7d3ccddfd8c7041488432189e0e284"
+  },
+  {
+    "pattern": "**/jline-style-3.21.0.jar",
+    "count": 1,
+    "maven_path": "org/jline/jline-style/3.30.15/jline-style-3.30.15.jar",
+    "sha256": "302a8779c9f175ea618e573bb38e8d240c3c5ccdfe639aeccec69e0b5ef0690c"
+  },
+  {
+    "pattern": "**/jline-terminal-jansi-3.21.0.jar",
+    "count": 1,
+    "maven_path": "org/jline/jline-terminal-jansi/3.30.15/jline-terminal-jansi-3.30.15.jar",
+    "sha256": "de0a419b6b5aaa6029c0546c7bf79e4ab326f0b9d749283687294b8506dcf545"
+  },
+  {
+    "pattern": "**/jsoup-1.23.1.jar",
+    "count": 2,
+    "maven_path": "org/jsoup/jsoup/1.23.2/jsoup-1.23.2.jar",
+    "sha256": "e9d8c856856680427f096d156f02a414289985c930998fcb519ce5be39b42003"
+  },
+  {
+    "pattern": "**/snappy-java-1.1.10.8.jar",
+    "count": 1,
+    "maven_path": "org/xerial/snappy/snappy-java/1.1.10.9/snappy-java-1.1.10.9.jar",
+    "sha256": "35228628442e4b9797681c7cbd3b26594f6da3379159dbd0cb07094ed3aece0d"
+  },
+  {
+    "pattern": "**/guava-*.jar",
+    "count": 8,
+    "maven_path": "com/google/guava/guava/33.7.2-jre/guava-33.7.2-jre.jar",
+    "sha256": "b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c"
+  },
+  {
+    "pattern": "**/failureaccess-*.jar",
+    "count": 5,
+    "maven_path": "com/google/guava/failureaccess/1.0.3/failureaccess-1.0.3.jar",
+    "sha256": "cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb"
+  },
+  {
+    "pattern": "**/lz4-java-1.11.2.jar",
+    "count": 1,
+    "maven_path": "at/yawk/lz4/lz4-java/1.11.4/lz4-java-1.11.4.jar",
+    "sha256": "58c8e0b813960d2a248e050c353baea73139b48a2ffc55382d42c69707e17325"
+  }
+]

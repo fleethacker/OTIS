@@ -64,6 +64,9 @@ Required: Docker/BuildKit with Linux ARM64 support, the pinned UDS CLI, Python
 3.14+, Helm and Git. Image/model/native downloads occur only during preparation
 and image builds. No Python packages are installed in the bootstrap image.
 
+See [ARM64 scan remediation](SCAN-REMEDIATION.md) for the patched runtime images,
+dependency lock, measured scan results and remaining upstream findings.
+
 From the repository root:
 
 ```sh

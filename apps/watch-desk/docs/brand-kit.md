@@ -24,7 +24,7 @@ layout and content hierarchy.
 | --- | --- | --- | --- | --- |
 | Navy and white | `app` | `#FFFFFF`, `#F7F9FB`, `#DCE5EC` | Navy `#17364D` | Blue `#245FA6` |
 | Maritime Dark | `app-dark` | `#0B2C3A`, `#061E2A`, `#254956` | Parchment `#F5F0DF` | Brass `#E5CC88` |
-| Vice | `app-vice` | `#2B1042`, `#210A38`, `#593369` | `#FFF1FC` | Pink `#FF55C5`; cyan trim `#28E9E1` |
+| Vice | `app-vice` | `#24163D`, `#180D2E`, `#654277` | `#FFF4FC` | Pink `#FF79D6`; cyan trim `#5AF7E4` |
 | Windows Light | `app-windows` | `#FFFFFF`, `#F3F3F3`, `#D1D1D1` | `#202020` | Blue `#0067C0` |
 | Windows Dark | `app-windows-dark` | `#2B2B2B`, `#202020`, `#454545` | `#F5F5F5` | Blue `#60CDFF` |
 
@@ -32,9 +32,13 @@ Navy and white uses a near-white `#F7F9FB` canvas, white panels and header,
 navy text, and blue accents. Muted text uses `#4C6476`; selected rows use pale
 blue `#EAF1FA`. It replaces Haze Gray while retaining the `app` theme key and
 saved light-mode preferences. Maritime Dark uses deep navy and sea-green
-surfaces with brass trim. Vice adds violet gradients, neon
-accents, and a grid on the header. Decorative effects stay on the shell so
-messages, forms, and operational symbols remain readable.
+surfaces with brass trim. Vice uses a striped peach/pink sunset, a receding cyan
+grid, violet gradients, and thin neon panel edges. Its OTIS title has bold italic
+lettering with crisp cyan/pink shadows; supporting text keeps its ordinary face.
+Primary buttons blend pink into lavender with dark text and a separate cyan focus
+outline. The scenery is static, decorative, and behind the shell; message and
+calendar surfaces stay solid, and operational symbol colors retain their meanings.
+The Vice-only treatments live in [`ui/src/vice.css`](../ui/src/vice.css).
 
 Settings → Preferences offers a browser-local **Interface style** choice between
 Maritime and Windows. It applies immediately, separately from the timezone Save
@@ -142,6 +146,7 @@ All paths below are relative to the application root.
 | --- | --- |
 | `ui/src/brand.css` | Theme, font, spacing, shape, and semantic color tokens |
 | `ui/src/windows.css` | Optional Windows light/dark tokens and scoped web styling |
+| `ui/src/vice.css` | Vice-only sunset, perspective grid, title lettering, and neon framing |
 | `ui/src/assets/otis/` | Approved runtime mascot, emblem, and favicon assets; follow the mascot and artwork guide |
 | `ui/src/index.css` | App-wide control styles, identity styles, shell, and feature layouts |
 | `ui/src/theme.ts` | Preference initialization, persistence, system appearance, and tab synchronization |

@@ -1,0 +1,98 @@
+/* Static vaporwave scenery lives behind the shell, never over source records. */
+[data-theme="app-vice"] #root {
+  isolation: isolate;
+  position: relative;
+}
+
+[data-theme="app-vice"] #root::before,
+[data-theme="app-vice"] #root::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* A striped sunset, visible in the open canvas around the working surfaces. */
+[data-theme="app-vice"] #root::before {
+  top: 80px;
+  right: 8vw;
+  width: clamp(140px, 18vw, 220px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--vice-sunset);
+  opacity: .42;
+  mask-image: linear-gradient(#000 0 43%, transparent 43% 46%, #000 46% 54%, transparent 54% 59%, #000 59% 66%, transparent 66% 73%, #000 73% 79%, transparent 79% 87%, #000 87% 91%, transparent 91%);
+}
+
+/* Only this decorative plane is transformed; fixed menus retain their viewport. */
+[data-theme="app-vice"] #root::after {
+  inset: auto 0 0;
+  height: min(44vh, 440px);
+  background-image: linear-gradient(var(--vice-grid) 1px, transparent 1px), linear-gradient(90deg, var(--vice-grid) 1px, transparent 1px);
+  background-size: 52px 52px;
+  transform: perspective(420px) rotateX(56deg);
+  transform-origin: center bottom;
+  mask-image: linear-gradient(transparent, #000 80%);
+}
+
+[data-theme="app-vice"] .desk-header {
+  isolation: isolate;
+  z-index: 40;
+  box-shadow: 0 1px 0 var(--color-secondary), 0 5px 24px #ff79d62b;
+}
+
+[data-theme="app-vice"] .desk-header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 7px, #ff79d60d 7px 8px);
+}
+
+[data-theme="app-vice"] .wordmark-title {
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: .12em;
+  text-shadow: -1px 0 0 var(--color-secondary), 2px 2px 0 #b43093;
+}
+
+[data-theme="app-vice"] .wordmark small {
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+
+[data-theme="app-vice"] :is(.timeline-section, .message-viewer) {
+  border-top-color: var(--color-secondary);
+  border-bottom-color: var(--color-primary);
+  box-shadow: var(--brand-shadow), 0 1px 0 #ff79d640;
+}
+
+[data-theme="app-vice"] .btn-primary:not(:disabled, [aria-disabled="true"], .btn-disabled) {
+  background: var(--vice-button);
+  color: var(--color-primary-content);
+  border-color: var(--color-primary);
+  box-shadow: 2px 2px 0 #783777, 0 0 16px #ff79d626;
+}
+
+[data-theme="app-vice"] .btn-primary:not(:disabled, [aria-disabled="true"], .btn-disabled):hover {
+  box-shadow: 2px 2px 0 #783777, 0 0 22px #ff79d647;
+}
+
+[data-theme="app-vice"] .btn-primary:focus-visible {
+  outline: 3px solid var(--brand-focus);
+  outline-offset: 4px;
+}
+
+@media (max-width: 640px) {
+  [data-theme="app-vice"] #root::before {
+    top: 120px;
+    right: 16px;
+    opacity: .24;
+  }
+  [data-theme="app-vice"] #root::after {
+    height: 28vh;
+  }
+}

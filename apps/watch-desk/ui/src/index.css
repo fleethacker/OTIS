@@ -4,6 +4,7 @@
 @import "./brand.css";
 @import "./windows.css";
 @import "./watchdesk-port.css";
+@import "./vice.css";
 
 .structured-message { min-width: 0; overflow-wrap: anywhere; }
 .structured-section { border-top: 1px solid var(--color-base-300); padding: 16px 0; }
@@ -699,16 +700,6 @@ main:has(.calendar-page) { flex: 1; width: 100%; min-height: 0; padding: 16px 32
 .ship-symbol { display: inline-block; width: 20px; height: 20px; flex: none; vertical-align: middle; margin-inline-end: 5px; }
 .ship-name { font-family: var(--font-ship-stack); font-weight: 400; letter-spacing: .035em; }
 .hull-number { font-family: var(--font-hull-stack); font-weight: 400; letter-spacing: .05em; color: #fff; text-shadow: 2px 2px 0 #11171d; }
-
-/* Vice decoration stays on the shell; source text and military symbols stay legible. */
-[data-theme="app-vice"] .desk-header { isolation: isolate; }
-[data-theme="app-vice"] .desk-header::after {
-  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image: linear-gradient(#28e9e11a 1px, transparent 1px), linear-gradient(90deg, #ff55c51a 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-[data-theme="app-vice"] .wordmark { text-shadow: 2px 2px 0 #8b1b8c; }
-[data-theme="app-vice"] .btn-primary { box-shadow: 3px 3px 0 #822477; }
 
 /* The current shell retains its compact navigation, live clock, and settings. */
 .header-clock, .lifecycle-time, .notification-copy time { font-family: var(--font-mono); }

@@ -6,6 +6,10 @@
   "uds_k3d": "0.21.0-airgap",
   "kubernetes_image": "ghcr.io/defenseunicorns/uds-k3d/k3s:v1.36.4-k3s1",
   "opensearch": "3.9.0",
-  "python_image": "python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34",
-  "model_sha256": "61ebca09b70c3061726fcd439dde0ad64ede6c5698cb30b594cb11b02603d64b"
+  "python_image": "cgr.dev/chainguard/python:latest@sha256:f73b534b99afc3a17c9d7a863a688d9c2577de23e12af21d55ad7b3fdbaf83f0",
+  "server_runtime_image": "gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329",
+  "ui_runtime_image": "nginx:1.30.6-alpine-slim@sha256:f65ed258206d1eb6c4eb6141111715a2cf94ac0a4ec9675fc2da186f7aadb163",
+  "model_sha256": "61ebca09b70c3061726fcd439dde0ad64ede6c5698cb30b594cb11b02603d64b",
+  "server_build_image": "rust:1.97.1-alpine3.24@sha256:3c38f3f82c2f3d73da3b38e18d279393a04cb43ddded0e35088a8c3324d40900",
+  "opensearch_security_source_commit": "3193d192d048a60fc8e63b3d172a7eb3dc9148a0"
 }

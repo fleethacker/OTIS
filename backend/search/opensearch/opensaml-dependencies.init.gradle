@@ -1,0 +1,18 @@
+// Retain upstream's Shadow recipe, exclusions and service-resource merging.
+// Update dependency resolution before the aggregate is built from upstream JARs.
+allprojects {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            def fixes = [
+                'com.fasterxml.jackson.core:jackson-core': '2.22.3',
+                'com.fasterxml.jackson.core:jackson-databind': '2.22.3',
+                'com.google.guava:guava': '33.7.2-jre',
+                'com.google.guava:failureaccess': '1.0.3'
+            ]
+            def version = fixes[details.requested.group + ':' + details.requested.name]
+            if (version != null) {
+                details.useVersion(version)
+            }
+        }
+    }
+}

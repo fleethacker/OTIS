@@ -18,7 +18,7 @@ connectrpc = { version = "=0.9.1", default-features = false, features = ["server
 buffa = { version = "=0.9.1", features = ["json"] }
 buffa-types = { version = "=0.9.1", features = ["json"] }
 axum = "=0.8.6"
-tokio = { version = "=1.48.0", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+tokio = { version = "=1.51.6", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
 reqwest = { version = "=0.12.24", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 tokenizers = { version = "=0.20.3", default-features = false, features = ["onig"] }
 unicode-general-category = "=1.1.0"

@@ -35,10 +35,15 @@ from the repository root:
 
 ```sh
 docker build --target test -f backend/Dockerfile -t parse-command-backend-tests:local .
+docker build --target lint -f backend/Dockerfile -t parse-command-backend-lint:local .
 ```
 
 This target includes the demo configs needed by the synthetic custody tests.
 External corpus regressions remain opt-in and are not copied into the image.
+The server build uses the pinned Alpine/musl toolchain and verifies that both
+executables have no shared-library dependencies before copying them into the
+Distroless static runtime. The test stage adds OpenSSL only for certificate
+fixtures; the lint stage installs the matching Clippy component.
 
 Dependencies are pinned in `Cargo.lock`. Offline builds require the dependencies to have been provisioned beforehand; runtime airgap does not imply an unprepared machine can build offline. These libraries perform no network, filesystem, model or wall-clock calls during parsing. The external fixture test explicitly reads local files only when requested:
 
